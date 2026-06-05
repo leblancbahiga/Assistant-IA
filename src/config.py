@@ -50,6 +50,25 @@ class Config(BaseSettings):
     cache_ttl_seconds: int = 300
     cache_maxsize: int = 256
 
+    # ── TokenJuice (NURU V6) ──
+    token_juice_enabled: bool = True
+    token_juice_max_chunk_chars: int = 2000
+
+    # ── Learning Loop (NURU V6) ──
+    learning_enabled: bool = True
+
+    # ── Dual-Write / Nuru_Brain (NURU V6) ──
+    nuru_brain_enabled: bool = True
+    nuru_brain_path: str = os.path.expanduser("~/Nuru_Brain")
+    nuru_brain_watch_enabled: bool = False
+
+    # ── Auto-Fetch (NURU V6) ──
+    auto_fetch_enabled: bool = False
+    auto_fetch_interval_min: int = 30
+
+    # ── Stratégies Hybrides (NURU V6) ──
+    hybrid_mode: str = "local_only"  # local_only | verify | plan | rag
+
     # ── Mémoire ──
     session_window: int = 5
 

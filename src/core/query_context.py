@@ -20,6 +20,7 @@ class QueryContext:
     mode: str = "default"
     ram_free_mb: int = 0
     route: str = "unknown"       # Défini après routage
+    hybrid_strategy: str = "local_only"  # NURU V6 : stratégie hybride
 
     @classmethod
     def from_runtime(cls, query: str, session_id: str, is_online: bool = True) -> "QueryContext":
@@ -33,8 +34,8 @@ class QueryContext:
             ram_free_mb=ram_free,
         )
 
-    def with_route(self, route: str) -> "QueryContext":
-        """Retourne une copie avec la route définie (préserve l'immutabilité)."""
+    def with_route(self, route: str, hybrid_strategy: str = "local_only") -> "QueryContext":
+        """Retourne une copie avec la route et la stratégie hybride définies."""
         return QueryContext(
             query=self.query,
             session_id=self.session_id,
@@ -42,6 +43,7 @@ class QueryContext:
             mode=self.mode,
             ram_free_mb=self.ram_free_mb,
             route=route,
+            hybrid_strategy=hybrid_strategy,
         )
 
 

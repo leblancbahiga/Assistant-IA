@@ -729,4 +729,468 @@ Assistant IA/
 
 ---
 
-*Document d'architecture V5 (v2.0) — Analyse outillée du code V4.5. Mis à jour le 2026-06-05 avec statut d'implémentation actuel.*
+---
+
+## 14. Améliorations Post-V5 — Inspirations OpenJarvis + OpenHuman
+
+**Date** : 2026-06-05
+**Source** : Analyse de [OpenJarvis](https://github.com/open-jarvis/OpenJarvis) (Stanford SAIL, 6K⭐) et [OpenHuman](https://github.com/tinyhumansai/openhuman) (30K⭐)
+**Contrainte** : M1 8 Go RAM — chaque feature est évaluée pour son coût mémoire et CPU.
+
+### 14.1 Table des Chantiers Retenus
+
+| # | Chantier | Source | Priorité | Effort | Impact RAM | Bénéfice |
+|---|----------|--------|----------|--------|------------|----------|
+| **E1** | TokenJuice — Middleware de compression | OpenHuman | **P1** | ~200 lignes | ✅ -0.5 Go | Réponses stables sans swap |
+| **E2** | Dual-Write Mémoire — Vector DB + Wiki | OpenHuman | **P1** | ~300 lignes | ~ +80 Mo (opt.) | Mémoire transparente, éditable |
+| **E3** | Learning Loop — Traces → Évolution | OpenJarvis | **P2** | ~300 lignes | ✅ Négligeable | NURU s'améliore seul |
+| **E4** | Auto-Fetch — Ingestion silencieuse | OpenHuman | **P2** | ~250 lignes | ~ +100 Mo (CPU) | Contexte toujours frais |
+| **E5** | Stratégies Hybrides Local+Cloud | OpenJarvis | **P3** | ~400 lignes | ✅ Moins de local inutile | Meilleure fiabilité |
+
+### 14.2 E1 — TokenJuice : Middleware de Compression de Contexte
+
+**Problème** : Sur M1 8 Go, faire tourner Phi-4-mini-4bit (~2.5 Go), l'embedder MLX (~0.8 Go), le cache MX, et le contexte RAG (jusqu'à 4K tokens de chunks) laisse une marge infime avant swap. Le cloud lui-même coûte $0.15-0.30/requête sur du contenu gonflé.
+
+**Inspiration** : OpenHuman réduit sa consommation de tokens de 80% avec un système de règles superposées (builtin → user → projet) qui compresse les sorties avant envoi au LLM.
+
+**Implémentation** — Nouveau fichier `src/token_juice.py` :
+
+```python
+# src/token_juice.py — NURU V6: Middleware de compression de contexte
+# Positionné à 2 points d'injection :
+#  1. Avant le SemanticRouter (requête utilisateur)
+#  2. Après le RAG, avant l'envoi au LLM (chunks + contexte)
+
+import re, html
+
+class TokenJuice:
+    """Pipeline de compression de tokens inspiré d'OpenHuman."""
+
+    RULES = [
+        ("html_to_md", lambda t: html2text(t) if "<" in t else t),
+        ("url_shrink", lambda t: re.sub(
+            r'https?://[^\s]{50,}', lambda m: m.group(0)[:60]+"...", t)),
+        ("path_shrink", lambda t: re.sub(
+            r'(?:/[^/\s]{20,}){2,}', lambda m: "..."+m.group(0)[-40:], t)),
+        ("dedup_lines", lambda t: _dedup_consecutive(t)),
+        ("log_crush", lambda t: re.sub(
+            r'(?:DEBUG|INFO|WARNING)[^\n]*\n', '', t)),
+        ("timestamp_crush", lambda t: re.sub(
+            r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', '[TS]', t)),
+    ]
+
+    def compress(self, text: str, stage: str = "pre") -> str:
+        if not text or len(text) < 500:
+            return text  # Pas de bénéfice sous 500 chars
+        for name, fn in self.RULES:
+            text = fn(text)
+        return text
+
+    def compress_chunks(self, chunks: list[str], max_tokens: int = 4000) -> str:
+        """Compresse une liste de chunks RAG avant envoi au LLM."""
+        # Troncature individuelle : max 500 tokens par chunk
+        trimmed = [self._token_truncate(c, 500) for c in chunks]
+        # Fusion
+        merged = "\n---\n".join(trimmed)
+        return self.compress(merged, stage="post")
+
+
+def _dedup_consecutive(text: str) -> str:
+    lines = text.splitlines()
+    result = []
+    prev = None
+    for line in lines:
+        if line != prev:
+            result.append(line)
+            prev = line
+    return "\n".join(result)
+```
+
+**Points d'injection dans le pipeline** :
+
+```python
+# Dans orchestrator.py, avant process_query :
+from src.token_juice import TokenJuice
+juice = TokenJuice()
+
+# Avant génération locale (dans llm_local.py) :
+compressed_prompt = juice.compress(prompt, stage="post")
+
+# Avant génération cloud (dans llm_cloud.py) :
+compressed_context = juice.compress_chunks(rag_chunks)
+```
+
+**Bénéfice attendu** : Réduction de 40-60% des tokens entrant → ~0.5 Go de RAM libérée sur le pic mémoire → moins de fallback cloud prématuré.
+
+**Activation** : Configurable dans `settings.yaml` :
+```yaml
+token_juice:
+  enabled: true
+  max_chunk_tokens: 500
+  crush_logs: true
+  crush_timestamps: true
+```
+
+### 14.3 E2 — Dual-Write Mémoire : Vector Store + Wiki Persistant
+
+**Problème** : La mémoire de NURU (6900 chunks, 445 sources) est opaque sans interface dédiée. Impossible d'éditer, vérifier ou exporter les connaissances stockées.
+
+**Inspiration** : OpenHuman synchronise ses vecteurs internes avec un vault Obsidian en Markdown, rendant la mémoire transparente et bidirectionnelle.
+
+**Implémentation** — Étendre `src/memory_store.py` et `src/ingestion.py` :
+
+```
+Nouveau dossier : ~/Nuru_Brain/
+├── sources/           # Un fichier .md par document source
+│   ├── chat-001.md
+│   └── rapport-2024.md
+├── topics/            # Résumés thématiques (construits par LLM)
+│   ├── agronomie.md
+│   └── code-nuru.md
+├── index.md           # Table des matières générée
+└── .nuru_state.json   # Hash map pour détection de changements
+```
+
+**Fonctionnement** :
+
+```
+1. Ingest : chunk inséré dans sqlite-vec
+                │
+                ▼ (async, file d'attente)
+2. Écriture .md : ~/Nuru_Brain/sources/<source_id>.md
+   - En-tête YAML : source, date, hash, tags
+   - Corps : Markdown du chunk
+                │
+                ▼
+3. Watchdog (watchdog Observer) : écoute les modifications
+   - Si fichier .md modifié manuellement → re-calcul hash
+   - Si hash différent → ré-embedding + mise à jour sqlite-vec
+                │
+                ▼
+4. Périodique (24h) : re-génération de index.md et topics/
+   - Phrase tout le contenu par thèmes
+   - Écrit un résumé dans topics/<theme>.md
+```
+
+**Code minimal** :
+
+```python
+# Dans src/memory_store.py, méthode write_to_wiki()
+async def write_chunk_to_wiki(self, chunk_id: str, content: str,
+                               source: str, metadata: dict) -> str:
+    wiki_dir = Path.home() / "Nuru_Brain" / "sources"
+    wiki_dir.mkdir(parents=True, exist_ok=True)
+    slug = re.sub(r'[^a-z0-9]+', '-', source.lower())[:40]
+    path = wiki_dir / f"{slug}.md"
+
+    # En-tête YAML
+    md = f"""---
+source: {source}
+id: {chunk_id}
+date: {metadata.get('date', '')}
+hash: {hash(content)}
+tags: [{', '.join(metadata.get('tags', []))}]
+---
+
+{content}
+"""
+    # Écriture atomique
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(md, encoding="utf-8")
+    tmp.rename(path)
+    return str(path)
+```
+
+**Watchdog** :
+
+```python
+# Dans src/document_watcher.py, ajouter WikiObserver
+class WikiObserver:
+    def __init__(self, callback):
+        self.observer = Observer()
+        self.callback = callback
+
+    def start(self):
+        path = Path.home() / "Nuru_Brain" / "sources"
+        if path.exists():
+            self.observer.schedule(
+                WikiHandler(self.callback),
+                str(path),
+                recursive=False
+            )
+            self.observer.start()
+
+class WikiHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        if event.src_path.endswith(".md"):
+            self.callback(event.src_path)
+```
+
+**Activation** : Optionnelle dans `settings.yaml` :
+```yaml
+nuru_brain:
+  enabled: true          # false = comportement actuel
+  path: "~/Nuru_Brain"
+  auto_sync: true        # sync bidirectionnelle
+  obsidian_compat: true  # Compatible vault Obsidian
+```
+
+**Bénéfice** : Transparence totale. L'utilisateur peut ouvrir `~/Nuru_Brain/` dans Obsidian (ou VS Code) et voir/modifier la mémoire de NURU comme des notes classiques.
+
+### 14.4 E3 — Learning Loop : Traces → Mining → Évolution
+
+**Problème** : NURU n'apprend pas de ses erreurs. Un faux routage aujourd'hui sera répété demain. Aucune boucle de rétroaction.
+
+**Inspiration** : OpenJarvis orchestre un Learning Loop complet : collecte de traces → mining SFT → optimisation DSPy → évolution des configs → fine-tuning LoRA → validation par eval. Pour NURU (pas de GPU LoRA), une version légère avec optimisation des prompts et des seuils.
+
+**Implémentation** — 3 nouveaux modules :
+
+```
+src/learning/
+├── __init__.py
+├── trace_collector.py    # Enregistre (query, réponse, mode, feedback) via async queue
+├── miner.py              # Analyse hebdomadaire : patterns d'échec, routages sous-optimaux
+└── optimiser.py          # Génère variantes de prompt système, ajuste seuils du routeur
+```
+
+**TraceCollector** :
+
+```python
+# src/learning/trace_collector.py
+class TraceCollector:
+    """Enregistre toutes les interactions pour mining périodique."""
+
+    def __init__(self, db_path: str = "~/.nuru/traces.db"):
+        self.db = sqlite3.connect(os.path.expanduser(db_path))
+        self._init_db()
+
+    def _init_db(self):
+        self.db.execute("""
+            CREATE TABLE IF NOT EXISTS traces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                response TEXT,
+                mode TEXT,           -- LOCAL_RAG | CLOUD_GROQ | etc.
+                confidence REAL,
+                feedback INTEGER,    -- 1 (👍), -1 (👎), 0 (neutre)
+                tokens_used INTEGER,
+                latency_ms INTEGER,
+                timestamp TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        self.db.commit()
+
+    async def record(self, query: str, response: str, mode: str,
+                     confidence: float, feedback: int = 0,
+                     tokens: int = 0, latency: int = 0):
+        # Écriture asynchrone via queue pour ne pas bloquer le LLM
+        await self.queue.put((query, response, mode, confidence,
+                              feedback, tokens, latency))
+```
+
+**Miner (toutes les 50 requêtes ou 24h)** :
+
+```python
+# src/learning/miner.py
+class MiningWorker:
+    """Analyse les traces et détecte les patterns d'amélioration."""
+
+    def mine(self) -> dict:
+        rows = self.db.execute("""
+            SELECT query, mode, feedback, confidence FROM traces
+            WHERE feedback = -1 ORDER BY timestamp DESC LIMIT 50
+        """).fetchall()
+
+        patterns = {
+            "bad_routing": [],      # Questions RAG qui sont allées en cloud
+            "low_confidence": [],   # Réponses avec confiance < 0.5
+            "recurring_fails": [],  # Mêmes sujets en échec
+        }
+        # ... analyse ...
+        return patterns
+```
+
+**Intégration** :
+- `TraceCollector.record()` appelé dans `orchestrator.py` après chaque réponse
+- `MiningWorker.mine()` déclenché par cron (via QTimer) ou manuellement
+- Résultats : suggestions de nouveaux TRIVIAL_PATTERNS, ajustement de seuils, nouvelles règles TokenJuice
+
+**Bénéfice** : NURU devient auto-améliorable. Corrige ses propres erreurs de routage sans intervention manuelle.
+
+### 14.5 E4 — Auto-Fetch : Ingestion Asynchrone Silencieuse
+
+**Problème** : Le RAG de NURU se construit uniquement par indexation déclenchée (ingestion manuelle ou au lancement). Entre deux sessions, des documents importants peuvent ne pas être indexés.
+
+**Inspiration** : OpenHuman scanne ses intégrations actives toutes les 20 minutes en arrière-plan pour mettre à jour sa mémoire.
+
+**Implémentation** — Nouveau module `src/auto_fetch.py` avec `APScheduler` (compatible qasync) :
+
+```python
+# src/auto_fetch.py — NURU V6: Ingestion silencieuse périodique
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import hashlib, json
+
+DATA_SOURCES = {
+    "workspace": {
+        "path": "~/workspace/",
+        "glob": "*.md",
+        "interval_min": 30,
+    },
+    "downloads": {
+        "path": "~/Downloads/",
+        "glob": "*.{md,txt,pdf}",
+        "interval_min": 60,
+        "max_files": 10,  # Limiter le scan
+    },
+}
+
+class AutoFetcher:
+    def __init__(self, ingestion_callback, embedder):
+        self.scheduler = AsyncIOScheduler()
+        self.callback = ingestion_callback
+        self.embedder = embedder
+        self.hash_file = Path.home() / ".nuru" / "data_hashes.json"
+        self.hashes = self._load_hashes()
+
+    def start(self):
+        for name, config in DATA_SOURCES.items():
+            self.scheduler.add_job(
+                self._scan_source,
+                trigger="interval",
+                minutes=config["interval_min"],
+                args=[name, config],
+                id=f"autofetch-{name}",
+                replace_existing=True,
+            )
+        self.scheduler.start()
+
+    async def _scan_source(self, name, config):
+        """Scan un dossier et n'indexe que les nouveaux fichiers."""
+        base = Path(config["path"]).expanduser()
+        if not base.exists():
+            return
+
+        files = sorted(base.glob(config["glob"]),
+                       key=os.path.getmtime, reverse=True)
+        files = files[:config.get("max_files", 50)]
+
+        for fpath in files:
+            current_hash = hashlib.md5(fpath.read_bytes()).hexdigest()
+            if self.hashes.get(str(fpath)) == current_hash:
+                continue  # Pas de changement
+
+            # Nouveau ou modifié → indexer (embedding CPU léger)
+            text = fpath.read_text(encoding="utf-8", errors="replace")
+            if len(text) > 100:
+                await self.callback(fpath, text)
+                self.hashes[str(fpath)] = current_hash
+
+        self._save_hashes()
+```
+
+**Détection de delta par hash** :
+
+Chaque fichier a un MD5 stocké dans `~/.nuru/data_hashes.json`. Seuls les fichiers nouveaux ou modifiés sont ré-indexés. Coût CPU minimal.
+
+**Règle d'or pour M1 8 Go** : l'embedding en fond utilise un petit modèle CPU (`all-MiniLM-L6-v2` via sentence-transformers, ~100 Mo RAM, pas de GPU). Le MLX reste pour l'indexation complète et le RAG en ligne.
+
+**Activation** :
+```yaml
+auto_fetch:
+  enabled: false     # Désactivé par défaut (économe en RAM)
+  cpu_embedder: "sentence-transformers/all-MiniLM-L6-v2"
+  interval_min: 30
+```
+
+### 14.6 E5 — Stratégies Hybrides Local+Cloud Fines
+
+**Problème** : Actuellement NURU a un simple fallback binaire : si LOCAL suffit → local, sinon → cloud. OpenJarvis propose 8 paradigmes hybrides (Advisors, Conductors, Minions, Archon…) qui tirent parti des deux mondes.
+
+**Implémentation** — Ajouter 3 stratégies optionnelles dans `src/core/router.py` :
+
+```python
+class HybridStrategy(enum.Enum):
+    """Stratégies hybrides local+cloud inspirées d'OpenJarvis."""
+    LOCAL_ONLY = "local_only"       # Défaut V5 : tout en local
+    LOCAL_CLOUD_VERIFY = "verify"   # Phi-4-mini répond, Groq vérifie
+    CLOUD_PLAN_LOCAL_EXEC = "plan"  # Groq planifie, Phi-4-mini exécute
+    LOCAL_RAG_CLOUD_SYNTH = "rag"   # RAG locale récupère, Groq synthétise (Archon)
+```
+
+**Stratégie « Archon » (Local RAG + Cloud Synthesis)** :
+
+```python
+# Génération locale : récupération RAG
+rag_chunks = await self.rag.search(query, top_k=6)
+
+# Synthèse cloud : Groq résume et répond avec les chunks
+if strategy == HybridStrategy.LOCAL_RAG_CLOUD_SYNTH and is_online:
+    response = await self.cloud.generate(
+        system_prompt="Voici des documents pertinents...\n---\n"
+                      + "\n---\n".join(rag_chunks),
+        query=query,
+        model="llama-3.3-70b-versatile",
+    )
+else:
+    # Fallback : génération locale normale
+    response = await self.local.generate(query, rag_context=rag_chunks)
+```
+
+**Intégration** : Aucune modification de l'interface utilisateur. Le choix de stratégie est automatique (basé sur RAM libre, mode, complexité de la question). Configurable dans les Settings.
+
+**Bénéfice** : Meilleure utilisation des ressources — Phi-4-mini pour la recherche et les tâches simples, Groq pour ce qu'il fait de mieux (synthèse, vérification, planification).
+
+### 14.7 Ce qu'on NE fait PAS (justification)
+
+| Proposition rejetée | Source | Raison |
+|---------------------|--------|--------|
+| **Fine-tuning LoRA** | OpenJarvis | Impossible sur 8 Go RAM. GoldMemory fait 80% du boulot. |
+| **118 intégrations OAuth** | OpenHuman | 5-10 max (Gmail, Notion, GitHub, Slack, Calendar). Chacune = ~50 Mo RAM. |
+| **Mascotte 3D Rive** | OpenHuman | Zero valeur ajoutée pour un assistant sérieux. |
+| **Sandbox Docker/WASM** | OpenHuman | Overkill pour un desktop local mono-utilisateur. |
+| **Architecture Rust/Tauri** | OpenHuman | Coût de migration trop élevé. Optimiser le Python existant. |
+| **Whisper.cpp local (Metal)** | OpenHuman | ~2-4 Go RAM. NURU utilise Groq/OpenAI pour le STT, c'est mieux. |
+| **Learning avec DSPy** | OpenJarvis | DSPy nécessite ~200 Mo + dépendances. La version "miner + optimiseur prompts" fait le travail. |
+
+### 14.8 Arborescence Post-V5
+
+```
+Assistant IA/
+├── src/
+│   ├── token_juice.py         # NOUVEAU E1 : Middleware de compression
+│   ├── auto_fetch.py          # NOUVEAU E4 : Ingestion silencieuse périodique
+│   ├── learning/
+│   │   ├── __init__.py
+│   │   ├── trace_collector.py # NOUVEAU E3 : Enregistrement des interactions
+│   │   ├── miner.py           # NOUVEAU E3 : Analyse des patterns d'échec
+│   │   └── optimiser.py       # NOUVEAU E3 : Ajustement automatique des seuils
+│   ├── memory_store.py        # MODIFIÉ E2 : Dual-write vers Nuru_Brain/
+│   ├── ingestion.py           # MODIFIÉ E2 : Export .md après indexation
+│   ├── document_watcher.py    # MODIFIÉ E2 : WikiObserver pour sync bidirectionnelle
+│   └── core/
+│       └── router.py          # MODIFIÉ E5 : HybridStrategy (3 stratégies)
+├── nuru_brain/                # NOUVEAU E2 : Wiki persistant (hors dépôt git)
+└── config/
+    └── settings.yaml          # MODIFIÉ : + token_juice, nuru_brain, auto_fetch
+```
+
+### 14.9 Budget Effort Post-V5
+
+| Chantier | Effort | Dépendances | Bloquant pour |
+|----------|--------|-------------|---------------|
+| E1 — TokenJuice | **~2h** | Aucune | E3 (mieux mining avec moins de tokens) |
+| E2 — Dual-Write | **~4h** | watchdog | — |
+| E3 — Learning Loop | **~4h** | E1 (traces plus propres) | — |
+| E4 — Auto-Fetch | **~3h** | E2 (écriture wiki) | — |
+| E5 — Stratégies Hybrides | **~3h** | E1 (moins de tokens cloud) | — |
+| **Total** | **~16h** | | |
+
+### 14.10 Liens vers les Analyses Complètes
+
+- [Analyse OpenJarvis](/Users/leblancbahiga/openjarvis_analysis.md) — Architecture 3 piliers, 8 agents, learning loop, 12+ moteurs
+- [Analyse OpenHuman](/Users/leblancbahiga/openhuman_analysis.md) — Memory Tree, TokenJuice, Auto-fetch, 118 intégrations, Tauri/Rust
+
+---
+
+*Document d'architecture V5 (v2.0) — Analyse outillée du code V4.5. Mis à jour le 2026-06-05.*
+*Extend V5 — Inspirations OpenJarvis + OpenHuman. Mis à jour le 2026-06-05 avec synthèse croisée.*

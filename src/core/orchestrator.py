@@ -18,6 +18,8 @@ from src.core.events import EventBus
 from src.core.policies import PolicyEngine
 from src.core.response_guard import StrictRAGGuard
 from src.ai.verifier import EvidenceVerifier
+from src.token_juice import TokenJuice
+from src.learning.trace_collector import TraceCollector
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,14 @@ class NuruOrchestrator:
         self.response_guard = StrictRAGGuard(config.response_mode)
         # NURU V5 : Vérificateur de citations
         self.evidence_verifier = EvidenceVerifier()
+        # NURU V6 : Middleware de compression de contexte (TokenJuice)
+        tj_enabled = getattr(config, 'token_juice_enabled', True)
+        self.token_juice = TokenJuice(
+            enabled=tj_enabled,
+            max_chunk_chars=getattr(config, 'token_juice_max_chunk_chars', 2000),
+        )
+        # NURU V6 : Learning Loop — collecteur de traces
+        self.trace_collector = TraceCollector()
 
     async def process_query(
         self,
@@ -111,11 +121,20 @@ class NuruOrchestrator:
             query, session_id,
             is_online=is_online,
         )
+        # NURU V6 : TokenJuice — compression de la requête avant routage
+        original_query = query
+        query = self.token_juice.compress_query(query)
+        if query != original_query and len(query) < len(original_query):
+            logger.debug(
+                f"🧃 TokenJuice: requête compressée "
+                f"{len(original_query)}→{len(query)} chars"
+            )
         await self.event_bus.emit("query.received", {"query": query})
 
         # ── 2. Routage avec PolicyEngine (NURU V5) ──
         route_result = await self.router.route_with_context(ctx)
-        ctx = ctx.with_route(route_result.decision)
+        hybrid_strategy = getattr(route_result, 'hybrid_strategy', 'local_only')
+        ctx = ctx.with_route(route_result.decision, hybrid_strategy=hybrid_strategy)
         intent = self._route_to_intent(route_result.decision)
         await self.event_bus.emit("route.decided", {
             "decision": route_result.decision,
@@ -139,6 +158,12 @@ class NuruOrchestrator:
 
         # ── 4. Récupération contexte ──
         rag_context, rag_result, web_context = await self._retrieve_context(query, intent)
+
+        # NURU V6 : TokenJuice — compression du contexte RAG et web avant construction prompt
+        if rag_context:
+            rag_context = self.token_juice.compress(rag_context, stage="post")
+        if web_context:
+            web_context = self.token_juice.compress(web_context, stage="post")
 
         # ── 5. Fallback Web si RAG vide ──
         rag_context, intent = await self._maybe_web_fallback(
@@ -242,6 +267,18 @@ class NuruOrchestrator:
             await self.memory_store.set_cache(query, response_content)
         self.memory_store.add_message("user", query)
         self.memory_store.add_message("assistant", response_content)
+
+        # NURU V6 : Learning Loop — enregistrement de la trace
+        asyncio.create_task(self.trace_collector.record(
+            query=original_query,
+            response=response_content[:500],
+            mode="CLOUD" if intent == "COMPLEX" else "LOCAL",
+            confidence=result.confidence,
+            tokens_prompt=result.tokens_prompt or len(full_prompt) // 4,
+            tokens_generated=result.tokens_generated,
+            latency_ms=int(duration * 1000) if 'duration' in dir() else 0,
+            model=result.model,
+        ))
 
     # ─── Privées ───
 
@@ -357,14 +394,30 @@ class NuruOrchestrator:
         # NURU V5 : Fallback cloud renforcé — si RAM < 1 Go ET online,
         # on passe en cloud même pour RAG (évite les hallucinations du petit modèle qui swap)
         ram_too_low = ctx.ram_free_mb < 1000
-        use_cloud = intent == "COMPLEX" or self.policy_engine.should_use_cloud(ctx) or (intent == "RAG" and ctx.is_online and ram_too_low)
-        if use_cloud:
+        hybrid = getattr(ctx, 'hybrid_strategy', 'local_only')
+
+        # NURU V6 : Stratégie Archon (RAG local + synthèse cloud)
+        if hybrid == "rag" and intent == "RAG" and ctx.is_online and rag_context.strip():
+            logger.info("☁️ Stratégie Archon: RAG local → synthèse cloud")
+            cloud_system = system_prompt
+            cloud_system += (
+                f"\n\n## CONTEXTE DE VOS DOCUMENTS\n{rag_context}\n\n"
+                f"Réponds à partir de ces documents uniquement."
+            )
+            async for token in self.cloud_llm.generate_stream(
+                query, intent=intent, system_prompt=cloud_system
+            ):
+                yield token
+            return
+
+        # NURU V6 : Stratégie Verify (local → cloud vérifie)
+        use_cloud_first = intent == "COMPLEX" or self.policy_engine.should_use_cloud(ctx) or (intent == "RAG" and ctx.is_online and ram_too_low)
+
+        if use_cloud_first or hybrid == "verify":
             if not ctx.is_online:
                 logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")
             else:
-                logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB)")
-                # NURU V5 : Injecter le contexte RAG (documents locaux) ET web dans
-                # le system_prompt pour que le LLM cloud utilise les deux
+                logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB, hybrid={hybrid})")
                 cloud_system = system_prompt
                 if rag_context.strip():
                     cloud_system += (
@@ -383,8 +436,9 @@ class NuruOrchestrator:
                 ):
                     yield token
                 return
+
         # Fallback local
-        logger.info(f"💻 Local (intent={intent})")
+        logger.info(f"💻 Local (intent={intent}, hybrid={hybrid})")
         try:
             gen = self.local_llm.generate_stream(full_prompt, intent=intent)
             if self.runtime:

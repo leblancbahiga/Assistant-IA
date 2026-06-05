@@ -107,6 +107,21 @@ class IngestionEngine:
 
                 self.rag.add_chunks(chunks)
                 self.rag.mark_file_indexed(filepath, 0, file_hash)
+                # NURU V6 : Dual-Write — chaque chunk aussi dans ~/Nuru_Brain/
+                try:
+                    from src.nuru_brain import WikiWriter
+                    wiki = WikiWriter()
+                    source_name = os.path.basename(filepath)
+                    for c in chunks[:5]:  # Limiter à 5 chunks par fichier
+                        wiki.write_chunk(
+                            content=c["content"],
+                            source=source_name,
+                            chunk_id=hashlib.md5(c["content"].encode()).hexdigest()[:8],
+                            date="",
+                            tags=[c.get("title", ""), c.get("level", "")],
+                        )
+                except Exception:
+                    pass  # WikiWriter est optionnel, ne pas casser l'ingestion
                 logger.info(f"✅ Ingestion OK: {os.path.basename(filepath)}")
 
         except asyncio.TimeoutError:

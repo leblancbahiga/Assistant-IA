@@ -5,7 +5,7 @@
 # strict   : uniquement documents, refuse si pas de preuves
 # hybrid   : (défaut) RAG d'abord, connaissances générales ensuite
 # free     : pas de grounding, conversation libre
-response_mode: "strict"
+response_mode: "hybrid"
 
 # ─── RAG ───
 # Seuil de confiance pour accepter un résultat RAG
@@ -37,3 +37,31 @@ session_window: 5  # nombre de tours conservés
 stt_model: "small"
 tts_enabled: true
 tts_engine: "piper"
+
+# ─── TokenJuice (NURU V6) — Middleware de compression de contexte ───
+# Réduit le nombre de tokens avant envoi au LLM (économise ~0.5 Go RAM)
+token_juice_enabled: true
+# Taille max (en chars) d'un chunk RAG individuel avant troncature
+token_juice_max_chunk_chars: 2000
+
+# ─── Learning Loop (NURU V6) — Traces → Mining → Évolution ───
+# Enregistre les interactions et améliore NURU automatiquement
+learning_enabled: true
+
+# ─── Nuru_Brain (NURU V6) — Wiki persistant pour la mémoire ───
+# Chaque chunk RAG est aussi écrit en Markdown dans ~/Nuru_Brain/
+nuru_brain_enabled: true
+# Surveillance des modifications manuelles (nécessite watchdog)
+nuru_brain_watch_enabled: false
+
+# ─── Auto-Fetch (NURU V6) — Ingestion silencieuse périodique ───
+# Scanne workspace/Downloads toutes les 30 min pour indexer les nouveaux fichiers
+auto_fetch_enabled: false
+auto_fetch_interval_min: 30
+
+# ─── Stratégies Hybrides (NURU V6) — Local+Cloud fins ───
+# local_only : tout en local (défaut)
+# verify     : Phi-4-mini répond, Groq vérifie
+# plan       : Groq planifie, Phi-4-mini exécute
+# rag        : RAG locale récupère, Groq synthétise (Archon)
+hybrid_mode: "rag"

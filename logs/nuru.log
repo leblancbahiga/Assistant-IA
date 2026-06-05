@@ -27058,3 +27058,30 @@
 2026-06-05 13:13:13.914 | INFO   | logging:callHandlers:1737 | Nouveau fait mémorisé : L'utilisateur s'intéresse à Unis
 2026-06-05 13:13:13.915 | INFO   | logging:callHandlers:1737 | ✅ Génération terminée
 2026-06-05 14:05:40.366 | DEBUG  | logging:callHandlers:1737 | Closing
+2026-06-05 15:51:25.736 | INFO   | src.infra.logging_setup:setup_logging:81 | 📋 Logs configurés — fichier: /Users/leblancbahiga/Downloads/Assistant IA/logs/nuru.log | rotation: 10 MB | retention: 30 days
+2026-06-05 15:51:26.794 | DEBUG  | logging:callHandlers:1737 | Using selector: _Selector
+2026-06-05 15:51:26.828 | INFO   | logging:callHandlers:1737 | ⚙️ PolicyEngine initialisé
+2026-06-05 15:51:26.842 | DEBUG  | logging:callHandlers:1737 | Loading KWallet
+2026-06-05 15:51:26.845 | DEBUG  | logging:callHandlers:1737 | Loading SecretService
+2026-06-05 15:51:26.847 | DEBUG  | logging:callHandlers:1737 | Loading Windows
+2026-06-05 15:51:26.848 | DEBUG  | logging:callHandlers:1737 | Loading chainer
+2026-06-05 15:51:26.848 | DEBUG  | logging:callHandlers:1737 | Loading libsecret
+2026-06-05 15:51:26.849 | DEBUG  | logging:callHandlers:1737 | Loading macOS
+2026-06-05 15:51:26.938 | INFO   | logging:callHandlers:1737 | 🧠 Mémoire système : 8.00 Go total | 1.09 Go disponible au départ
+2026-06-05 15:51:26.938 | INFO   | logging:callHandlers:1737 | ✅ Callback de libération de mémoire enregistré : clear_reranker
+2026-06-05 15:51:26.938 | INFO   | logging:callHandlers:1737 | 👀 Monitoring RAM activé (interruption toutes les 5s)
+2026-06-05 15:51:26.938 | WARNING | logging:callHandlers:1737 | ⚠️ Event loop asynchrone non trouvée, monitoring en mode passif.
+2026-06-05 15:51:26.938 | INFO   | logging:callHandlers:1737 | ⚙️ PolicyEngine initialisé
+2026-06-05 15:51:26.939 | INFO   | logging:callHandlers:1737 | 🔒 StrictRAGGuard: mode=strict
+2026-06-05 15:51:26.942 | INFO   | logging:callHandlers:1737 | 🚀 NuruOrchestrator V4.5 initialisé
+2026-06-05 15:51:26.945 | INFO   | logging:callHandlers:1737 | Initializing CyberDashboard...
+2026-06-05 15:51:26.957 | INFO   | logging:callHandlers:1737 | ✅ Logo SVG chargé : /Users/leblancbahiga/Downloads/Assistant IA/src/ui/assets/gemini-logo.svg
+2026-06-05 15:51:27.881 | INFO   | logging:callHandlers:1737 | CyberDashboard initialized.
+2026-06-05 15:52:47.893 | DEBUG  | logging:callHandlers:1737 | Using selector: KqueueSelector
+2026-06-05 15:52:47.970 | DEBUG  | logging:callHandlers:1737 | 🌐 Connectivité vérifiée via dns
+2026-06-05 15:52:47.978 | DEBUG  | logging:callHandlers:1737 | 🧠 Router N1 (Trivial) → SIMPLE: qui suis-je?
+2026-06-05 15:52:47.979 | INFO   | logging:callHandlers:1737 | 🧠 Route: qui suis-je?... → SIMPLE (conf: 1.00)
+2026-06-05 15:52:48.835 | ERROR  | logging:callHandlers:1737 | Erreur lors du chargement de l'embedder : [Errno 2] No such file or directory
+2026-06-05 15:52:48.836 | ERROR  | logging:callHandlers:1737 | Stream error: [Errno 2] No such file or directory
+2026-06-05 15:52:48.842 | INFO   | logging:callHandlers:1737 | ✅ Génération terminée
+2026-06-05 15:54:15.287 | DEBUG  | logging:callHandlers:1737 | Closing
