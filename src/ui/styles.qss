@@ -1,103 +1,107 @@
 /* ===================================================================
-   NURU V5 — Style GEEK & FUNK (Synthwave / Retro-Hacker)
+   NURU V6 — Style épuré (Anthracite / Bleu électrique / Vert acide)
+   
+   Palette : fond #0D1117, cartes #161B22, bordures #1F2937
+             bleu #00A3FF, vert #39FF14, ambre #FFB000
+             texte #E5E7EB, secondaire #6B7280
    =================================================================== */
 
 QWidget {
-    font-family: "Fira Code", "JetBrains Mono", "SF Mono", monospace;
+    font-family: "SF Mono", "Consolas", "Fira Code", monospace;
     font-size: 13px;
-    color: #E0E7FF;
+    color: #E5E7EB;
 }
 
-/* Panneau central - Violet abyssal */
+/* Panneau central */
 #CentralContainer {
-    background-color: #0F0A1E;
-    border-top-right-radius: 16px;
-    border-bottom-right-radius: 16px;
+    background-color: #0D1117;
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
 }
 
-/* Sidebar - Gradient Synthwave */
+/* Sidebar */
 #Sidebar {
-    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                      stop:0 #1A0B2E,
-                                      stop:1 #080414);
-    border-right: 2px solid #FF00FF;
+    background-color: #0D1117;
+    border-right: 1px solid #1F2937;
     border-top-left-radius: 16px;
     border-bottom-left-radius: 16px;
 }
 
-/* Titre NURU - Vert Acide Hacker */
 #AppName {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 900;
-    color: #39FF14;
+    color: #00A3FF;
     letter-spacing: 4px;
 }
 
 #AppVersion {
-    color: #FF00FF;
+    color: #6B7280;
     font-weight: bold;
+    font-size: 10px;
 }
 
-/* Bouton Nouveau Chat - Style Arcade */
+/* Bouton Nouveau Chat */
 #NewChatBtn {
-    background-color: #FF00FF;
-    color: #000000;
-    border: 2px solid #FF00FF;
+    background-color: #00A3FF;
+    color: #0D1117;
+    border: none;
     border-radius: 8px;
     font-weight: 900;
-    text-transform: uppercase;
+    font-size: 13px;
 }
 #NewChatBtn:hover {
     background-color: #39FF14;
-    border: 2px solid #39FF14;
-    color: #000000;
+    color: #0D1117;
 }
 
-/* Menus de la Sidebar */
+/* Menus Sidebar */
 #SidebarMenu {
     background: transparent;
     border: none;
     font-size: 13px;
 }
 #SidebarMenu::item {
-    color: #A78BFA;
-    border-radius: 4px;
-    padding: 8px;
+    color: #6B7280;
+    border-radius: 6px;
+    padding: 10px;
+    margin: 2px 0;
 }
 #SidebarMenu::item:selected {
-    color: #39FF14;
-    background-color: rgba(57, 255, 20, 0.1);
-    border-left: 4px solid #39FF14;
+    color: #00A3FF;
+    background-color: rgba(0, 163, 255, 0.1);
+    border-left: 3px solid #00A3FF;
 }
 
 /* Raccourcis */
 #ShortcutBtn {
-    background-color: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    color: #6b7280;
+    background-color: transparent;
+    border: 1px solid #1F2937;
+    border-radius: 6px;
+    color: #6B7280;
     text-align: left;
-    padding-left: 15px;
+    padding-left: 12px;
+    font-size: 12px;
 }
 #ShortcutBtn:hover {
-    background-color: rgba(57, 255, 20, 0.08);
-    color: #cbd5e1;
+    background-color: rgba(0, 163, 255, 0.08);
+    color: #E5E7EB;
+    border-color: #00A3FF;
 }
 
 /* Pro Card */
 #ProCard {
     background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                                      stop:0 rgba(255, 0, 255, 0.15),
+                                      stop:0 rgba(0, 163, 255, 0.1),
                                       stop:1 rgba(57, 255, 20, 0.05));
-    border: 1px solid #FF00FF;
-    border-radius: 12px;
-    padding: 10px;
+    border: 1px solid #00A3FF;
+    border-radius: 10px;
+    padding: 12px;
 }
 #ProBtn {
-    background-color: #FF00FF;
-    color: #000000;
+    background-color: #00A3FF;
+    color: #0D1117;
     border: none;
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 6px 12px;
     font-weight: bold;
 }
@@ -105,82 +109,73 @@ QWidget {
     background-color: #39FF14;
 }
 
-/* ── HUD METRICS ── */
-#MetricsOverlay {
-    background: transparent;
-}
+/* HUD Métriques (overlay legacy — caché si non utilisé) */
+#MetricsOverlay { background: transparent; }
 #MetricsContainer {
-    background-color: rgba(0, 0, 0, 0.6);
-    border: 2px solid #FFB000;
+    background-color: #161B22;
+    border: 1px solid #1F2937;
     border-radius: 8px;
 }
-#MetricsText, #MetricsPct {
-    color: #FFB000;
-    font-weight: bold;
-}
-#MetricsText {
-    font-family: "SF Mono", monospace;
-    font-size: 11px;
-}
+#MetricsText, #MetricsPct { color: #6B7280; font-weight: bold; }
+#MetricsText { font-size: 10px; }
 
-/* Barre de RAM */
+/* Barre RAM */
 QProgressBar#RamBar {
-    background-color: #333333;
+    background-color: #1F2937;
     border: none;
-    border-radius: 0px;
-    height: 8px;
+    border-radius: 2px;
+    height: 6px;
 }
 QProgressBar#RamBar::chunk {
     background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                                       stop:0 #39FF14,
-                                      stop:1 #FF00FF);
-    border-radius: 0px;
+                                      stop:1 #00A3FF);
+    border-radius: 2px;
 }
 
-/* Bulles de Chat V6 — Neon Funk */
+/* Bulles de chat V6 */
 #ChatBubbleAssistant {
-    background-color: #1A152E;
-    border-left: 3px solid #FF00FF;
-    border-radius: 8px;
-    padding: 15px;
-    margin: 5px;
+    background-color: #161B22;
+    border-left: 3px solid #00A3FF;
+    border-radius: 10px;
+    padding: 14px;
+    margin: 4px 0;
 }
 
 #ChatBubbleUser {
-    background-color: #2D2545;
+    background-color: #1A1D24;
     border-left: 3px solid #39FF14;
-    border-radius: 8px;
-    padding: 15px;
-    margin: 5px;
+    border-radius: 10px;
+    padding: 14px;
+    margin: 4px 0;
 }
 
-/* Bulles legacy (V5) */
+/* Bulles legacy V5 */
 #BubbleFrame {
-    background-color: rgba(139, 92, 246, 0.15);
-    border: 1px solid rgba(139, 92, 246, 0.5);
+    background-color: rgba(0, 163, 255, 0.08);
+    border: 1px solid rgba(0, 163, 255, 0.3);
     border-radius: 10px;
     border-bottom-right-radius: 0px;
 }
-
 #AssistantBubbleFrame {
     background-color: rgba(57, 255, 20, 0.05);
-    border: 1px solid rgba(57, 255, 20, 0.3);
+    border: 1px solid rgba(57, 255, 20, 0.2);
     border-radius: 10px;
     border-bottom-left-radius: 0px;
 }
 
 /* Zone de saisie */
 #InputFrame {
-    background-color: rgba(30, 20, 50, 0.6);
-    border: 2px solid #FF00FF;
-    border-radius: 20px;
+    background-color: #161B22;
+    border: 1px solid #1F2937;
+    border-radius: 16px;
 }
 #InputField {
     background: transparent;
     border: none;
-    color: #E0E7FF;
+    color: #E5E7EB;
     font-size: 14px;
-    padding: 8px;
+    padding: 8px 4px;
 }
 #InputField:focus {
     border: none;
@@ -189,11 +184,12 @@ QProgressBar#RamBar::chunk {
 
 /* Bouton Envoyer */
 #SendButton {
-    background-color: #FF00FF;
-    color: #000000;
+    background-color: #00A3FF;
+    color: #0D1117;
     border: none;
-    border-radius: 18px;
+    border-radius: 16px;
     font-weight: bold;
+    font-size: 14px;
 }
 #SendButton:hover {
     background-color: #39FF14;
@@ -202,44 +198,40 @@ QProgressBar#RamBar::chunk {
 /* Bouton Web */
 #WebSearchBtn {
     background-color: transparent;
-    color: #A78BFA;
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #6B7280;
+    border: 1px solid #1F2937;
     border-radius: 8px;
-    padding: 4px 8px;
+    padding: 4px 10px;
     font-size: 11px;
 }
 #WebSearchBtn:checked {
-    background-color: #39FF14;
-    color: #000000;
-    border: 1px solid #39FF14;
+    background-color: #00A3FF;
+    color: #0D1117;
+    border: 1px solid #00A3FF;
 }
 
 /* Clear / Feedback */
 #ClearBtn {
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    color: #94a3b8;
+    background-color: transparent;
+    border: 1px solid #1F2937;
+    border-radius: 8px;
+    color: #6B7280;
     font-size: 10px;
 }
 #ClearBtn:hover {
-    background-color: #FF00FF;
-    color: #000000;
+    background-color: #00A3FF;
+    color: #0D1117;
 }
 
 /* Feedback buttons */
 #BtnFeedbackUp, #BtnFeedbackDown {
     background: transparent;
     border: none;
-    color: #6b7280;
-    font-size: 14px;
+    color: #6B7280;
+    font-size: 12px;
 }
-#BtnFeedbackUp:hover, #BtnFeedbackUp:checked {
-    color: #39FF14;
-}
-#BtnFeedbackDown:hover, #BtnFeedbackDown:checked {
-    color: #FF00FF;
-}
+#BtnFeedbackUp:hover, #BtnFeedbackUp:checked { color: #39FF14; }
+#BtnFeedbackDown:hover, #BtnFeedbackDown:checked { color: #ef4444; }
 
 /* Scrollbar */
 QScrollBar:vertical {
@@ -247,30 +239,22 @@ QScrollBar:vertical {
     width: 6px;
 }
 QScrollBar::handle:vertical {
-    background: #FF00FF;
+    background: #1F2937;
     border-radius: 3px;
     min-height: 20px;
 }
-QScrollBar::handle:vertical:hover {
-    background: #39FF14;
-}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-    height: 0px;
-}
+QScrollBar::handle:vertical:hover { background: #00A3FF; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
 
-/* Labels / titres */
+/* Labels */
 #PanelTitle {
-    color: #FFB000;
+    color: #6B7280;
     font-size: 10px;
     font-weight: bold;
     letter-spacing: 1px;
 }
 
-/* Hint de saisie */
-#InputHint {
-    color: #6b7280;
-    font-size: 10px;
-}
+#InputHint { color: #4B5563; font-size: 10px; }
 
 /* Module circles */
 #ModuleCircleActive {
@@ -278,51 +262,42 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     border-radius: 20px;
 }
 #ModuleCircleInactive {
-    background-color: #333333;
+    background-color: #1F2937;
     border-radius: 20px;
 }
+
 /* Collapse button */
 #CollapseBtn {
     background: transparent;
-    color: #6b7280;
+    color: #6B7280;
     border: none;
-    font-size: 16px;
+    font-size: 14px;
 }
 
-/* MetricCard V5 styles */
+/* MetricCard */
 #MetricCard {
-    background-color: rgba(0, 0, 0, 0.6);
-    border: 2px solid #FF00FF;
+    background-color: #161B22;
+    border: 1px solid #1F2937;
     border-radius: 8px;
-    padding: 6px;
+    padding: 8px;
 }
-
-#MetricTitle {
-    color: #A78BFA;
-    font-size: 10px;
-    font-weight: bold;
-}
-
+#MetricTitle { color: #6B7280; font-size: 10px; font-weight: bold; }
 #MetricValue {
     font-size: 16px;
     font-weight: bold;
-    color: #39FF14;
+    color: #00A3FF;
 }
+#MetricSparkline { color: rgba(0, 163, 255, 0.3); font-size: 10px; }
 
-#MetricSparkline {
-    color: rgba(255, 0, 255, 0.3);
-    font-size: 10px;
-}
-
-/* Bouton de réduction des métriques (NURU V5) */
+/* Minimize btn */
 #MinimizeBtn {
-    background-color: rgba(255, 0, 255, 0.2);
-    color: #FF00FF;
-    border: 1px solid #FF00FF;
+    background-color: transparent;
+    color: #6B7280;
+    border: 1px solid #1F2937;
     border-radius: 4px;
     font-size: 12px;
-    font-weight: bold;
 }
 #MinimizeBtn:hover {
-    background-color: rgba(255, 0, 255, 0.4);
+    background-color: #00A3FF;
+    color: #0D1117;
 }

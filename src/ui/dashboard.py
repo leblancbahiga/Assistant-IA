@@ -265,7 +265,7 @@ class CyberDashboard(QMainWindow):
         # Build components
         self._build_sidebar()
         self._build_central_area()
-        self._build_metrics_overlay()
+        self._build_right_panel()  # V6 : colonne métriques + CoT
         
         self._wire_signals()
         self._init_timers()
@@ -450,19 +450,143 @@ class CyberDashboard(QMainWindow):
         layout.addWidget(self.stacked, 1)
         self.main_layout.addWidget(container, 1)
 
-    def _build_metrics_overlay(self):
-        self.metrics_overlay = MetricsOverlay(self.centralWidget())
-        self._reposition_overlay()
-        self.metrics_overlay.show()
+    def _build_right_panel(self):
+        """V6 : Colonne droite — métriques en temps réel + zone Chain of Thought.
 
-    def _reposition_overlay(self):
-        self.metrics_overlay.adjustSize()
-        self.metrics_overlay.move(self.width() - self.metrics_overlay.width() - 30, 20)
-        self.metrics_overlay.raise_()
+        Design sobre : fond anthracite, accents bleu électrique, vert acide.
+        """
+        self.right_panel = QFrame()
+        self.right_panel.setObjectName("RightPanel")
+        self.right_panel.setFixedWidth(320)
+        self.right_panel.setStyleSheet("""
+            #RightPanel {
+                background-color: #0D1117;
+                border-left: 1px solid #1F2937;
+                border-top-right-radius: 16px;
+                border-bottom-right-radius: 16px;
+            }
+        """)
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._reposition_overlay()
+        layout = QVBoxLayout(self.right_panel)
+        layout.setContentsMargins(16, 20, 16, 20)
+        layout.setSpacing(16)
+
+        # ── Titre du panneau ──
+        panel_title = QLabel("SYSTÈME")
+        panel_title.setStyleSheet(
+            "color: #6B7280; font-size: 10px; font-weight: bold; letter-spacing: 2px;"
+        )
+        layout.addWidget(panel_title)
+
+        # ── RAM ──
+        ram_frame = QFrame()
+        ram_frame.setStyleSheet("""
+            background-color: #161B22;
+            border: 1px solid #1F2937;
+            border-radius: 8px; padding: 12px;
+        """)
+        ram_inner = QVBoxLayout(ram_frame)
+        ram_inner.setSpacing(6)
+
+        ram_header = QHBoxLayout()
+        ram_lbl = QLabel("🖥 RAM")
+        ram_lbl.setStyleSheet("color: #00A3FF; font-size: 11px; font-weight: bold;")
+        self.ram_value = QLabel("-- / --")
+        self.ram_value.setStyleSheet("color: #E5E7EB; font-size: 13px; font-weight: bold;")
+        ram_header.addWidget(ram_lbl)
+        ram_header.addStretch()
+        ram_header.addWidget(self.ram_value)
+        ram_inner.addLayout(ram_header)
+
+        self.ram_bar = QProgressBar()
+        self.ram_bar.setFixedHeight(4)
+        self.ram_bar.setTextVisible(False)
+        self.ram_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #1F2937; border: none; border-radius: 2px;
+            }
+            QProgressBar::chunk {
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #39FF14, stop:1 #00A3FF);
+                border-radius: 2px;
+            }
+        """)
+        ram_inner.addWidget(self.ram_bar)
+
+        self.ram_detail = QLabel("")
+        self.ram_detail.setStyleSheet("color: #6B7280; font-size: 10px;")
+        ram_inner.addWidget(self.ram_detail)
+        layout.addWidget(ram_frame)
+
+        # ── Cartes métriques ──
+        metrics_grid = QHBoxLayout()
+        metrics_grid.setSpacing(8)
+
+        self.tok_card = self._make_metric_card("TOK/S", "0.0", "#00A3FF")
+        self.rag_card = self._make_metric_card("RAG", "0.00", "#39FF14")
+        metrics_grid.addWidget(self.tok_card)
+        metrics_grid.addWidget(self.rag_card)
+        layout.addLayout(metrics_grid)
+
+        self.mode_card = self._make_metric_card("MODE", "local", "#FFB000")
+        layout.addWidget(self.mode_card)
+
+        # ── Séparateur ──
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("color: #1F2937;")
+        layout.addWidget(sep)
+
+        # ── Zone Chain of Thought ──
+        cot_label = QLabel("🧠 RAISONNEMENT")
+        cot_label.setStyleSheet(
+            "color: #6B7280; font-size: 10px; font-weight: bold; letter-spacing: 2px;"
+        )
+        layout.addWidget(cot_label)
+
+        self.cot_text = QLabel("En attente d'une requête...")
+        self.cot_text.setWordWrap(True)
+        self.cot_text.setStyleSheet("""
+            color: #9CA3AF; font-size: 11px; line-height: 1.5;
+            background-color: #161B22;
+            border: 1px solid #1F2937;
+            border-radius: 8px; padding: 12px;
+        """)
+        layout.addWidget(self.cot_text, 1)
+
+        # ── Info modèle ──
+        self.model_info = QLabel("Phi-4-mini-4bit • Groq")
+        self.model_info.setStyleSheet("color: #4B5563; font-size: 9px;")
+        self.model_info.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.model_info)
+
+        self.main_layout.addWidget(self.right_panel)
+
+    def _make_metric_card(self, title: str, value: str, color: str) -> QFrame:
+        """Crée une carte métrique compacte."""
+        card = QFrame()
+        card.setStyleSheet(f"""
+            background-color: #161B22;
+            border: 1px solid #1F2937;
+            border-radius: 8px; padding: 10px;
+        """)
+        inner = QVBoxLayout(card)
+        inner.setSpacing(4)
+        lbl = QLabel(title)
+        lbl.setStyleSheet(f"color: {color}; font-size: 9px; font-weight: bold;")
+        val = QLabel(value)
+        val.setStyleSheet(f"color: #E5E7EB; font-size: 16px; font-weight: bold;")
+        val.setAlignment(Qt.AlignLeft)
+        inner.addWidget(lbl)
+        inner.addWidget(val)
+        return card
+
+    def set_cot(self, text: str):
+        """V6 : Met à jour la zone Chain of Thought."""
+        self.cot_text.setText(text)
+
+    def clear_cot(self):
+        self.cot_text.setText("En attente d'une requête...")
 
     def _on_menu_clicked(self, item):
         idx = self.main_menu.row(item)
@@ -492,37 +616,28 @@ class CyberDashboard(QMainWindow):
 
     def _update_metrics(self):
         try:
-            # NURU V5 : utilise le TelemetryViewModel au lieu de psutil direct
             snapshot = self.telemetry_vm.snapshot()
             free_gb = snapshot.ram_free_mb / 1024.0
             total_gb = snapshot.ram_total_mb / 1024.0
             used_gb = total_gb - free_gb
-            ram_ratio = free_gb / total_gb if total_gb > 0 else 0
-            ram_used_pct = int((1 - ram_ratio) * 100)
-            ram_color = self.telemetry_vm.ram_color(snapshot.ram_status)
+            ram_pct = int((1 - free_gb / total_gb) * 100) if total_gb > 0 else 0
+            ram_color = "#39FF14" if free_gb > 1.5 else "#FFB000" if free_gb > 0.5 else "#ef4444"
 
-            self.metrics_overlay.update_metrics(free_gb, total_gb, snapshot.ram_status)
-            
-            # NURU V6 : Mettre à jour le badge de stratégie
+            self.ram_value.setText(
+                f"<span style='color:{ram_color}'>{used_gb:.1f}G</span> / {total_gb:.1f}G"
+            )
+            self.ram_bar.setValue(ram_pct)
+            self.ram_detail.setText(
+                f"{ram_pct}% utilisé  •  {free_gb:.1f}G libre"
+            )
+
+            # Badge stratégie
             try:
                 hybrid = getattr(config, 'hybrid_mode', 'local_only')
-                colors = {
-                    "local_only": ("#39FF14", "🌀 LOCAL"),
-                    "verify": ("#FF00FF", "✅ VERIFY"),
-                    "plan": ("#FFB000", "📋 PLAN"),
-                    "rag": ("#00F2FF", "🌀 ARCHON"),
-                }
-                color, label = colors.get(hybrid, ("#39FF14", "🌀 LOCAL"))
-                self.strategy_badge.setStyleSheet(f"""
-                    background-color: rgba({','.join(map(str, QColor(color).getRgb()[:3]))}, 0.1);
-                    border: 1px solid {color};
-                    border-radius: 4px;
-                    color: {color};
-                    font-size: 10px;
-                    padding: 2px 8px;
-                    font-weight: bold;
-                """)
-                self.strategy_badge.setText(label)
+                labels = {"local_only": "local", "verify": "verify",
+                          "plan": "plan", "rag": "archon"}
+                mode = labels.get(hybrid, "local")
+                self.mode_card.layout().itemAt(1).widget().setText(mode)
             except Exception:
                 pass
         except Exception as e:
