@@ -15,7 +15,7 @@ rag_score_fallback: 0.30
 # Nombre de chunks maximum à utiliser
 rag_k: 5
 # Taille max du contexte RAG en tokens
-rag_max_context_tokens: 600
+rag_max_context_tokens: 1200
 
 # ─── LLM Local ───
 local_model: "mlx-community/Phi-4-mini-instruct-4bit"

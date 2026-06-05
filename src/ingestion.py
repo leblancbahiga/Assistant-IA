@@ -92,17 +92,31 @@ class IngestionEngine:
                 semantic_chunks = chunker.chunk(text, source=os.path.basename(filepath),
                                                 metadata=metadata)
 
+                # NURU V6 : Chunking hiérarchique V2 (plus robuste, chunks plus gros)
+                from src.rag.v2_chunking import HierarchicalChunkerV2
+                v2_chunker = HierarchicalChunkerV2()
+                v2_chunks = v2_chunker.chunk(
+                    text,
+                    source=os.path.basename(filepath),
+                    doc_title=os.path.basename(filepath),
+                )
+                
+                # Utiliser V2 comme source principale, V1 comme fallback
+                primary_chunks = v2_chunks if v2_chunks else semantic_chunks
+
                 chunks = []
-                for sc in semantic_chunks:
-                    # On embed le texte contextualisé (avec [Doc - Section])
-                    embedding = await self.embedder.embed(sc.contextualized, is_query=False)
+                for c in primary_chunks:
+                    # V2 : le contenu inclut déjà le contexte (résumé, section, importance)
+                    content = c.to_dict()["content"]
+                    # On embed le texte enrichi
+                    embedding = await self.embedder.embed(content, is_query=False)
                     chunks.append({
-                        "content": sc.contextualized,  # Texte avec contexte
+                        "content": content,
                         "source": os.path.basename(filepath),
                         "embedding": embedding[0],
                         "date": "",
-                        "title": sc.title,
-                        "level": sc.level,
+                        "title": c.section_title or c.doc_title,
+                        "level": c.level,
                     })
 
                 self.rag.add_chunks(chunks)
