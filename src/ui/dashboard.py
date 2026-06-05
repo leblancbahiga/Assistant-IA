@@ -367,11 +367,23 @@ class CyberDashboard(QMainWindow):
     def _build_central_area(self):
         container = QFrame()
         container.setObjectName("CentralContainer")
-        
+
+        # Fond d'écran + overlay sombre pour lisibilité
         bg_path = Path(__file__).parent / "assets" / "fond.jpg"
         if bg_path.exists():
-            container.setStyleSheet(f"#CentralContainer {{ border-image: url({bg_path.as_posix()}) 0 0 0 0 stretch stretch; }}")
-            
+            container.setStyleSheet(f"""
+                #CentralContainer {{
+                    border-image: url({bg_path.as_posix()}) 0 0 0 0 stretch stretch;
+                }}
+            """)
+            # Overlay semi-transparent par-dessus l'image
+            overlay = QFrame(container)
+            overlay.setStyleSheet("""
+                background-color: rgba(13, 17, 23, 0.25);
+            """)
+            overlay.setGeometry(0, 0, container.width(), container.height())
+            overlay.lower()
+
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -592,6 +604,17 @@ class CyberDashboard(QMainWindow):
         idx = self.main_menu.row(item)
         target = {0: 1, 1: 2, 2: 7}.get(idx, 0)
         self.switch_page(target)
+
+    def resizeEvent(self, event):
+        """Redimensionne l'overlay de fond avec la fenêtre."""
+        super().resizeEvent(event)
+        # Mettre à jour la taille de l'overlay sombre
+        container = self.findChild(QFrame, "CentralContainer")
+        if container:
+            for child in container.findChildren(QFrame):
+                if child.styleSheet() and "rgba(13, 17, 23" in child.styleSheet():
+                    child.setGeometry(0, 0, container.width(), container.height())
+                    break
 
     def switch_page(self, index: int):
         """V6 : Transition animée entre les pages du dashboard."""
