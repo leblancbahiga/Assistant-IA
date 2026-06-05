@@ -13,9 +13,9 @@ rag_score_threshold: 0.40
 # Seuil réduit si la recherche plein texte (FTS) confirme un résultat
 rag_score_fallback: 0.30
 # Nombre de chunks maximum à utiliser
-rag_k: 5
+rag_k: 3
 # Taille max du contexte RAG en tokens
-rag_max_context_tokens: 1200
+rag_max_context_tokens: 2000
 
 # ─── LLM Local ───
 local_model: "mlx-community/Phi-4-mini-instruct-4bit"

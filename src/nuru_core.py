@@ -149,8 +149,13 @@ class NuruCore:
             return False
         
     def start_background_tasks(self):
-        """Lance les tâches asynchrones et le watcher en arrière-plan."""
-        asyncio.create_task(self.ingestion.auto_index_loop())
+        """Lance les tâches asynchrones et le watcher en arrière-plan.
+        
+        NURU V6 : auto_index_loop suspendue — l'index est construit 
+        manuellement via reindex_personal.py pour éviter la saturation RAM.
+        """
+        # V6 : Auto-indexation suspendue (sature la RAM sur M1 8 Go)
+        # asyncio.create_task(self.ingestion.auto_index_loop())
         # V4.5 : Document watcher (watchdog) pour auto-indexation temps réel
         self._watcher = DocumentWatcher(index_callback=self.ingestion.index_file)
         self._watcher.start()
