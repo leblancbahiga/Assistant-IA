@@ -59,6 +59,12 @@ EXCLUDED_PATTERNS = [
     re.compile(r'\bmaize.?mill\b', re.IGNORECASE),
     re.compile(r'\bcorn.?mill\b', re.IGNORECASE),
     re.compile(r'\bUganda Airlines\b'),
+    re.compile(r'\bequity\b', re.IGNORECASE),
+    re.compile(r'\bdai global\b', re.IGNORECASE),
+    re.compile(r'\bimpact\b'),  # lettre de motivation Impact
+    re.compile(r'\brti\b', re.IGNORECASE),
+    re.compile(r'\bulb.cooperation\b', re.IGNORECASE),
+    re.compile(r'\bulb-cooperation\b', re.IGNORECASE),
 ]
 
 
