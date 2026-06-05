@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070a11" />
+      <stop offset="100%" stop-color="#0d121e" />
+    </linearGradient>
+    
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00f2ff" stop-opacity="1" />
+      <stop offset="40%" stop-color="#8a2be2" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#070a11" stop-opacity="0" />
+    </radialGradient>
+
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f2ff" />
+      <stop offset="100%" stop-color="#b300ff" />
+    </linearGradient>
+
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur2" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="20" result="blur3" />
+      <feMerge>
+        <feMergeNode in="blur3" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="500" height="500" fill="url(#bgGradient)" rx="40" />
+
+  <circle cx="250" cy="220" r="160" fill="url(#coreGlow)" />
+
+  <circle cx="250" cy="220" r="110" fill="none" stroke="#00f2ff" stroke-width="2" stroke-dasharray="10 15 40 15" filter="url(#neonGlow)" />
+  <circle cx="250" cy="220" r="130" fill="none" stroke="#8a2be2" stroke-width="1" stroke-dasharray="4 8" opacity="0.6" />
+
+  <polygon points="250,135 323,177 323,263 250,305 177,263 177,177" fill="none" stroke="#b300ff" stroke-width="3" filter="url(#neonGlow)" opacity="0.8" />
+
+  <circle cx="250" cy="135" r="4" fill="#ffffff" filter="url(#neonGlow)" />
+  <circle cx="323" cy="177" r="4" fill="#ffffff" filter="url(#neonGlow)" />
+  <circle cx="323" cy="263" r="4" fill="#ffffff" filter="url(#neonGlow)" />
+  <circle cx="250" cy="305" r="4" fill="#ffffff" filter="url(#neonGlow)" />
+  <circle cx="177" cy="263" r="4" fill="#ffffff" filter="url(#neonGlow)" />
+  <circle cx="177" cy="177" r="4" fill="#ffffff" filter="url(#neonGlow)" />
+
+  <circle cx="250" cy="220" r="40" fill="#00f2ff" filter="url(#neonGlow)" opacity="0.9" />
+  <circle cx="250" cy="220" r="20" fill="#ffffff" filter="url(#neonGlow)" />
+
+  <line x1="250" y1="180" x2="250" y2="135" stroke="#00f2ff" stroke-width="2" opacity="0.8" />
+  <line x1="250" y1="260" x2="250" y2="305" stroke="#00f2ff" stroke-width="2" opacity="0.8" />
+  <line x1="215" y1="200" x2="177" y2="177" stroke="#00f2ff" stroke-width="2" opacity="0.8" />
+  <line x1="285" y1="200" x2="323" y2="177" stroke="#00f2ff" stroke-width="2" opacity="0.8" />
+  <line x1="215" y1="240" x2="177" y2="263" stroke="#00f2ff" stroke-width="2" opacity="0.8" />
+  <line x1="285" y1="240" x2="323" y2="263" stroke="#00f2ff" stroke-width="2" opacity="0.8" />
+
+  <text x="250" y="420" font-family="Menlo, monospace" font-size="56" font-weight="900" fill="url(#textGradient)" text-anchor="middle" letter-spacing="12" filter="url(#neonGlow)">NURU</text>
+  
+  <text x="250" y="450" font-family="Menlo, monospace" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="middle" letter-spacing="4">PERSONAL AI</text>
+</svg>

@@ -1,0 +1,25 @@
+Metadata-Version: 2.4
+Name: nuru-v45
+Version: 4.5.0
+Summary: NURU V4.5 — Assistant IA local pour Apple Silicon (Phi-4-mini / Groq / RAG)
+Author: Leblanc BAHIGA Mudarhi
+Requires-Dist: mlx-lm
+Requires-Dist: mlx-whisper
+Requires-Dist: mlx-embeddings
+Requires-Dist: sqlite-vec
+Requires-Dist: pysqlite3
+Requires-Dist: pyside6
+Requires-Dist: qasync
+Requires-Dist: psutil
+Requires-Dist: httpx
+Requires-Dist: numpy
+Requires-Dist: pymupdf
+Requires-Dist: python-docx
+Requires-Dist: loguru
+Requires-Dist: sentence-transformers
+Requires-Dist: sounddevice
+Requires-Dist: soundfile
+Requires-Dist: watchdog
+Requires-Dist: pyyaml
+Requires-Dist: pydantic-settings
+Requires-Dist: keyring

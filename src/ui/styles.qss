@@ -1,0 +1,311 @@
+/* ===================================================================
+   NURU V5 — Style GEEK & FUNK (Synthwave / Retro-Hacker)
+   =================================================================== */
+
+QWidget {
+    font-family: "Fira Code", "JetBrains Mono", "SF Mono", monospace;
+    font-size: 13px;
+    color: #E0E7FF;
+}
+
+/* Panneau central - Violet abyssal */
+#CentralContainer {
+    background-color: #0F0A1E;
+    border-top-right-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+
+/* Sidebar - Gradient Synthwave */
+#Sidebar {
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                      stop:0 #1A0B2E,
+                                      stop:1 #080414);
+    border-right: 2px solid #FF00FF;
+    border-top-left-radius: 16px;
+    border-bottom-left-radius: 16px;
+}
+
+/* Titre NURU - Vert Acide Hacker */
+#AppName {
+    font-size: 24px;
+    font-weight: 900;
+    color: #39FF14;
+    letter-spacing: 4px;
+}
+
+#AppVersion {
+    color: #FF00FF;
+    font-weight: bold;
+}
+
+/* Bouton Nouveau Chat - Style Arcade */
+#NewChatBtn {
+    background-color: #FF00FF;
+    color: #000000;
+    border: 2px solid #FF00FF;
+    border-radius: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+#NewChatBtn:hover {
+    background-color: #39FF14;
+    border: 2px solid #39FF14;
+    color: #000000;
+}
+
+/* Menus de la Sidebar */
+#SidebarMenu {
+    background: transparent;
+    border: none;
+    font-size: 13px;
+}
+#SidebarMenu::item {
+    color: #A78BFA;
+    border-radius: 4px;
+    padding: 8px;
+}
+#SidebarMenu::item:selected {
+    color: #39FF14;
+    background-color: rgba(57, 255, 20, 0.1);
+    border-left: 4px solid #39FF14;
+}
+
+/* Raccourcis */
+#ShortcutBtn {
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    color: #6b7280;
+    text-align: left;
+    padding-left: 15px;
+}
+#ShortcutBtn:hover {
+    background-color: rgba(57, 255, 20, 0.08);
+    color: #cbd5e1;
+}
+
+/* Pro Card */
+#ProCard {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                      stop:0 rgba(255, 0, 255, 0.15),
+                                      stop:1 rgba(57, 255, 20, 0.05));
+    border: 1px solid #FF00FF;
+    border-radius: 12px;
+    padding: 10px;
+}
+#ProBtn {
+    background-color: #FF00FF;
+    color: #000000;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+#ProBtn:hover {
+    background-color: #39FF14;
+}
+
+/* ── HUD METRICS ── */
+#MetricsOverlay {
+    background: transparent;
+}
+#MetricsContainer {
+    background-color: rgba(0, 0, 0, 0.6);
+    border: 2px solid #FFB000;
+    border-radius: 8px;
+}
+#MetricsText, #MetricsPct {
+    color: #FFB000;
+    font-weight: bold;
+}
+#MetricsText {
+    font-family: "SF Mono", monospace;
+    font-size: 11px;
+}
+
+/* Barre de RAM */
+QProgressBar#RamBar {
+    background-color: #333333;
+    border: none;
+    border-radius: 0px;
+    height: 8px;
+}
+QProgressBar#RamBar::chunk {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                      stop:0 #39FF14,
+                                      stop:1 #FF00FF);
+    border-radius: 0px;
+}
+
+/* Bulles de Chat */
+#BubbleFrame {
+    background-color: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    border-radius: 10px;
+    border-bottom-right-radius: 0px;
+}
+
+#AssistantBubbleFrame {
+    background-color: rgba(57, 255, 20, 0.05);
+    border: 1px solid rgba(57, 255, 20, 0.3);
+    border-radius: 10px;
+    border-bottom-left-radius: 0px;
+}
+
+/* Zone de saisie */
+#InputFrame {
+    background-color: rgba(30, 20, 50, 0.6);
+    border: 2px solid #FF00FF;
+    border-radius: 20px;
+}
+#InputField {
+    background: transparent;
+    border: none;
+    color: #E0E7FF;
+    font-size: 14px;
+    padding: 8px;
+}
+#InputField:focus {
+    border: none;
+    outline: none;
+}
+
+/* Bouton Envoyer */
+#SendButton {
+    background-color: #FF00FF;
+    color: #000000;
+    border: none;
+    border-radius: 18px;
+    font-weight: bold;
+}
+#SendButton:hover {
+    background-color: #39FF14;
+}
+
+/* Bouton Web */
+#WebSearchBtn {
+    background-color: transparent;
+    color: #A78BFA;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 11px;
+}
+#WebSearchBtn:checked {
+    background-color: #39FF14;
+    color: #000000;
+    border: 1px solid #39FF14;
+}
+
+/* Clear / Feedback */
+#ClearBtn {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: #94a3b8;
+    font-size: 10px;
+}
+#ClearBtn:hover {
+    background-color: #FF00FF;
+    color: #000000;
+}
+
+/* Feedback buttons */
+#BtnFeedbackUp, #BtnFeedbackDown {
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    font-size: 14px;
+}
+#BtnFeedbackUp:hover, #BtnFeedbackUp:checked {
+    color: #39FF14;
+}
+#BtnFeedbackDown:hover, #BtnFeedbackDown:checked {
+    color: #FF00FF;
+}
+
+/* Scrollbar */
+QScrollBar:vertical {
+    background: transparent;
+    width: 6px;
+}
+QScrollBar::handle:vertical {
+    background: #FF00FF;
+    border-radius: 3px;
+    min-height: 20px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #39FF14;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* Labels / titres */
+#PanelTitle {
+    color: #FFB000;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+/* Hint de saisie */
+#InputHint {
+    color: #6b7280;
+    font-size: 10px;
+}
+
+/* Module circles */
+#ModuleCircleActive {
+    background-color: #39FF14;
+    border-radius: 20px;
+}
+#ModuleCircleInactive {
+    background-color: #333333;
+    border-radius: 20px;
+}
+/* Collapse button */
+#CollapseBtn {
+    background: transparent;
+    color: #6b7280;
+    border: none;
+    font-size: 16px;
+}
+
+/* MetricCard V5 styles */
+#MetricCard {
+    background-color: rgba(0, 0, 0, 0.6);
+    border: 2px solid #FF00FF;
+    border-radius: 8px;
+    padding: 6px;
+}
+
+#MetricTitle {
+    color: #A78BFA;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+#MetricValue {
+    font-size: 16px;
+    font-weight: bold;
+    color: #39FF14;
+}
+
+#MetricSparkline {
+    color: rgba(255, 0, 255, 0.3);
+    font-size: 10px;
+}
+
+/* Bouton de réduction des métriques (NURU V5) */
+#MinimizeBtn {
+    background-color: rgba(255, 0, 255, 0.2);
+    color: #FF00FF;
+    border: 1px solid #FF00FF;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+#MinimizeBtn:hover {
+    background-color: rgba(255, 0, 255, 0.4);
+}

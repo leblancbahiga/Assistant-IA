@@ -1,0 +1,39 @@
+# NURU V5 — Configuration Utilisateur
+# Fichier YAML éditable. Redémarrage nécessaire après modification.
+
+# ─── Mode de réponse ───
+# strict   : uniquement documents, refuse si pas de preuves
+# hybrid   : (défaut) RAG d'abord, connaissances générales ensuite
+# free     : pas de grounding, conversation libre
+response_mode: "strict"
+
+# ─── RAG ───
+# Seuil de confiance pour accepter un résultat RAG
+rag_score_threshold: 0.50
+# Seuil réduit si la recherche plein texte (FTS) confirme un résultat
+rag_score_fallback: 0.40
+# Nombre de chunks maximum à utiliser
+rag_k: 5
+# Taille max du contexte RAG en tokens
+rag_max_context_tokens: 600
+
+# ─── LLM Local ───
+local_model: "mlx-community/Phi-4-mini-instruct-4bit"
+local_model_fallback: "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
+
+# ─── Cloud ───
+cloud_model: "llama-3.3-70b-versatile"
+cloud_provider: "groq"
+cloud_fallback: "gemini-1.5-flash"
+
+# ─── Cache ───
+cache_ttl_seconds: 300
+cache_maxsize: 256
+
+# ─── Mémoire ───
+session_window: 5  # nombre de tours conservés
+
+# ─── Audio ───
+stt_model: "small"
+tts_enabled: true
+tts_engine: "piper"

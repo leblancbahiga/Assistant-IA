@@ -1,0 +1,206 @@
+"""
+Memory Page — Affichage des Faits, Cache Sémantique et Procédures.
+"""
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+                               QFrame, QScrollArea, QPushButton, QLineEdit,
+                               QTableWidget, QTableWidgetItem, QHeaderView,
+                               QComboBox)
+from PySide6.QtCore import Qt
+
+
+class MemoryPage(QWidget):
+    def __init__(self, memory_store=None, parent=None):
+        super().__init__(parent)
+        self.memory_store = memory_store
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        
+        # Header
+        header = QHBoxLayout()
+        title = QLabel("🧠  MÉMOIRE")
+        title.setObjectName("PageTitle")
+
+        self.btn_purge = QPushButton("🗑  Purger")
+        self.btn_purge.setObjectName("GhostButton")
+        self.btn_purge.setCursor(Qt.PointingHandCursor)
+        self.btn_purge.clicked.connect(self._purge_cache)
+
+        self.btn_analyze = QPushButton("📊  Analyser")
+        self.btn_analyze.setObjectName("GhostButton")
+        self.btn_analyze.setCursor(Qt.PointingHandCursor)
+        self.btn_analyze.clicked.connect(self._analyze_memory)
+
+        btn_refresh = QPushButton("↻  Actualiser")
+        btn_refresh.setObjectName("GhostButton")
+        btn_refresh.setCursor(Qt.PointingHandCursor)
+        btn_refresh.clicked.connect(self.load_data)
+
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(self.btn_purge)
+        header.addWidget(self.btn_analyze)
+        header.addWidget(btn_refresh)
+        layout.addLayout(header)
+        
+        # Stats row
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(10)
+        self.stat_facts = self._make_stat_card("📌 Faits Stockés", "0")
+        self.stat_cache = self._make_stat_card("💾 Cache Sémantique", "0 entrées")
+        self.stat_procedures = self._make_stat_card("📋 Procédures", "0 règles")
+        stats_row.addWidget(self.stat_facts)
+        stats_row.addWidget(self.stat_cache)
+        stats_row.addWidget(self.stat_procedures)
+        layout.addLayout(stats_row)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none; background: transparent;")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        content_layout = QVBoxLayout(content)
+        content_layout.setSpacing(15)
+        
+        # === FAITS ===
+        facts_panel = QFrame()
+        facts_panel.setObjectName("Panel")
+        facts_layout = QVBoxLayout(facts_panel)
+        
+        facts_header = QHBoxLayout()
+        facts_title = QLabel("📌  FAITS MÉMORISÉS")
+        facts_title.setObjectName("PanelTitle")
+        facts_header.addWidget(facts_title)
+        facts_header.addStretch()
+        facts_layout.addLayout(facts_header)
+        
+        # Add fact
+        add_row = QHBoxLayout()
+        self.fact_input = QLineEdit()
+        self.fact_input.setObjectName("ChatInput")
+        self.fact_input.setPlaceholderText("Ajouter un fait...")
+        self.fact_category = QComboBox()
+        self.fact_category.setObjectName("StyledCombo")
+        self.fact_category.addItems(["general", "professional", "personal", "technical"])
+        btn_add = QPushButton("+ Ajouter")
+        btn_add.setObjectName("PrimaryButton")
+        btn_add.setCursor(Qt.PointingHandCursor)
+        btn_add.clicked.connect(self._add_fact)
+        add_row.addWidget(self.fact_input, stretch=1)
+        add_row.addWidget(self.fact_category)
+        add_row.addWidget(btn_add)
+        facts_layout.addLayout(add_row)
+        
+        self.facts_table = QTableWidget()
+        self.facts_table.setObjectName("DataTable")
+        self.facts_table.setColumnCount(3)
+        self.facts_table.setHorizontalHeaderLabels(["Contenu", "Catégorie", "Date"])
+        self.facts_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.facts_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.facts_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.facts_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.facts_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        facts_layout.addWidget(self.facts_table)
+        content_layout.addWidget(facts_panel)
+        
+        # === PROCÉDURES ===
+        proc_panel = QFrame()
+        proc_panel.setObjectName("Panel")
+        proc_layout = QVBoxLayout(proc_panel)
+        proc_title = QLabel("📋  PROCÉDURES & RÈGLES")
+        proc_title.setObjectName("PanelTitle")
+        proc_layout.addWidget(proc_title)
+        
+        self.proc_label = QLabel("Aucune procédure enregistrée.")
+        self.proc_label.setWordWrap(True)
+        self.proc_label.setStyleSheet("color: #9CA3AF; font-size: 13px; padding: 10px;")
+        proc_layout.addWidget(self.proc_label)
+        content_layout.addWidget(proc_panel)
+        
+        scroll.setWidget(content)
+        layout.addWidget(scroll, stretch=1)
+    
+    def _make_stat_card(self, title, value):
+        frame = QFrame()
+        frame.setObjectName("Panel")
+        frame.setFixedHeight(65)
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(15, 8, 15, 8)
+        t = QLabel(title)
+        t.setStyleSheet("color: #9CA3AF; font-size: 11px; font-weight: 600;")
+        v = QLabel(value)
+        v.setObjectName(f"stat_value_{title}")
+        v.setStyleSheet("color: #F3F4F6; font-size: 18px; font-weight: bold;")
+        fl.addWidget(t)
+        fl.addWidget(v)
+        frame._value_label = v
+        return frame
+    
+    def load_data(self):
+        if not self.memory_store:
+            return
+        try:
+            facts = self.memory_store.get_recent_facts(limit=50)
+            self.facts_table.setRowCount(len(facts))
+            for i, fact in enumerate(facts):
+                self.facts_table.setItem(i, 0, QTableWidgetItem(fact))
+                self.facts_table.setItem(i, 1, QTableWidgetItem("general"))
+                self.facts_table.setItem(i, 2, QTableWidgetItem("—"))
+            self.stat_facts._value_label.setText(str(len(facts)))
+            
+            procedures = self.memory_store.get_procedures()
+            proc_count = len(procedures.split('\n')) if procedures.strip() else 0
+            self.stat_procedures._value_label.setText(f"{proc_count} règles")
+            self.proc_label.setText(procedures if procedures.strip() else "Aucune procédure enregistrée.")
+        except Exception as e:
+            self.proc_label.setText(f"Erreur : {e}")
+    
+    def _add_fact(self):
+        text = self.fact_input.text().strip()
+        if text and self.memory_store:
+            category = self.fact_category.currentText()
+            self.memory_store.add_fact(text, category)
+            self.fact_input.clear()
+            self.load_data()
+
+    def _purge_cache(self):
+        if not self.memory_store:
+            return
+        from PySide6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(self, "Purger le cache",
+                                     "Voulez-vous vraiment purger le cache sémantique ?",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.memory_store.purge_cache()
+            self.stat_cache._value_label.setText("0 entrées")
+            self.load_data()
+
+    def _analyze_memory(self):
+        if not self.memory_store:
+            return
+        try:
+            analysis = self.memory_store.analyze_memory()
+            from PySide6.QtWidgets import QMessageBox
+            msg = (
+                f"📊 Analyse Mémoire\n\n"
+                f"Faits stockés : {analysis.get('total_facts', '?')}\n"
+                f"Messages historiques : {analysis.get('total_history', '?')}\n"
+                f"Procédures : {analysis.get('total_procedures', '?')}\n"
+                f"Réflexions : {analysis.get('total_reflections', '?')}\n"
+                f"Cache entries : {analysis.get('cache_entries', '?')}\n"
+                f"Cache hits : {analysis.get('cache_hits', '?')}\n"
+                f"Taille DB : {analysis.get('db_size_kb', '?')} KB\n"
+                f"Activité récente (1h) : {analysis.get('recent_activity', '?')} messages"
+            )
+            QMessageBox.information(self, "Analyse Mémoire", msg)
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Erreur", f"Analyse impossible : {e}")
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.load_data()

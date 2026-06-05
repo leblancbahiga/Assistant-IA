@@ -1,0 +1,957 @@
+📂 873 fichiers trouvés (PDF, DOCX, TXT, MD, CSV, JSON)
+   Exclusions : .git, __pycache__, .venv, node_modules
+📄 873 fichiers à indexer
+Fetching 5 files:   0%|          | 0/5 [00:00<?, ?it/s]Fetching 5 files: 100%|██████████| 5/5 [00:00<00:00, 127875.12it/s]
+⏱ Timeout sur /Users/leblancbahiga/Documents/Lettre n°012 Appel à proposition pour le recrutement du cabinet enquête de vulnérabilité climatique.docx (>30s).
+  ✅ [1/873] Lettre n°012 Appel à proposition pour le recrutement du cabinet enquête de vulnérabilité climatique.docx
+  ✅ [2/873] Guide de l'utilisateur.pdf
+  ✅ [3/873] P.V. de Neėgociation avec BEACOM ETUDES FILIERE RIZ WALIKALE Vf.pdf
+  ✅ [4/873] Interview Questions - Sustainable Agriculture Trainer.docx
+  ✅ [5/873] Uganda Airlines - Reservation.pdf
+  ✅ [6/873] Proposition Technique BEACCOM_Tomj_2025.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/720BHA23GR00094_Annex A_Final External Evaluation_ToRs_V2_tosubmit.pdf (>30s).
+  ✅ [7/873] 720BHA23GR00094_Annex A_Final External Evaluation_ToRs_V2_tosubmit.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/TdR-endline-evaluation_MAnU-2.0-Final-2025[1].pdf (>30s).
+  ✅ [8/873] TdR-endline-evaluation_MAnU-2.0-Final-2025[1].pdf
+  ✅ [9/873] ETUDE DE MARCHE | KoboToolbox.pdf
+  ✅ [10/873] analyse_enquete_alimentaire.txt
+  ✅ [11/873] CURRICULUM VITAE-OMOMBO MULAMBA_Project BEACCOM_2025.docx
+Erreur hashage /Users/leblancbahiga/Documents/mediacongo.net - Offre d'emploi - Moniteur de Terrain.pdf: [Errno 60] Operation timed out
+  ✅ [12/873] mediacongo.net - Offre d'emploi - Moniteur de Terrain.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/SUSTAINABLE AGRICULTURE TRAINING CURRICULUM- Zamora.docx (>30s).
+  ✅ [13/873] SUSTAINABLE AGRICULTURE TRAINING CURRICULUM- Zamora.docx
+  ✅ [14/873] Interview Questions - Sustainable Agriculture Trainer.pdf
+  ✅ [15/873] ANALYSE ETUDE DE MARCHE.docx
+  ✅ [16/873] Image_20250120_0002.pdf
+  ✅ [17/873] Mots de passe.csv
+  ✅ [18/873] Image_20250120_0001.pdf
+  ✅ [19/873] Questionnaire Alimentation  Leblanc.docx
+  ✅ [20/873] Rapport d1.docx
+  ✅ [21/873] Production mondiale et africaine d.docx
+  ⏭️  [22/873] Trop gros (39MB): VC Ananas_Kananga VI.docx
+  ✅ [23/873] Rapport d.docx
+  ✅ [24/873] Maize Processing Machine Proposals Received.docx
+  ✅ [25/873] Maize Processing Machine Proposals.docx
+  ✅ [26/873] Maize Processing Machine Proposals Received.pdf
+  ✅ [27/873] Synthèse des Devis d.docx
+  ✅ [28/873] QUOTATION OF SMALL MAIZE MILLING MACHINE.pdf
+  ✅ [29/873] 500KGH FLOW DIAGRAM.pdf
+  ✅ [30/873] Quotation list of 28-45.pdf
+  ✅ [31/873] Quotation of 10T Maize mill-Uganda (1).pdf
+  ✅ [32/873] flow chart of  10ton per day  maize milling machine.pdf
+  ✅ [33/873] QUOTATION OF 500KGH CORN MILLING PLANT.pdf
+  ✅ [34/873] Quotation sheet-10ton per day maize flour mill.pdf
+  ✅ [35/873] 5tpd maize milling machine quotation.pdf
+  ✅ [36/873] flow chart 5 ton per day 24 hours maize flour mill.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/Projet ferme/Quotations/Quotation of 10T Maize mill-Uganda.pdf (>30s).
+  ✅ [37/873] Quotation of 10T Maize mill-Uganda.pdf
+  ✅ [38/873] Quotation list of 28-45 (1).pdf
+  ✅ [39/873] vehicle4.pdf
+  ✅ [40/873] vehicle5.pdf
+  ✅ [41/873] vehi11.pdf
+  ✅ [42/873] vehicle6.pdf
+  ✅ [43/873] rehicle regi ubb358k.pdf
+  ✅ [44/873] vehi10.pdf
+  ✅ [45/873] vehicle2.pdf
+  ✅ [46/873] vehicle3.pdf
+  ✅ [47/873] vehicle1.pdf
+  ✅ [48/873] VEHICLE REGI UBB358K.pdf
+  ✅ [49/873] vehi8.pdf
+  ✅ [50/873] vehi9.pdf
+  ✅ [51/873] veh12.pdf
+  ✅ [52/873] vehi7.pdf
+  ✅ [53/873] UBB2.pdf
+  ✅ [54/873] UBB3.pdf
+  ✅ [55/873] VEHICLE REGI UBB358K[53].pdf
+  ✅ [56/873] UBB1.pdf
+  ✅ [57/873] UBB.pdf
+  ✅ [58/873] UBB4.pdf
+  ✅ [59/873] UBB5.pdf
+  ✅ [60/873] vehicle.pdf
+  ✅ [61/873] UBB6.pdf
+  ✅ [62/873] Monday 3rd November minutes..docx
+  ✅ [63/873] Second Interview Questions - Technical_Jackline.docx
+  ✅ [64/873] 1.docx
+  ✅ [65/873] reaction to the curriculum.docx
+  ✅ [66/873] Installation maize flour unit.docx
+  ✅ [67/873] Sustainable and Climate.docx
+  ✅ [68/873] Agriculture Trainer May 2025.pdf
+  ✅ [69/873] YARID MEMO for Financial Requisitions 1 (1).docx
+  ✅ [70/873] Second Interview Questions - WILLIAM_OKELLO.docx
+  ✅ [71/873] CONCEPT NOTE1.docx
+  ✅ [72/873] can1.docx
+  ✅ [73/873] Adapting for Impact.docx
+  ⏭️  [74/873] Trop gros (24MB): REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE_2026 Cover + back.docx
+  ✅ [75/873] Plan de Projet Détaillé.docx
+  ✅ [76/873] Head paper 2026.docx
+  ✅ [77/873] Analysis and Recommendations for the Palabek Agricultural Curriculum.pdf
+  ✅ [78/873] YTT - Debriefing Note_Explorative Meeting_01.docx
+  ✅ [79/873] SUSTAINABLE AGRICULTURE TRAINING CURRICULUM- Zamora.pdf
+  ✅ [80/873] LEAD Achievements.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/YARID/MEMO to support repair of solar systems at office[25].docx (>30s).
+  ✅ [81/873] MEMO to support repair of solar systems at office[25].docx
+Erreur lors du parsing de /Users/leblancbahiga/Documents/YARID/~$AD Achievements.docx : Package not found at '/Users/leblancbahiga/Documents/YARID/~$AD Achievements.docx'
+  ✅ [82/873] ~$AD Achievements.docx
+  ✅ [83/873] amelioration curriculum.pdf
+  ✅ [84/873] can3.docx
+  ✅ [85/873] Second Interview Questions - INNOCENT MOSES.docx
+  ✅ [86/873] Demonstration Protocol Review.docx
+  ✅ [87/873] Report from the assesment.docx
+  ✅ [88/873] Adobe Scan 19 mai 2026.pdf
+  ✅ [89/873] 2783.pdf
+  ✅ [90/873] YTT - Debriefing Note_Explorative Meeting_01.pdf
+  ✅ [91/873] Analysis and Recommendations for the Palabek Agricultural Curriculum.docx
+  ✅ [92/873] Salary Advance Form.docx
+  ✅ [93/873] MONTHLY VEHICLE LOG.docx
+  ✅ [94/873] Second Interview Questions - Technical.docx
+  ✅ [95/873] QUOTATION 1.pdf
+  ✅ [96/873] concept note2.docx
+  ✅ [97/873] MONTHLY VEHICLE LOG.pdf
+  ✅ [98/873] Can2.docx
+  ✅ [99/873] PALABEK 1.docx
+  ✅ [100/873] Concept note to Conduct Sustainable Agriculture Training.docx
+  ✅ [101/873] Agriculture intelligente en Ouganda_.docx
+  ✅ [102/873] Analyse et Améliorations du Curriculum LEAD - Agriculture Durable.pdf
+  ✅ [103/873] CONTRACT 2[22].txt
+  ✅ [104/873] can4.docx
+  ✅ [105/873] Agriculture intelligente en Ouganda (2015–2025).pdf
+  ✅ [106/873] 2.docx
+  ✅ [107/873] rapport_agriculture_ouganda.pdf
+  ✅ [108/873] Needs and Knowledge Assessment report.docx
+  ✅ [109/873] Youth Group Zone 6.docx
+  ✅ [110/873] BASELINE SURVEY REPORT ON AGRICULTURAL NEEDS AND PRACTICES OF BENEFICIARIES.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/YARID/Baseline/BASELINE SURVEY REPORT ON AGRICULTURAL NEEDS AND PRACTICES OF BENEFICIARIES.pdf (>30s).
+  ✅ [111/873] BASELINE SURVEY REPORT ON AGRICULTURAL NEEDS AND PRACTICES OF BENEFICIARIES.pdf
+  ✅ [112/873] Baseline survey report template.docx
+  ✅ [113/873] Interview guide.docx
+  ✅ [114/873] Women FGD Zone 6.docx
+  ✅ [115/873] Baseline survey report template copie.docx
+  ✅ [116/873] FGD Men Beyogoya.docx
+  ✅ [117/873] Interview.docx
+  ✅ [118/873] Baseline Interview Guide with comments..docx
+  ✅ [119/873] Interview.pdf
+  ✅ [120/873] FGD Women Byogoya.docx
+  ✅ [121/873] Men FGD Zone 6.docx
+  ✅ [122/873] Baseline Interview Guide.docx
+  ✅ [123/873] Float Requisition Form_18092025.docx
+  ✅ [124/873] Cash Request Monitoring visit.docx
+  ✅ [125/873] Requisition to Conduct Sustainable Agriculture training.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/YARID/CONCEPT NOTE/protocole 3.docx (>30s).
+  ✅ [126/873] protocole 3.docx
+  ✅ [127/873] protocole 2.docx
+  ✅ [128/873] Rev_CONCEPT_Technical support_smart agric Training.docx
+  ✅ [129/873] CONCEPT_Technical support_smart agric_29012026.docx
+  ✅ [130/873] Concept note to Conduct training in sustainable agriculture.docx
+  ✅ [131/873] protocole 8.docx
+  ✅ [132/873] protocole 7.docx
+  ✅ [133/873] CONCEPT NOTE PALABEK 1.docx
+  ✅ [134/873] REV_Concept_Assorted seeds, tools in zone6 & beyogoya.docx
+  ✅ [135/873] protocole 6.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/YARID/CONCEPT NOTE/REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE.pdf (>30s).
+  ✅ [136/873] REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE.pdf
+  ✅ [137/873] Concept note for JTP & ICT 2025 LEAD training.docx
+  ✅ [138/873] Agreement Reference.docx
+  ✅ [139/873] Concept_note_monitoring_visit.docx
+  ✅ [140/873] Leblanc BAHIGA MUDARHI.docx
+  ✅ [141/873] Concept Note for Assorted Seeds.docx
+  ⏭️  [142/873] Trop gros (22MB): REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE_2026.docx
+  ✅ [143/873] Concept Note orientations on the JTP and ICT Bootcamp trainings for LEAD Project Beneficiaries in Palabek.docx
+  ⏭️  [144/873] Trop gros (24MB): REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE_2026.pdf
+  ✅ [145/873] Protocol for the layout and management of demonstration plots.docx
+  ✅ [146/873] Protocol for the layout and management of demonstration plots_2026.pdf
+  ✅ [147/873] Protocol for the layout and management of demonstration plots_2026.docx
+  ⏭️  [148/873] Trop gros (27MB): REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE.docx
+  ✅ [149/873] SUSTAINABLE AGRICULTURE TRAINING CURRICULUM- Zamora.docx
+  ✅ [150/873] Cahier des Charges.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/YARID/Training manual and Curriculum/SUSTAINABLE AGRICULTURE TRAINING GUIDE.pdf (>30s).
+  ✅ [151/873] SUSTAINABLE AGRICULTURE TRAINING GUIDE.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/YARID/Training manual and Curriculum/SUSTAINABLE AGRICULTURE TRAINING GUIDE.docx (>30s).
+  ✅ [152/873] SUSTAINABLE AGRICULTURE TRAINING GUIDE.docx
+  ✅ [153/873] REPORT ON DEMONSTRATION GARDENS AND TRIAL DEMONSTRATION.docx
+  ✅ [154/873] ACTIVITY REPORT_17032026.docx
+  ✅ [155/873] indicateurs_individuels.csv
+  ✅ [156/873] tableaux_croises.txt
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/Lettre n°012 Appel à proposition pour le recrutement du cabinet enquête de vulnérabilité climatique.docx (>30s).
+  ✅ [157/873] Lettre n°012 Appel à proposition pour le recrutement du cabinet enquête de vulnérabilité climatique.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/Guide de l'utilisateur.pdf (>30s).
+  ✅ [158/873] Guide de l'utilisateur.pdf
+  ✅ [159/873] P.V. de Neėgociation avec BEACOM ETUDES FILIERE RIZ WALIKALE Vf.pdf
+  ✅ [160/873] Interview Questions - Sustainable Agriculture Trainer.docx
+  ✅ [161/873] Uganda Airlines - Reservation.pdf
+  ✅ [162/873] Proposition Technique BEACCOM_Tomj_2025.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/720BHA23GR00094_Annex A_Final External Evaluation_ToRs_V2_tosubmit.pdf (>30s).
+  ✅ [163/873] 720BHA23GR00094_Annex A_Final External Evaluation_ToRs_V2_tosubmit.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/TdR-endline-evaluation_MAnU-2.0-Final-2025[1].pdf (>30s).
+  ✅ [164/873] TdR-endline-evaluation_MAnU-2.0-Final-2025[1].pdf
+  ✅ [165/873] ETUDE DE MARCHE | KoboToolbox.pdf
+  ✅ [166/873] CURRICULUM VITAE-OMOMBO MULAMBA_Project BEACCOM_2025.docx
+  ✅ [167/873] mediacongo.net - Offre d'emploi - Moniteur de Terrain.pdf
+  ✅ [168/873] SUSTAINABLE AGRICULTURE TRAINING CURRICULUM- Zamora.docx
+  ✅ [169/873] Interview Questions - Sustainable Agriculture Trainer.pdf
+  ✅ [170/873] ANALYSE ETUDE DE MARCHE.docx
+  ✅ [171/873] Image_20250120_0002.pdf
+  ✅ [172/873] Mots de passe.csv
+  ✅ [173/873] Image_20250120_0001.pdf
+  ✅ [174/873] Rapport d1.docx
+  ✅ [175/873] Production mondiale et africaine d.docx
+  ⏭️  [176/873] Trop gros (39MB): VC Ananas_Kananga VI.docx
+  ✅ [177/873] Rapport d.docx
+  ✅ [178/873] Maize Processing Machine Proposals Received.docx
+  ✅ [179/873] Maize Processing Machine Proposals.docx
+  ✅ [180/873] Maize Processing Machine Proposals Received.pdf
+  ✅ [181/873] Synthèse des Devis d.docx
+  ✅ [182/873] QUOTATION OF SMALL MAIZE MILLING MACHINE.pdf
+  ✅ [183/873] 500KGH FLOW DIAGRAM.pdf
+  ✅ [184/873] Quotation list of 28-45.pdf
+  ✅ [185/873] Quotation of 10T Maize mill-Uganda (1).pdf
+  ✅ [186/873] flow chart of  10ton per day  maize milling machine.pdf
+  ✅ [187/873] QUOTATION OF 500KGH CORN MILLING PLANT.pdf
+  ✅ [188/873] Quotation sheet-10ton per day maize flour mill.pdf
+  ✅ [189/873] 5tpd maize milling machine quotation.pdf
+  ✅ [190/873] flow chart 5 ton per day 24 hours maize flour mill.pdf
+  ✅ [191/873] Quotation of 10T Maize mill-Uganda.pdf
+  ✅ [192/873] Quotation list of 28-45 (1).pdf
+  ✅ [193/873] vehicle4.pdf
+  ✅ [194/873] vehicle5.pdf
+  ✅ [195/873] vehi11.pdf
+  ✅ [196/873] vehicle6.pdf
+  ✅ [197/873] rehicle regi ubb358k.pdf
+  ✅ [198/873] vehi10.pdf
+  ✅ [199/873] vehicle2.pdf
+  ✅ [200/873] vehicle3.pdf
+  ✅ [201/873] vehicle1.pdf
+  ✅ [202/873] VEHICLE REGI UBB358K.pdf
+  ✅ [203/873] vehi8.pdf
+  ✅ [204/873] vehi9.pdf
+  ✅ [205/873] veh12.pdf
+  ✅ [206/873] vehi7.pdf
+  ✅ [207/873] UBB2.pdf
+  ✅ [208/873] UBB3.pdf
+  ✅ [209/873] VEHICLE REGI UBB358K[53].pdf
+  ✅ [210/873] UBB1.pdf
+  ✅ [211/873] UBB.pdf
+  ✅ [212/873] UBB4.pdf
+  ✅ [213/873] UBB5.pdf
+  ✅ [214/873] vehicle.pdf
+  ✅ [215/873] UBB6.pdf
+  ✅ [216/873] Monday 3rd November minutes..docx
+  ✅ [217/873] Second Interview Questions - Technical_Jackline.docx
+  ✅ [218/873] 1.docx
+  ✅ [219/873] reaction to the curriculum.docx
+  ✅ [220/873] Installation maize flour unit.docx
+  ✅ [221/873] Sustainable and Climate.docx
+  ✅ [222/873] Agriculture Trainer May 2025.pdf
+  ✅ [223/873] YARID MEMO for Financial Requisitions 1 (1).docx
+  ✅ [224/873] Second Interview Questions - WILLIAM_OKELLO.docx
+  ✅ [225/873] CONCEPT NOTE1.docx
+  ✅ [226/873] can1.docx
+  ✅ [227/873] Adapting for Impact.docx
+  ⏭️  [228/873] Trop gros (24MB): REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE_2026 Cover + back.docx
+  ✅ [229/873] Plan de Projet Détaillé.docx
+  ✅ [230/873] Head paper 2026.docx
+  ✅ [231/873] Analysis and Recommendations for the Palabek Agricultural Curriculum.pdf
+  ✅ [232/873] YTT - Debriefing Note_Explorative Meeting_01.docx
+  ✅ [233/873] SUSTAINABLE AGRICULTURE TRAINING CURRICULUM- Zamora.pdf
+  ✅ [234/873] amelioration curriculum.pdf
+  ✅ [235/873] can3.docx
+  ✅ [236/873] Second Interview Questions - INNOCENT MOSES.docx
+  ✅ [237/873] Demonstration Protocol Review.docx
+  ✅ [238/873] Report from the assesment.docx
+  ✅ [239/873] 2783.pdf
+  ✅ [240/873] YTT - Debriefing Note_Explorative Meeting_01.pdf
+  ✅ [241/873] Analysis and Recommendations for the Palabek Agricultural Curriculum.docx
+  ✅ [242/873] Salary Advance Form.docx
+  ✅ [243/873] MONTHLY VEHICLE LOG.docx
+  ✅ [244/873] Second Interview Questions - Technical.docx
+  ✅ [245/873] QUOTATION 1.pdf
+  ✅ [246/873] concept note2.docx
+  ✅ [247/873] MONTHLY VEHICLE LOG.pdf
+  ✅ [248/873] Can2.docx
+  ✅ [249/873] PALABEK 1.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/YARID/Agriculture intelligente en Ouganda_.docx (>30s).
+  ✅ [250/873] Agriculture intelligente en Ouganda_.docx
+  ✅ [251/873] Analyse et Améliorations du Curriculum LEAD - Agriculture Durable.pdf
+  ✅ [252/873] CONTRACT 2[22].txt
+  ✅ [253/873] can4.docx
+  ✅ [254/873] Agriculture intelligente en Ouganda (2015–2025).pdf
+  ✅ [255/873] 2.docx
+  ✅ [256/873] rapport_agriculture_ouganda.pdf
+  ✅ [257/873] Youth Group Zone 6.docx
+  ✅ [258/873] BASELINE SURVEY REPORT ON AGRICULTURAL NEEDS AND PRACTICES OF BENEFICIARIES.docx
+  ✅ [259/873] BASELINE SURVEY REPORT ON AGRICULTURAL NEEDS AND PRACTICES OF BENEFICIARIES.pdf
+  ✅ [260/873] Baseline survey report template.docx
+  ✅ [261/873] Interview guide.docx
+  ✅ [262/873] Women FGD Zone 6.docx
+  ✅ [263/873] Baseline survey report template copie.docx
+  ✅ [264/873] FGD Men Beyogoya.docx
+  ✅ [265/873] Interview.docx
+  ✅ [266/873] Baseline Interview Guide with comments..docx
+  ✅ [267/873] FGD Women Byogoya.docx
+  ✅ [268/873] Men FGD Zone 6.docx
+  ✅ [269/873] Baseline Interview Guide.docx
+  ✅ [270/873] Float Requisition Form_18092025.docx
+  ✅ [271/873] Cash Request Monitoring visit.docx
+  ✅ [272/873] protocole 3.docx
+  ✅ [273/873] protocole 2.docx
+  ✅ [274/873] Rev_CONCEPT_Technical support_smart agric Training.docx
+  ✅ [275/873] CONCEPT_Technical support_smart agric_29012026.docx
+  ✅ [276/873] protocole 8.docx
+  ✅ [277/873] protocole 7.docx
+  ✅ [278/873] CONCEPT NOTE PALABEK 1.docx
+  ✅ [279/873] protocole 6.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/YARID/CONCEPT NOTE/REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE.pdf (>30s).
+  ✅ [280/873] REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE.pdf
+  ✅ [281/873] Concept note for JTP & ICT 2025 LEAD training.docx
+  ✅ [282/873] Agreement Reference.docx
+  ✅ [283/873] Concept_note_monitoring_visit.docx
+  ✅ [284/873] Leblanc BAHIGA MUDARHI.docx
+  ✅ [285/873] Concept Note for Assorted Seeds.docx
+  ⏭️  [286/873] Trop gros (22MB): REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE_2026.docx
+  ✅ [287/873] Concept Note orientations on the JTP and ICT Bootcamp trainings for LEAD Project Beneficiaries in Palabek.docx
+  ⏭️  [288/873] Trop gros (24MB): REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE_2026.pdf
+  ✅ [289/873] Protocol for the layout and management of demonstration plots.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/YARID/Training manual and Curriculum/Protocol for the layout and management of demonstration plots_2026.pdf (>30s).
+  ✅ [290/873] Protocol for the layout and management of demonstration plots_2026.pdf
+  ✅ [291/873] Protocol for the layout and management of demonstration plots_2026.docx
+  ⏭️  [292/873] Trop gros (27MB): REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE.docx
+  ✅ [293/873] SUSTAINABLE AGRICULTURE TRAINING CURRICULUM- Zamora.docx
+  ✅ [294/873] Cahier des Charges.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/YARID/Training manual and Curriculum/SUSTAINABLE AGRICULTURE TRAINING GUIDE.pdf (>30s).
+  ✅ [295/873] SUSTAINABLE AGRICULTURE TRAINING GUIDE.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/YARID/Training manual and Curriculum/SUSTAINABLE AGRICULTURE TRAINING GUIDE.docx (>30s).
+  ✅ [296/873] SUSTAINABLE AGRICULTURE TRAINING GUIDE.docx
+  ✅ [297/873] REPORT ON DEMONSTRATION GARDENS AND TRIAL DEMONSTRATION.docx
+  ✅ [298/873] ACTIVITY REPORT_17032026.docx
+  ✅ [299/873] CV_2026-02-20_Leblanc_BAHIGA Mudarhi_English.pdf
+  ✅ [300/873] Receipt.pdf
+  ✅ [301/873] CV_2026-03-23_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [302/873] CV_Leblanc_BAHIGA_2026.docx
+  ✅ [303/873] CV_2026-02-20_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [304/873] 42720 (1).pdf
+  ✅ [305/873] Profile.pdf
+  ✅ [306/873] Salary Advance Form.docx
+  ✅ [307/873] CV_BAHIGA_Mudarhi_English.docx
+  ✅ [308/873] 2.1 Guide de la photo du CV.pdf
+  ✅ [309/873] 1.1 CV template 2.docx
+  ✅ [310/873] 1.2 CV-Template-francais.docx
+  ✅ [311/873] Proposition Financière PASA NK.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/Backup/CVS DES CONSULTANTS A LA MISSION/OFFRE TECH - BEACCOM_PASA-NK_.pdf (>30s).
+  ✅ [312/873] OFFRE TECH - BEACCOM_PASA-NK_.pdf
+  ✅ [313/873] CV_Gédéon_Bak Environnementaliste.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/Backup/CVS DES CONSULTANTS A LA MISSION/CVS DES CONSULTANTS A LA MISSION/CURRICULUMS VITAE  SERAPHIN .pdf (>30s).
+  ✅ [314/873] CURRICULUMS VITAE  SERAPHIN .pdf
+  ✅ [315/873] 5 - CV_Jesse Muzalia_060724_FR.pdf
+  ✅ [316/873] 1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf
+  ✅ [317/873] 2 - CV_2024-10-11_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [318/873] 4 - BANSWETSHIBANGU_Resume_2.pdf
+  ✅ [319/873] Contrat IITA_opt.pdf
+  ✅ [320/873] ATTESTATION DE SERVICE RENDU DIOBASS 2.pdf
+  ✅ [321/873] cv_english.pdf
+  ✅ [322/873] Certificate.pdf
+  ✅ [323/873] cover letter_RTI.pdf
+  ✅ [324/873] CL_Bahiga_Leblanc_opt.pdf
+  ✅ [325/873] Ref_Bahiga_Leblanc.docx
+  ✅ [326/873] Leblanc-BAHIGA-20240417 (1).pdf
+  ✅ [327/873] Passeport.pdf
+  ✅ [328/873] Profile.pdf
+  ✅ [329/873] Leblanc-BAHIGA_Resume-20240417.pdf
+  ✅ [330/873] C_electeur_013_KIN_2023.pdf
+  ✅ [331/873] Contrat Diobass_opt.pdf
+  ✅ [332/873] CL_Bahiga_Leblanc.pdf
+  ✅ [333/873] Certificat CIAT.pdf
+  ✅ [334/873] Bahiga LeBlanc_Attestation.pdf
+  ✅ [335/873] attestation UCB.pdf
+  ✅ [336/873] attestation de réussite UCB.pdf
+  ✅ [337/873] Contrat IITA 2.pdf
+  ✅ [338/873] ATTESTATION DE SERVICE RENDU LEBLANC.pdf
+  ✅ [339/873] Sodeico.pdf
+  ✅ [340/873] FAO Vacancy_ Consultant(e) spécialiste en stratégie semencière, Antananarivo, Madagascar _ UNjobs.pdf
+  ✅ [341/873] Responsable de programme.pdf
+  ✅ [342/873] star_241112_01_06.pdf
+  ✅ [343/873] Offre d'emploi - ULB-Coopération - Chargé de projet agroécologie.pdf
+  ✅ [344/873] FAO Vacancy: Consultant(e) spécialiste en stratégie semencière, Antananarivo, Madagascar | UNjobs.pdf
+  ✅ [345/873] chargé de ddéveloppement communautaire.pdf
+  ✅ [346/873] Chef de projet adjoint, technique -.pdf
+  ✅ [347/873] C4D Agri Sud Kivu Détails du poste _ Enabel.pdf
+  ✅ [348/873] star_241112_02_07.pdf
+  ✅ [349/873] Experts techniques Chemonics.pdf
+  ✅ [350/873] Assistants-en-Developpement-communautaire-pour-les-Coordinations-provinciales-du-Nord-Kivu-Sud-Kivu-et-Ituri.pdf
+  ✅ [351/873] Chef de projet adjoint, technique.pdf
+  ✅ [352/873] CV_2023-11-15_Leblanc_BAHIGA M. (Rétabli) (Rétabli) (Rétabli) (Rétabli) (Rétabli).pdf
+  ✅ [353/873] Formulaire_pré_inscription[1].pdf
+  ✅ [354/873] CV_Bahiga_Leblanc_updated.docx
+  ✅ [355/873] CV_Leblanc_BAHIGA M..pdf
+  ✅ [356/873] CV_Bahiga_Leblanc.docx
+  ✅ [357/873] CV Leblanc (3).pdf
+  ✅ [358/873] CV_2024-11-18_Leblanc_BAHIGA Mudarhi_2.pdf
+  ✅ [359/873] CV_2024-04-16_Leblanc_BAHIGA (1).pdf
+  ✅ [360/873] CV_2024-08-03_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [361/873] CV Leblanc (5).pdf
+  ✅ [362/873] CV_Bahiga_Leblanc.pdf
+  ✅ [363/873] CV Leblanc (4).pdf
+  ✅ [364/873] CV_2024-09-18_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [365/873] Motivation_Assistant_developpement_communautaire_Star_est.pdf
+  ✅ [366/873] motivation letter RTI.pdf
+  ✅ [367/873] lettre de motivation Enabel.docx
+  ✅ [368/873] lettre de motivation Equity.docx
+  ✅ [369/873] lettre de motivation DAI Global.docx
+  ✅ [370/873] lettre de motivation RTI.docx
+  ✅ [371/873] lettre de motivation Enabel.pdf
+  ✅ [372/873] Motivation_Chef_de _projet_pont_de_lhumanite.pdf
+  ✅ [373/873] Motivation_Assistant_developpement_communautaire_Star_est.docx
+  ✅ [374/873] Motivation_Spécialiste_en_Stratégie_Semencière.docx
+  ✅ [375/873] lettre de motivation Impact.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/Backup/Dossier Leblanc Bahiga/Lettre de motivation/Motivation_Ass_resilience_PAM.pdf (>30s).
+  ✅ [376/873] Motivation_Ass_resilience_PAM.pdf
+  ✅ [377/873] Lettre de motivation IITA-LBSHI-2023-01-DESKTOP-GNLHQNK.pdf
+  ✅ [378/873] lettre de motivation ULB-Cooperation.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/Documents - MacBook Pro de Leblanc/Backup/Dossier Leblanc Bahiga/Lettre de motivation/lettre de motivation Equity.pdf (>30s).
+  ✅ [379/873] lettre de motivation Equity.pdf
+  ✅ [380/873] Motivation_Spécialiste_en_Stratégie_Semencière.pdf
+  ✅ [381/873] Motivation_Expert_developpement_communautaire_Star_est.docx
+  ✅ [382/873] lettre de motivation IITa.docx
+  ✅ [383/873] Motivation_Ass_resilience_PAM.docx
+  ✅ [384/873] Motivation_Chef_de _projet_pont_de_lhumanite.docx
+  ✅ [385/873] Motivation_C4D_Enabel.docx
+  ✅ [386/873] lettre de motivation Impact.docx
+  ✅ [387/873] Lettre de motivation ULB-Cooperation.pdf
+  ✅ [388/873] lettre de motivation 013_KIN_2023_charge_de_projet_agriculture.pdf
+  ✅ [389/873] Motivation_C4D_Enabel.pdf
+  ✅ [390/873] motivation_letter_bridge_for_billions.pdf
+  ✅ [391/873] motivation_letter_bridge_for_billions.docx
+  ✅ [392/873] Motivation_Expert_developpement_communautaire_Star_est.pdf
+  ✅ [393/873] lettre de motivation DAI Global.pdf
+  ✅ [394/873] Leblanc BAHIGA Mudarhi.docx
+  ✅ [395/873] Monthly and Quarterly reporting Template_Draft.docx
+  ✅ [396/873] Concept Note_ Template_Draft.docx
+  ✅ [397/873] Action points Summary table.docx
+  ✅ [398/873] Minutes and Action points Template.docx
+  ✅ [399/873] CV_2026-02-20_Leblanc_BAHIGA Mudarhi_English.pdf
+  ✅ [400/873] Receipt.pdf
+  ✅ [401/873] CV_2026-03-23_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [402/873] CV_Leblanc_BAHIGA_2026.docx
+  ✅ [403/873] CV_2026-02-20_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [404/873] 42720 (1).pdf
+  ✅ [405/873] Profile.pdf
+  ✅ [406/873] Salary Advance Form.docx
+  ✅ [407/873] CV_BAHIGA_Mudarhi_English.docx
+  ✅ [408/873] 2.1 Guide de la photo du CV.pdf
+  ✅ [409/873] 1.1 CV template 2.docx
+  ✅ [410/873] 1.2 CV-Template-francais.docx
+  ✅ [411/873] Proposition Financière PASA NK.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/Backup/CVS DES CONSULTANTS A LA MISSION/OFFRE TECH - BEACCOM_PASA-NK_.pdf (>30s).
+  ✅ [412/873] OFFRE TECH - BEACCOM_PASA-NK_.pdf
+  ✅ [413/873] CV_Gédéon_Bak Environnementaliste.pdf
+  ✅ [414/873] CURRICULUMS VITAE  SERAPHIN .pdf
+  ✅ [415/873] 5 - CV_Jesse Muzalia_060724_FR.pdf
+  ✅ [416/873] 1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf
+  ✅ [417/873] 2 - CV_2024-10-11_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [418/873] 4 - BANSWETSHIBANGU_Resume_2.pdf
+  ✅ [419/873] Contrat IITA_opt.pdf
+  ✅ [420/873] ATTESTATION DE SERVICE RENDU DIOBASS 2.pdf
+  ✅ [421/873] cv_english.pdf
+  ✅ [422/873] Certificate.pdf
+  ✅ [423/873] cover letter_RTI.pdf
+  ✅ [424/873] CL_Bahiga_Leblanc_opt.pdf
+  ✅ [425/873] Ref_Bahiga_Leblanc.docx
+  ✅ [426/873] Leblanc-BAHIGA-20240417 (1).pdf
+  ✅ [427/873] Passeport.pdf
+  ✅ [428/873] Profile.pdf
+  ✅ [429/873] Leblanc-BAHIGA_Resume-20240417.pdf
+  ✅ [430/873] C_electeur_013_KIN_2023.pdf
+  ✅ [431/873] Contrat Diobass_opt.pdf
+  ✅ [432/873] CL_Bahiga_Leblanc.pdf
+  ✅ [433/873] Certificat CIAT.pdf
+  ✅ [434/873] Bahiga LeBlanc_Attestation.pdf
+  ✅ [435/873] attestation UCB.pdf
+  ✅ [436/873] attestation de réussite UCB.pdf
+  ✅ [437/873] Contrat IITA 2.pdf
+  ✅ [438/873] ATTESTATION DE SERVICE RENDU LEBLANC.pdf
+  ✅ [439/873] Sodeico.pdf
+  ✅ [440/873] FAO Vacancy_ Consultant(e) spécialiste en stratégie semencière, Antananarivo, Madagascar _ UNjobs.pdf
+  ✅ [441/873] Responsable de programme.pdf
+  ✅ [442/873] star_241112_01_06.pdf
+  ✅ [443/873] Offre d'emploi - ULB-Coopération - Chargé de projet agroécologie.pdf
+  ✅ [444/873] FAO Vacancy: Consultant(e) spécialiste en stratégie semencière, Antananarivo, Madagascar | UNjobs.pdf
+  ✅ [445/873] chargé de ddéveloppement communautaire.pdf
+  ✅ [446/873] Chef de projet adjoint, technique -.pdf
+  ✅ [447/873] C4D Agri Sud Kivu Détails du poste _ Enabel.pdf
+  ✅ [448/873] star_241112_02_07.pdf
+  ✅ [449/873] Experts techniques Chemonics.pdf
+  ✅ [450/873] Assistants-en-Developpement-communautaire-pour-les-Coordinations-provinciales-du-Nord-Kivu-Sud-Kivu-et-Ituri.pdf
+  ✅ [451/873] Chef de projet adjoint, technique.pdf
+  ✅ [452/873] CV_2023-11-15_Leblanc_BAHIGA M. (Rétabli) (Rétabli) (Rétabli) (Rétabli) (Rétabli).pdf
+  ✅ [453/873] Formulaire_pré_inscription[1].pdf
+  ✅ [454/873] CV_Bahiga_Leblanc_updated.docx
+  ✅ [455/873] CV_Leblanc_BAHIGA M..pdf
+  ✅ [456/873] CV_Bahiga_Leblanc.docx
+  ✅ [457/873] CV Leblanc (3).pdf
+  ✅ [458/873] CV_2024-11-18_Leblanc_BAHIGA Mudarhi_2.pdf
+  ✅ [459/873] CV_2024-04-16_Leblanc_BAHIGA (1).pdf
+  ✅ [460/873] CV_2024-08-03_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [461/873] CV Leblanc (5).pdf
+  ✅ [462/873] CV_Bahiga_Leblanc.pdf
+  ✅ [463/873] CV Leblanc (4).pdf
+  ✅ [464/873] CV_2024-09-18_Leblanc_BAHIGA Mudarhi.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/Backup/Dossier Leblanc Bahiga/Lettre de motivation/Motivation_Assistant_developpement_communautaire_Star_est.pdf (>30s).
+  ✅ [465/873] Motivation_Assistant_developpement_communautaire_Star_est.pdf
+  ✅ [466/873] motivation letter RTI.pdf
+  ✅ [467/873] lettre de motivation Enabel.docx
+  ✅ [468/873] lettre de motivation Equity.docx
+  ✅ [469/873] lettre de motivation DAI Global.docx
+  ✅ [470/873] lettre de motivation RTI.docx
+  ✅ [471/873] lettre de motivation Enabel.pdf
+  ✅ [472/873] Motivation_Chef_de _projet_pont_de_lhumanite.pdf
+  ✅ [473/873] Motivation_Assistant_developpement_communautaire_Star_est.docx
+  ✅ [474/873] Motivation_Spécialiste_en_Stratégie_Semencière.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/Backup/Dossier Leblanc Bahiga/Lettre de motivation/lettre de motivation Impact.pdf (>30s).
+  ✅ [475/873] lettre de motivation Impact.pdf
+⏱ Timeout sur /Users/leblancbahiga/Documents/Backup/Dossier Leblanc Bahiga/Lettre de motivation/Motivation_Ass_resilience_PAM.pdf (>30s).
+  ✅ [476/873] Motivation_Ass_resilience_PAM.pdf
+  ✅ [477/873] Lettre de motivation IITA-LBSHI-2023-01-DESKTOP-GNLHQNK.pdf
+  ✅ [478/873] lettre de motivation ULB-Cooperation.docx
+  ✅ [479/873] lettre de motivation Equity.pdf
+  ✅ [480/873] Motivation_Spécialiste_en_Stratégie_Semencière.pdf
+  ✅ [481/873] Motivation_Expert_developpement_communautaire_Star_est.docx
+  ✅ [482/873] lettre de motivation IITa.docx
+  ✅ [483/873] Motivation_Ass_resilience_PAM.docx
+  ✅ [484/873] Motivation_Chef_de _projet_pont_de_lhumanite.docx
+  ✅ [485/873] Motivation_C4D_Enabel.docx
+  ✅ [486/873] lettre de motivation Impact.docx
+⏱ Timeout sur /Users/leblancbahiga/Documents/Backup/Dossier Leblanc Bahiga/Lettre de motivation/Lettre de motivation ULB-Cooperation.pdf (>30s).
+  ✅ [487/873] Lettre de motivation ULB-Cooperation.pdf
+  ✅ [488/873] lettre de motivation 013_KIN_2023_charge_de_projet_agriculture.pdf
+  ✅ [489/873] Motivation_C4D_Enabel.pdf
+  ✅ [490/873] motivation_letter_bridge_for_billions.pdf
+  ✅ [491/873] motivation_letter_bridge_for_billions.docx
+  ✅ [492/873] Motivation_Expert_developpement_communautaire_Star_est.pdf
+  ✅ [493/873] lettre de motivation DAI Global.pdf
+  ✅ [494/873] Leblanc BAHIGA Mudarhi.docx
+  ✅ [495/873] Monthly and Quarterly reporting Template_Draft.docx
+  ✅ [496/873] Concept Note_ Template_Draft.docx
+  ✅ [497/873] Action points Summary table.docx
+  ✅ [498/873] Minutes and Action points Template.docx
+  ✅ [499/873] Agriculture Trainer  2025.pdf
+  ✅ [500/873] CV_2025-06-16_Leblanc_BAHIGA%20Mudarhi.pdf
+  ✅ [501/873] Concept Note on the LEAD Project field visit.pdf
+  ⏭️  [502/873] Trop gros (25MB): REVISED SUSTAINABLE AGRICULTURE TRAINING GUIDE_2026 cover intro back.docx
+  ✅ [503/873] YARID_Bi-Annual Narrative Report_LEAD[80].pdf
+  ✅ [504/873] Protocol for the layout and management of demonstration plots.docx
+  ✅ [505/873] Cahier_des_charges_Agricultural_Training_App_LEAD.md
+  ✅ [506/873] ANTOINE- MUGARUKA-GOMA-CV et lettre de motivation du candidat.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Formulaire TECH Etudes filières riz.pdf (>30s).
+  ✅ [507/873] Formulaire TECH Etudes filières riz.pdf
+  ✅ [508/873] Annex VII - LEAD THEORY OF CHANGE - Woord En Daad-2[78].pdf
+  ✅ [509/873] Procédure d'obtention des Permis de Conduire —.pdf
+  ✅ [510/873] Annex I - Template Call for concept note LEAD Uganda (1)[24].pdf
+Erreur lors du parsing de /Users/leblancbahiga/Desktop/1b_PROPOSITION FINANCIERE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LC1S.pdf : document closed or encrypted
+  ✅ [511/873] 1b_PROPOSITION FINANCIERE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LC1S.pdf
+  ✅ [512/873] Interview Questions .docx
+  ✅ [513/873] gemini_prompt_agri_training.txt
+  ⏭️  [514/873] Trop gros (10MB): RAPPORT FINAL - BEACCOM_RIKOLTO - ETUDE DE BASE FILIERE RIZ WALIKALE_032025.docx
+  ⏭️  [515/873] Trop gros (10MB): RAPPORT FINAL .docx
+  ✅ [516/873] proposition technique et financière_DIAKONIE.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/Lettre n°012 Appel à proposition pour le recrutement du cabinet enquête de vulnérabilité climatique.docx (>30s).
+  ✅ [517/873] Lettre n°012 Appel à proposition pour le recrutement du cabinet enquête de vulnérabilité climatique.docx
+  ✅ [518/873] demande de paiement.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/RAPPORT FINAL - BEACCOM_RIKOLTO - ETUDE DE BASE FILIERE RIZ WALIKALE_032025 copie.pdf (>30s).
+  ✅ [519/873] RAPPORT FINAL - BEACCOM_RIKOLTO - ETUDE DE BASE FILIERE RIZ WALIKALE_032025 copie.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/Proposition technique fin.pdf (>30s).
+  ✅ [520/873] Proposition technique fin.pdf
+  ✅ [521/873] 3 - CV_Gédéon_Bak Environnementaliste.pdf
+  ✅ [522/873] tool1.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/Proposition technique.pdf (>30s).
+  ✅ [523/873] Proposition technique.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/BEACCOM - Formulaire TECH Etudes filières riz.pdf (>30s).
+  ✅ [524/873] BEACCOM - Formulaire TECH Etudes filières riz.pdf
+  ✅ [525/873] Principales améliorations et considérations.docx
+  ✅ [526/873] ref_bib3 2.docx
+  ✅ [527/873] Formulaires.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/BEACCOM - Formulaire TECH Etudes filières riz.docx (>30s).
+  ✅ [528/873] BEACCOM - Formulaire TECH Etudes filières riz.docx
+  ✅ [529/873] formulation.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/CONTRAT DE SERVICE ETUDES DE BASE FILIERE RIZ WALIKALE  OK.docx (>30s).
+  ✅ [530/873] CONTRAT DE SERVICE ETUDES DE BASE FILIERE RIZ WALIKALE  OK.docx
+  ✅ [531/873] P.V. de Neėgociation avec BEACOM ETUDES FILIERE RIZ WALIKALE Vf copy.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/TdRs Etude diagnostic de référence de CV Riz à Walikale - revised  + RPM - rev20sep - Copie (1) (1).pdf (>30s).
+  ✅ [532/873] TdRs Etude diagnostic de référence de CV Riz à Walikale - revised  + RPM - rev20sep - Copie (1) (1).pdf
+  ✅ [533/873] Facture Rikolto 1 .pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/2. CONTRAT DE SERVICE ETUDES DE BASE FILIERE RIZ WALIKALE copy.pdf (>30s).
+  ✅ [534/873] 2. CONTRAT DE SERVICE ETUDES DE BASE FILIERE RIZ WALIKALE copy.pdf
+  ✅ [535/873] Mandat.pdf
+  ✅ [536/873] commentaires et suggestions.docx
+  ✅ [537/873] tool4.docx
+  ✅ [538/873] tool 3.docx
+  ⏭️  [539/873] Trop gros (10MB): RAPPORT FINAL - BEACCOM_RIKOLTO - ETUDE DE BASE FILIERE RIZ WALIKALE_032025 copie.docx
+  ✅ [540/873] Proposition Technique BEACCOM_22012025.docx
+  ⏭️  [541/873] Trop gros (14MB): RAPPORT FINAL .pdf
+  ✅ [542/873] Termes de références.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/Proposition technique2.pdf (>30s).
+  ✅ [543/873] Proposition technique2.pdf
+  ✅ [544/873] ref_bib4.docx
+  ✅ [545/873] Considérations clés pour les Focus Groups.docx
+  ✅ [546/873] INVITATION LETTER.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/BEACCOM/Etudes filières riz.pdf (>30s).
+  ✅ [547/873] Etudes filières riz.pdf
+  ⏭️  [548/873] Trop gros (14MB): RAPPORT FINAL - BEACCOM_RIKOLTO - ETUDE DE BASE FILIERE RIZ WALIKALE_032025.pdf
+  ✅ [549/873] questionnaire riz Walikale.pdf
+  ✅ [550/873] Tool2.docx
+  ✅ [551/873] Proposition technique.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/documents rikolto/cb4881fr.pdf (>30s).
+  ✅ [552/873] cb4881fr.pdf
+  ✅ [553/873] Walikale Note Orientations stratégiques PASA-NK - Rikolto CV Riz 2024-2027.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/documents rikolto/Case_Study_-_DRC_2017_FINAL.pdf (>30s).
+  ✅ [554/873] Case_Study_-_DRC_2017_FINAL.pdf
+  ✅ [555/873] VULNERABILITEALIMENTAIREDELAPOPULATIONDEWALIKALEFACEALINSECURITEALMENTAIRE.pdf
+  ✅ [556/873] Cadre des Résultats Rikolto PASA 2025 pour Riz Walikale.docx
+  ✅ [557/873] IOM_DTM_MT_Dashboard_NK_Walikale_R1_FR.pdf
+  ✅ [558/873] N°002_WFP_PROGRAMME_RESILIENCE_STRUCTURATION_BMZ2_NK_2020-2021_ renforcement des capacités organisationnelles,techniques et matérielles des Unions et Coopératives dans Walikale_nord Kivu..pdf
+  ✅ [559/873] Cadre des Résultats Rikolto PASA 2024 pour Riz Walikale.docx
+  ✅ [560/873] Cadre des Résultats Rikolto PASA 2024 pour Riz Walikale.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/documents rikolto/Plan simple de gestion de Prunus à Walikalé-RDC.pdf (>30s).
+  ✅ [561/873] Plan simple de gestion de Prunus à Walikalé-RDC.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/documents rikolto/RAPPORT-final_PFES_-Walikale-Philippe-VF.pdf (>30s).
+  ✅ [562/873] RAPPORT-final_PFES_-Walikale-Philippe-VF.pdf
+  ✅ [563/873] Walikale Note Orientations stratégiques PASA-NK - Rikolto CV Riz 2024-2027.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/documents rikolto/efsa_nord_kivu_july_2021_-_final_version.pdf (>30s).
+  ✅ [564/873] efsa_nord_kivu_july_2021_-_final_version.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/documents rikolto/IJSRED-V6I1P19.pdf (>30s).
+  ✅ [565/873] IJSRED-V6I1P19.pdf
+  ✅ [566/873] Cadre des Résultats Rikolto PASA 2025 pour Riz Walikale.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/documents rikolto/EB-2015-116-R-15-Document-de-conception.pdf (>30s).
+  ✅ [567/873] EB-2015-116-R-15-Document-de-conception.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/documents rikolto/20240312_IPIS_Roadblocks-in-Masisi-and-Walikale-508.pdf (>30s).
+  ✅ [568/873] 20240312_IPIS_Roadblocks-in-Masisi-and-Walikale-508.pdf
+  ✅ [569/873] Méthodologie Enabel.docx
+  ✅ [570/873] Rapport 1.docx - Google Docs.pdf
+  ✅ [571/873] FG WALIKALE.pdf
+  ✅ [572/873] Rapport 1.docx
+  ✅ [573/873] draft méthodologie etude_moyens_11112024.docx
+  ✅ [574/873] RAPPORT FOCUS DANIEL.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/VALUE CHAIN STUDY/3 - CV_Gédéon_Bak Environnementaliste.pdf (>30s).
+  ✅ [575/873] 3 - CV_Gédéon_Bak Environnementaliste.pdf
+  ✅ [576/873] Rapport analyses Walikale.pdf
+  ✅ [577/873] rapport analyse.pdf
+  ✅ [578/873] questionnaire_riz_Walikale_-_all_versions_-_labels_-_2025-03-28-09-49-45.csv
+  ✅ [579/873] FOCUS GROUP WALIKALE.docx
+  ✅ [580/873] zone rizicoles Walikale.pdf
+  ✅ [581/873] Territoire de Walikale.docx
+  ✅ [582/873] FG 3.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/VALUE CHAIN STUDY/COD21005-10425_CSC_Accompagnement_renforcement_activites_maraichers_petites_transformations_Lualaba.pdf (>30s).
+  ✅ [583/873] COD21005-10425_CSC_Accompagnement_renforcement_activites_maraichers_petites_transformations_Lualaba.pdf
+  ✅ [584/873] OFFRE_BEACCOM_AMI COD-1658-0161-NP-OTHER_CONSULTANT CABINET POUR ETUDE DE BASE POUR LA FILIERE RIZ[1].docx
+  ⏭️  [585/873] Trop gros (13MB): RAPPORT PROVISOIRE.docx
+  ✅ [586/873] Rapport enquête Walikale.docx
+  ✅ [587/873] RAPPORT PROVISOIRE- BEACCOM_RIKOLTO.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/VALUE CHAIN STUDY/RAPPORT PROVISOIRE.pdf (>30s).
+  ✅ [588/873] RAPPORT PROVISOIRE.pdf
+  ✅ [589/873] données disponibles.pdf
+  ✅ [590/873] Plan_m_thodologique_avec_chronogramme_sur_12_mois.csv
+⏱ Timeout sur /Users/leblancbahiga/Desktop/VALUE CHAIN STUDY/ETUDE DE MARCHE PASA NK[1].docx (>30s).
+  ✅ [591/873] ETUDE DE MARCHE PASA NK[1].docx
+  ✅ [592/873] 1b_PROPOSITION FINANCIERE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LC1S.docx
+  ✅ [593/873] QUESTIONS EN RAPPORT AVEC LA NUTRITION POSEES AUX IT RENCONTRES ET AUTRES DE SANTE.pdf
+  ✅ [594/873] AMI CONSULTANT CABINET POUR ETUDE DE BASE POUR LA FILIERE RIZ Vf.pdf
+  ✅ [595/873] Proposition Financière PASA NK[1].docx
+  ✅ [596/873] FOCUS GROUP WALIKALE.pdf
+  ✅ [597/873] Rapport 2.docx
+  ✅ [598/873] pasa_241101_01_04-2[1].pdf
+  ✅ [599/873] Chaîne valeur riz Walikale, insécurité. - Google Docs.pdf
+  ✅ [600/873] 1b_PROPOSITION FINANCIERE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LC1S.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/VALUE CHAIN STUDY/1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx (>30s).
+  ✅ [601/873] 1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx
+  ✅ [602/873] requirements.txt
+  ✅ [603/873] Présentation de HM-RDC.docx
+  ✅ [604/873] cahier_des_charges.txt
+  ✅ [605/873] RIB ASBL HERITIERS DU MONDE RDC.pdf
+  ✅ [606/873] VC Ananas_Kananga v3.pdf
+  ✅ [607/873] kapt_log.txt
+⏱ Timeout sur /Users/leblancbahiga/Desktop/programme/agri-training-app/grad_debug.txt (>30s).
+  ✅ [608/873] grad_debug.txt
+  ✅ [609/873] deps.txt
+  ✅ [610/873] README.md
+  ✅ [611/873] deps_debug.txt
+  ✅ [612/873] deps_debug 2.txt
+  ✅ [613/873] deps_after.txt
+  ✅ [614/873] package-aware-r.txt
+  ✅ [615/873] mergeDebugResources.json
+  ✅ [616/873] values-ur.json
+  ✅ [617/873] values-ta.json
+  ✅ [618/873] values-fi.json
+  ✅ [619/873] values-ky.json
+  ✅ [620/873] values-uk.json
+  ✅ [621/873] values-pl.json
+  ✅ [622/873] values-ru.json
+  ✅ [623/873] values-de.json
+  ✅ [624/873] values-hr.json
+  ✅ [625/873] values-tl.json
+  ✅ [626/873] values-sr.json
+  ✅ [627/873] values-it.json
+  ✅ [628/873] values-km.json
+  ✅ [629/873] values-my.json
+  ✅ [630/873] values-pa.json
+  ✅ [631/873] values-ka.json
+  ✅ [632/873] values-pt.json
+  ✅ [633/873] values-be.json
+  ✅ [634/873] values-ach.json
+  ✅ [635/873] mergeDebugResources.json
+  ✅ [636/873] values-sk.json
+  ✅ [637/873] values-az.json
+  ✅ [638/873] values-ml.json
+  ✅ [639/873] values-zh-rHK.json
+  ✅ [640/873] values-bn.json
+  ✅ [641/873] values-is.json
+  ✅ [642/873] values-lt.json
+  ✅ [643/873] values-mr.json
+  ✅ [644/873] values-hu.json
+  ✅ [645/873] values-en-rXC.json
+  ✅ [646/873] values-mk.json
+  ✅ [647/873] values-or.json
+  ✅ [648/873] values-sl.json
+  ✅ [649/873] values-tr.json
+  ✅ [650/873] values-en-rGB.json
+  ✅ [651/873] values-hy.json
+  ✅ [652/873] values-ja.json
+  ✅ [653/873] values-zh-rCN.json
+  ✅ [654/873] values-ms.json
+  ✅ [655/873] values-nl.json
+  ✅ [656/873] values-kk.json
+  ✅ [657/873] values-pt-rBR.json
+  ✅ [658/873] values-da.json
+  ✅ [659/873] values-af.json
+  ✅ [660/873] values-sw.json
+  ✅ [661/873] values-lv.json
+  ✅ [662/873] values-zh-rTW.json
+  ✅ [663/873] values-uz.json
+  ✅ [664/873] values-as.json
+  ✅ [665/873] values-te.json
+  ✅ [666/873] values-cs.json
+  ✅ [667/873] values-v16.json
+  ✅ [668/873] values-lo.json
+  ✅ [669/873] values-en-rCA.json
+  ✅ [670/873] values-vi.json
+  ✅ [671/873] values-fa.json
+  ✅ [672/873] values-b+sr+Latn.json
+  ✅ [673/873] values-en-rIN.json
+  ✅ [674/873] values-nb.json
+  ✅ [675/873] values-ar.json
+  ✅ [676/873] values-en-rAU.json
+  ✅ [677/873] values-v21.json
+  ✅ [678/873] values-pt-rPT.json
+  ✅ [679/873] values-es.json
+  ✅ [680/873] values-sv.json
+  ✅ [681/873] values-th.json
+  ✅ [682/873] values-fr.json
+  ✅ [683/873] values-bs.json
+  ✅ [684/873] values-ne.json
+  ✅ [685/873] values-in.json
+  ✅ [686/873] values-sq.json
+  ✅ [687/873] values-kn.json
+  ✅ [688/873] values-iw.json
+  ✅ [689/873] values-fr-rCA.json
+  ✅ [690/873] values-et.json
+  ✅ [691/873] values-zu.json
+  ✅ [692/873] values-es-rUS.json
+  ✅ [693/873] values-gl.json
+  ✅ [694/873] values-eu.json
+  ✅ [695/873] values.json
+  ✅ [696/873] values-ko.json
+  ✅ [697/873] values-mn.json
+  ✅ [698/873] values-ca.json
+  ✅ [699/873] values-si.json
+  ✅ [700/873] values-hi.json
+  ✅ [701/873] values-bg.json
+  ✅ [702/873] values-ro.json
+  ✅ [703/873] values-el.json
+  ✅ [704/873] values-gu.json
+  ✅ [705/873] values-am.json
+  ✅ [706/873] output-metadata.json
+  ✅ [707/873] annotationProcessors.json
+  ✅ [708/873] R-def.txt
+  ✅ [709/873] output-metadata.json
+  ✅ [710/873] navigation.json
+  ✅ [711/873] output-metadata.json
+  ✅ [712/873] nestedResourcesValidationReport.txt
+  ✅ [713/873] manifest-merger-blame-debug-report.txt
+  ✅ [714/873] R.txt
+  ✅ [715/873] file-map.txt
+  ✅ [716/873] output-metadata.json
+  ✅ [717/873] signing-config-versions.json
+  ✅ [718/873] stableIds.txt
+  ✅ [719/873] manifest-merger-debug-report.txt
+  ✅ [720/873] data.json
+  ✅ [721/873] Contrat IITA_opt.pdf
+  ✅ [722/873] ATTESTATION DE SERVICE RENDU DIOBASS 2.pdf
+  ✅ [723/873] Certificate.pdf
+  ✅ [724/873] cover letter_RTI.pdf
+  ✅ [725/873] CL_Bahiga_Leblanc_opt.pdf
+  ✅ [726/873] Ref_Bahiga_Leblanc.docx
+  ✅ [727/873] Leblanc-BAHIGA-20240417 (1).pdf
+  ✅ [728/873] Passeport.pdf
+  ✅ [729/873] Leblanc-BAHIGA_Resume-20240417.pdf
+  ✅ [730/873] C_electeur_013_KIN_2023.pdf
+  ✅ [731/873] Contrat Diobass_opt.pdf
+  ✅ [732/873] CL_Bahiga_Leblanc.pdf
+  ✅ [733/873] Certificat CIAT.pdf
+  ✅ [734/873] Bahiga LeBlanc_Attestation.pdf
+  ✅ [735/873] attestation UCB.pdf
+  ✅ [736/873] attestation de réussite UCB.pdf
+  ✅ [737/873] Contrat IITA 2.pdf
+  ✅ [738/873] ATTESTATION DE SERVICE RENDU LEBLANC.pdf
+  ✅ [739/873] Sodeico.pdf
+  ✅ [740/873] Responsable de programme.pdf
+  ✅ [741/873] star_241112_01_06.pdf
+  ✅ [742/873] Offre d'emploi - ULB-Coopération - Chargé de projet agroécologie.pdf
+  ✅ [743/873] FAO Vacancy: Consultant(e) spécialiste en stratégie semencière, Antananarivo, Madagascar | UNjobs.pdf
+  ✅ [744/873] chargé de ddéveloppement communautaire.pdf
+  ✅ [745/873] Chef de projet adjoint, technique -.pdf
+  ✅ [746/873] C4D Agri Sud Kivu Détails du poste _ Enabel.pdf
+  ✅ [747/873] star_241112_02_07.pdf
+  ✅ [748/873] Experts techniques Chemonics.pdf
+  ✅ [749/873] Assistants-en-Developpement-communautaire-pour-les-Coordinations-provinciales-du-Nord-Kivu-Sud-Kivu-et-Ituri.pdf
+  ✅ [750/873] Chef de projet adjoint, technique.pdf
+  ✅ [751/873] Offre agronome IITA_USAID.pdf
+  ✅ [752/873] Business plan FINALLLLLLL.docx
+  ✅ [753/873] AJOUT EQUIPEMENT.docx
+  ✅ [754/873] Immaculée BP_CS.docx
+  ✅ [755/873] Alice_LISTE DE PRESENCES AUX ACTIVITES_2021 (AutoRecovered).docx
+  ✅ [756/873] BUSINESS PLAN (COMB) IITA.docx
+  ✅ [757/873] GROUPE LA FAMILLE.docx
+  ✅ [758/873] IMMACHRIS  SARL.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/les outils et taches 23H2/Flash/DRAFTS/COATCH ANSELME/SUPU NZITO SARL/SUPU NZITO Sarl.docx (>30s).
+  ✅ [759/873] SUPU NZITO Sarl.docx
+Erreur lors du parsing de /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/les outils et taches 23H2/Flash/DRAFTS/COATCH ANSELME/SUPU NZITO SARL/BP-JAMES MUGARUKA-Vol 8-VERSION FINALE.docx : Package not found at '/Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/les outils et taches 23H2/Flash/DRAFTS/COATCH ANSELME/SUPU NZITO SARL/BP-JAMES MUGARUKA-Vol 8-VERSION FINALE.docx'
+  ✅ [760/873] BP-JAMES MUGARUKA-Vol 8-VERSION FINALE.docx
+  ✅ [761/873] BIPHQ SARL.docx
+  ✅ [762/873] GRAINE DE VIE.docx
+  ✅ [763/873] ZEN SARL.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/les outils et taches 23H2/Flash/DRAFTS/COATCH ANSELME/TANGANYIKA TUFUGE/TANGANYIKA TUFUGE.docx (>30s).
+  ✅ [764/873] TANGANYIKA TUFUGE.docx
+  ✅ [765/873] LBTA provenderie.docx
+  ✅ [766/873] BP ALIMENTATION DON DE L'ETERNEL.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/les outils et taches 23H2/Flash/DRAFTS/COATCH ANSELME/SOMIONT SARL/PROJET SOMIONT.DOCX (>30s).
+  ✅ [767/873] PROJET SOMIONT.DOCX
+  ✅ [768/873] BUSINESS PLAN YOUNG LIFE BUSINESS DRAFT.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/les outils et taches 23H2/Flash/DRAFTS/COACH DESTIN/GLOBAL NUCLEUS.docx (>30s).
+  ✅ [769/873] GLOBAL NUCLEUS.docx
+  ✅ [770/873] BP SQP.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/les outils et taches 23H2/Flash/DRAFTS/COACH DESTIN/JOLIE MAISON.docx (>30s).
+  ✅ [771/873] JOLIE MAISON.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/les outils et taches 23H2/Flash/DRAFTS/COACH DESTIN/GRANDE VISION BP.docx (>30s).
+  ✅ [772/873] GRANDE VISION BP.docx
+  ✅ [773/873] josue agro bus.docx
+  ✅ [774/873] MIPPN BP.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/les outils et taches 23H2/Flash/DRAFTS/COACH DESTIN/MABU.docx (>30s).
+  ✅ [775/873] MABU.docx
+  ✅ [776/873] Nice for Land Sarl.docx
+  ✅ [777/873] MAYAYI BORA.docx
+  ✅ [778/873] TWIKWASHEN   SARL.docx
+  ✅ [779/873] DOC1 des entreprises pretes pour le pré-peach.docx
+  ✅ [780/873] AGECIA.docx
+  ✅ [781/873] CV_2023-11-15_Leblanc_BAHIGA M. (Rétabli) (Rétabli) (Rétabli) (Rétabli) (Rétabli).pdf
+  ✅ [782/873] Formulaire_pré_inscription[1].pdf
+Erreur lors du parsing de /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/CV/CV  Fofana.docx : "There is no item named 'word/media\\\\image1.jpg' in the archive"
+  ✅ [783/873] CV  Fofana.docx
+  ✅ [784/873] CV_2023-11-15_Leblanc_BAHIGA M..pdf
+  ✅ [785/873] CV_2024-10-11_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [786/873] CV_Bahiga_Leblanc_updated.docx
+  ✅ [787/873] CV_Leblanc_BAHIGA M..pdf
+  ✅ [788/873] CV_Bahiga_Leblanc.docx
+  ✅ [789/873] CV Leblanc (3).pdf
+  ✅ [790/873] CV_2024-11-18_Leblanc_BAHIGA Mudarhi_2.pdf
+  ✅ [791/873] CV_2024-04-16_Leblanc_BAHIGA (1).pdf
+  ✅ [792/873] CV_2024-08-03_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [793/873] CV Leblanc (5).pdf
+  ✅ [794/873] CV  Fofana.pdf
+  ✅ [795/873] CV_Bahiga_Leblanc.pdf
+  ✅ [796/873] CV Leblanc (4).pdf
+  ✅ [797/873] CV_2024-09-18_Leblanc_BAHIGA Mudarhi.pdf
+  ✅ [798/873] Motivation_Assistant_developpement_communautaire_Star_est.pdf
+  ✅ [799/873] motivation letter RTI.pdf
+  ✅ [800/873] lettre de motivation Enabel.docx
+  ✅ [801/873] lettre de motivation Equity.docx
+  ✅ [802/873] lettre de motivation DAI Global.docx
+  ✅ [803/873] lettre de motivation RTI.docx
+  ✅ [804/873] lettre de motivation Enabel.pdf
+  ✅ [805/873] Motivation_Chef_de _projet_pont_de_lhumanite.pdf
+  ✅ [806/873] Motivation_Assistant_developpement_communautaire_Star_est.docx
+  ✅ [807/873] Motivation_Spécialiste_en_Stratégie_Semencière.docx
+  ✅ [808/873] lettre de motivation Impact.pdf
+  ✅ [809/873] Motivation_Ass_resilience_PAM.pdf
+  ✅ [810/873] Lettre de motivation IITA-LBSHI-2023-01-DESKTOP-GNLHQNK.pdf
+  ✅ [811/873] lettre de motivation ULB-Cooperation.docx
+  ✅ [812/873] lettre de motivation Equity.pdf
+  ✅ [813/873] Motivation_Spécialiste_en_Stratégie_Semencière.pdf
+  ✅ [814/873] Motivation_Expert_developpement_communautaire_Star_est.docx
+  ✅ [815/873] lettre de motivation IITa.docx
+  ✅ [816/873] Motivation_Ass_resilience_PAM.docx
+  ✅ [817/873] Motivation_Chef_de _projet_pont_de_lhumanite.docx
+  ✅ [818/873] Motivation_C4D_Enabel.docx
+  ✅ [819/873] lettre de motivation Impact.docx
+  ✅ [820/873] Lettre de motivation ULB-Cooperation.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/Lettre de motivation/lettre de motivation 013_KIN_2023_charge_de_projet_agriculture.pdf (>30s).
+  ✅ [821/873] lettre de motivation 013_KIN_2023_charge_de_projet_agriculture.pdf
+  ✅ [822/873] Motivation_C4D_Enabel.pdf
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Dossier Leblanc Bahiga/Lettre de motivation/Motivation_Expert_developpement_communautaire_Star_est.pdf (>30s).
+  ✅ [823/873] Motivation_Expert_developpement_communautaire_Star_est.pdf
+  ✅ [824/873] lettre de motivation DAI Global.pdf
+  ✅ [825/873] Leblanc BAHIGA Mudarhi.docx
+  ✅ [826/873] Notification christine correction.pdf
+  ✅ [827/873] nov. 8, Doc 2.pdf
+  ✅ [828/873] Notification Togogo.pdf
+  ✅ [829/873] Lettre de motivation.pdf
+  ✅ [830/873] Carte d’electeur tante.pdf
+  ✅ [831/873] article integration des marches_PJ.docx
+  ✅ [832/873] Evolution de la production.csv
+  ✅ [833/873] pour le blanc_081052.pdf
+  ✅ [834/873] Analyse de l.docx
+  ✅ [835/873] Evolution de la production.txt
+  ✅ [836/873] Analyse des variations mensuelles.docx
+  ✅ [837/873] pour le blanc_081052.docx
+  ✅ [838/873] REVUE ARTICLE PAULIN.docx
+  ✅ [839/873] analyse .docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Njingulula/article.docx (>30s).
+  ✅ [840/873] article.docx
+  ✅ [841/873] Evolution de la production.pdf
+  ✅ [842/873] Analysis of Bean Price Trends in the DRC.docx
+⏱ Timeout sur /Users/leblancbahiga/Desktop/Njingulula/article integration des marches_PJ.pdf (>30s).
+  ✅ [843/873] article integration des marches_PJ.pdf
+  ✅ [844/873] Résultats analyse.docx
+  ✅ [845/873] Cahier_des_charges_Agricultural_Training_App_LEAD.pdf
+  ✅ [846/873] gemini_prompt_agri_training_final.txt
+  ✅ [847/873] gemini_prompt_agri_training_final 2.txt
+  ✅ [848/873] gemini_prompt_agri_training_final 3.txt
+  ✅ [849/873] Draft Rapport étude Ananas.docx
+  ✅ [850/873] Tableau 1.docx
+  ✅ [851/873] Rapport d'analyse commerçants et collecteurs.docx
+  ✅ [852/873] recherche.docx
+  ✅ [853/873] Étude de la Chaîne de Valeur de l'Ananas à Kananga.docx
+  ✅ [854/873] Transcription des entretiens avec les différents acteurs de la chaîne de valeur Ananas à Kananga.pdf
+  ⏭️  [855/873] Trop gros (39MB): VC Ananas_Kananga VI.pdf
+  ✅ [856/873] recommandations draft.docx
+  ⏭️  [857/873] Trop gros (35MB): Rapport Ananas_Kananga with IFC comments.pdf
+  ✅ [858/873] recommandations.docx
+Erreur lors du parsing de /Users/leblancbahiga/Desktop/Etude Kananga/Enquete_commerçant_Kananga_-_all_versions_-_labels_-_2025-04-14-13-45-15.csv : 'utf-8' codec can't decode byte 0x8e in position 3867: invalid start byte
+  ✅ [859/873] Enquete_commerçant_Kananga_-_all_versions_-_labels_-_2025-04-14-13-45-15.csv
+  ✅ [860/873] Questionnaire .docx
+  ✅ [861/873] Canevas d'entretien.pdf
+  ✅ [862/873] Fwd_ BAHIGA MUDARHI_LEBLANC MR 02APR2025 EBB FIH - leblanc.bahiga@innogenceconsulting.com - Messagerie Innogence Consulting.pdf
+  ✅ [863/873] Enquete_commerçant_Kananga fin.csv
+  ✅ [864/873] Fwd_ MUZALIA WAKYEBWA_JESSE MR 02APR2025 EBB FIH - leblanc.bahiga@innogenceconsulting.com - Messagerie Innogence Consulting.pdf
+  ✅ [865/873] RAPPORT FINAL ETUDE DE BASE FILIERE RIZ WALIKALE_032025.docx
+  ✅ [866/873] canevas d'entretion final.docx
+  ✅ [867/873] Recherche documentaire .docx
+  ✅ [868/873] Canevas d'entretien.docx
+  ✅ [869/873] Rapport d'analyse commerçants et collecteurs.pdf
+  ✅ [870/873] UNHCR_COD_2023_KASAI_data_household_v2.1.csv
+  ✅ [871/873] Collecteurs__Intermédiaires_Kananga_-_all_versions_-_labels_-_2025-04-15-10-59-40.csv
+  ✅ [872/873] DIAGNOSTIC AND SCOPING STUDY OF THE PINEAPPLE VALUE CHAIN IN KANANGA, DRC.pdf
+  ✅ [873/873] recherche.pdf
+
+==================================================
+✅ Indexation terminée :
+   ✅ 854 fichiers indexés
+   ⏭️  19 fichiers ignorés (>10MB)
+   ❌ 0 erreurs
+
+📊 Index maintenant : 6960 chunks (445 sources)

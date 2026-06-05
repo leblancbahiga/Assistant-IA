@@ -1,0 +1,420 @@
+"""NURU V4.5 — Orchestrateur asynchrone principal.
+
+Point d'entrée du pipeline : reçoit une requête utilisateur,
+orchestre routage → RAG → génération → mémoire, et retourne
+un résultat structuré.
+"""
+import asyncio
+import logging
+import re
+import time
+from dataclasses import dataclass, field
+from typing import AsyncGenerator, Optional
+
+from src.config import config
+
+from src.core.query_context import QueryContext, EvidencePack
+from src.core.events import EventBus
+from src.core.policies import PolicyEngine
+from src.core.response_guard import StrictRAGGuard
+from src.ai.verifier import EvidenceVerifier
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class OrchestratorResult:
+    """Résultat structuré d'une requête traitée par l'orchestrateur."""
+    response: str = ""
+    route: str = "unknown"
+    confidence: float = 0.0
+    evidence: Optional[EvidencePack] = None
+    tokens_generated: int = 0
+    tokens_prompt: int = 0
+    duration_s: float = 0.0
+    tokens_per_sec: float = 0.0
+    model: str = ""
+    error: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        return {
+            "route": self.route,
+            "confidence": round(self.confidence, 3),
+            "tokens": self.tokens_generated,
+            "duration_s": round(self.duration_s, 2),
+            "tps": round(self.tokens_per_sec, 2),
+            "model": self.model,
+        }
+
+
+class NuruOrchestrator:
+    """Orchestrateur asynchrone du pipeline NURU V4.5.
+
+    1. Reçoit une requête utilisateur
+    2. Construit un QueryContext
+    3. Route via SemanticRouter (avec cache TTL)
+    4. Assemble les preuves via RAG Engine
+    5. Génère la réponse (local ou cloud selon policies)
+    6. Persiste en mémoire
+    7. Émet des événements pour l'UI
+
+    Injection de dépendances : tous les composants passés au constructeur.
+    Migration incrémentale : utilisable en parallèle de NuruCore.
+    """
+
+    def __init__(
+        self,
+        router,
+        rag_engine,
+        local_llm,
+        cloud_llm,
+        memory_store,
+        policy_engine: Optional[PolicyEngine] = None,
+        event_bus: Optional[EventBus] = None,
+        runtime_manager=None,
+        web_search=None,
+        context_budget=None,
+        reflection_engine=None,
+        system_prompt_builder=None,  # V4.5 : callback pour construire le prompt système
+    ):
+        self.router = router
+        self.rag_engine = rag_engine
+        self.local_llm = local_llm
+        self.cloud_llm = cloud_llm
+        self.memory_store = memory_store
+        self.policy_engine = policy_engine or PolicyEngine()
+        self.event_bus = event_bus or EventBus()
+        self.runtime = runtime_manager
+        self.web = web_search
+        self.context_budget = context_budget
+        self.reflection = reflection_engine
+        self._system_prompt_builder = system_prompt_builder
+        # NURU V5 : Mode Strict RAG depuis config
+        self.response_guard = StrictRAGGuard(config.response_mode)
+        # NURU V5 : Vérificateur de citations
+        self.evidence_verifier = EvidenceVerifier()
+
+    async def process_query(
+        self,
+        query: str,
+        session_id: str = "default",
+        use_tts: bool = False,
+        audio_engine=None,
+    ) -> AsyncGenerator[str, None]:
+        """Pipeline complet : route → RAG → génère → stream.
+
+        Yields les tokens de réponse.
+        """
+        # ── 1. Contexte avec état réseau réel (NURU V5) ──
+        is_online = await self._check_connectivity()
+        ctx = QueryContext.from_runtime(
+            query, session_id,
+            is_online=is_online,
+        )
+        await self.event_bus.emit("query.received", {"query": query})
+
+        # ── 2. Routage avec PolicyEngine (NURU V5) ──
+        route_result = await self.router.route_with_context(ctx)
+        ctx = ctx.with_route(route_result.decision)
+        intent = self._route_to_intent(route_result.decision)
+        await self.event_bus.emit("route.decided", {
+            "decision": route_result.decision,
+            "confidence": route_result.confidence,
+            "rag_score": route_result.rag_top_score,
+        })
+        logger.info(
+            f"🧠 Route: {query[:40]}... → {route_result.decision} "
+            f"(conf: {route_result.confidence:.2f})"
+        )
+
+        # ── 3. Cache sémantique ──
+        if intent != "COMPLEX":
+            cached = await self.memory_store.get_cache(query)
+            if cached:
+                await self.event_bus.emit("cache_hit", {"query": query})
+                if use_tts and audio_engine:
+                    asyncio.create_task(audio_engine.speak(cached))
+                yield cached
+                return
+
+        # ── 4. Récupération contexte ──
+        rag_context, rag_result, web_context = await self._retrieve_context(query, intent)
+
+        # ── 5. Fallback Web si RAG vide ──
+        rag_context, intent = await self._maybe_web_fallback(
+            query, intent, rag_context, rag_result, web_context
+        )
+
+        # ── 5.5 FallbackGuard V2 : bloquer cloud si mots-clés docs + contexte vide (NURU V5) ──
+        if intent == "COMPLEX" and not rag_context and not web_context:
+            query_lower = query.lower()
+            from src.semantic_router import RAG_KEYWORDS
+            has_rag_keyword = any(kw in query_lower for kw in RAG_KEYWORDS)
+            if has_rag_keyword:
+                logger.warning(
+                    "🔒 FallbackGuard V2: requête documentaire sans contexte"
+                    " → blocage cloud"
+                )
+                await self.event_bus.emit("query.strict_refused", {"query": query})
+                yield "⚠️ Je n'ai pas trouvé cette information dans vos documents. "
+                yield "Vérifiez que le fichier est indexé ou reformulez votre requête."
+                return
+
+        # ── 5.6 Mode Strict RAG (NURU V5) : refuser si aucun contexte documentaire ──
+        if self.response_guard.is_strict and not rag_context.strip():
+            logger.info("🔒 Strict RAG: refus — pas de contexte documentaire")
+            event_data = {"query": query, "intent": intent}
+            await self.event_bus.emit("query.strict_refused", event_data)
+            yield self.response_guard.refuse_message(query)
+            return
+
+        # ── 6. Construction prompt ──
+        system_prompt, full_prompt = self._build_prompt(intent, query, rag_context, web_context)
+
+        # ── 7. Génération (streaming) ──
+        response_content = ""
+        start_gen = time.time()
+
+        try:
+            async for token in self._generate(system_prompt, full_prompt, query, intent, ctx, web_context=web_context, rag_context=rag_context):
+                response_content += token
+                yield token
+        except Exception as e:
+            logger.error(f"❌ Génération: {e}")
+            yield f"\n[⚠️ Erreur: {e}]"
+            return
+
+        duration = time.time() - start_gen
+
+        # ── 7.5 Vérification des citations post-génération (NURU V5) ──
+        if intent == "RAG" and rag_context and response_content.strip():
+            # Extraire les sources des chunks
+            chunk_sources = []
+            if rag_result and hasattr(rag_result, 'chunks_retrieved'):
+                try:
+                    # Récupérer les sources depuis le résultat RAG
+                    if hasattr(rag_result, 'source_list'):
+                        chunk_sources = rag_result.source_list
+                except Exception:
+                    pass
+            if not chunk_sources and rag_context:
+                # Fallback : extraire les [SOURCE N] du contexte
+                chunk_sources = re.findall(r'\[SOURCE \d+\] ([^\n]+)', rag_context)
+
+            vr = self.evidence_verifier.verify(
+                response=response_content,
+                chunk_sources=chunk_sources,
+                rag_context=rag_context,
+            )
+            if not vr.valid and self.response_guard.is_strict:
+                logger.warning(
+                    f"🔒 Strict RAG: vérification échouée — {vr.reason}"
+                )
+                # En mode STRICT, remplacer la réponse par un refus
+                response_content = self.response_guard.refuse_message(query)
+                # On ne peut pas revenir en arrière sur les tokens déjà yield,
+                # mais on note pour l'UI que la vérification a échoué
+                await self.event_bus.emit("verification_failed", {
+                    "query": query,
+                    "reason": vr.reason,
+                    "matched": vr.matched_citations,
+                    "missing": vr.missing_citations,
+                })
+
+        # ── 8. Finalisation ──
+        result = self._finalize(response_content, duration, intent, rag_result)
+        await self.event_bus.emit("generation_complete", result.to_dict())
+
+        # ── 9. Réflexion ──
+        if self.reflection:
+            analysis = await self.reflection.analyze(
+                query=query, response=response_content,
+                metadata={"intent": intent, "latency_ms": int(duration * 1000)},
+            )
+            analysis_dict = analysis if isinstance(analysis, dict) else {}
+            self.memory_store.add_reflection(
+                query=query, feedback=str(analysis),
+                score=1.0 - analysis_dict.get("hallucination_risk", 0),
+            )
+
+        # ── 10. Mémoire ──
+        if intent != "COMPLEX":
+            await self.memory_store.set_cache(query, response_content)
+        self.memory_store.add_message("user", query)
+        self.memory_store.add_message("assistant", response_content)
+
+    # ─── Privées ───
+
+    def _route_to_intent(self, decision: str) -> str:
+        return {"LOCAL_RAG": "RAG", "CLOUD_GROQ": "COMPLEX", "WEB": "COMPLEX",
+                "CLARIFICATION": "SIMPLE", "SIMPLE": "SIMPLE"}.get(decision, "SIMPLE")
+
+    # NURU V5 : Vérification réseau réelle (remplace is_online toujours True)
+    async def _check_connectivity(self) -> bool:
+        """Vérifie la connectivité Internet avec timeout court (2s).
+        Essais multiples : DNS Google, puis HTTP Google.
+        """
+        import socket
+        methods = [
+            ("dns", lambda: asyncio.open_connection("8.8.8.8", 53)),
+            ("http", lambda: asyncio.open_connection("www.google.com", 80)),
+        ]
+        for name, coro_fn in methods:
+            try:
+                _, writer = await asyncio.wait_for(coro_fn(), timeout=1.5)
+                writer.close()
+                await writer.wait_closed()
+                logger.debug(f"🌐 Connectivité vérifiée via {name}")
+                return True
+            except (OSError, asyncio.TimeoutError):
+                continue
+        logger.debug("🌐 Hors-ligne détecté (toutes les sondes ont échoué)")
+        return False
+
+    async def _retrieve_context(self, query: str, intent: str) -> tuple:
+        rag_context, rag_result, web_context = "", None, ""
+        tasks = []
+        if intent in ("RAG", "COMPLEX"):
+            tasks.append(self.rag_engine.retrieve(query))
+        if intent == "COMPLEX" and self.web:
+            tasks.append(self.web.search(query))
+        if tasks:
+            for c in await asyncio.gather(*tasks):
+                if isinstance(c, tuple):
+                    rag_context, rag_result = c
+                elif isinstance(c, str):
+                    web_context = c
+        return rag_context, rag_result, web_context
+
+    async def _maybe_web_fallback(self, query, intent, rag_context, rag_result, web_context):
+        # NURU V5 : FallbackGuard — pas de cloud si RAG vide + mots-clés docs
+        if intent == "RAG" and not rag_context and len(query.split()) > 3 and self.web:
+            query_lower = query.lower()
+            from src.semantic_router import RAG_KEYWORDS
+            has_rag_keyword = any(kw in query_lower for kw in RAG_KEYWORDS)
+
+            if has_rag_keyword and not rag_context:
+                logger.warning(
+                    "🔒 FallbackGuard: RAG vide + mots-clés documents"
+                    " → refus cloud pour éviter hallucination"
+                )
+                rag_context = "AUCUNE SOURCE DOCUMENTAIRE PERTINENTE TROUVÉE"
+                return rag_context, "RAG"  # Garde intent RAG → message d'absence
+
+            logger.info("RAG vide → fallback Web")
+            web_context = await self.web.search(query)
+            if web_context:
+                intent = "COMPLEX"
+        return rag_context, intent
+
+    def _build_prompt(self, intent, query, rag_context, web_context):
+        full_rag = ""
+        if intent == "COMPLEX":
+            full_rag = web_context + ("\n\n" + rag_context if rag_context else "")
+        else:
+            full_rag = rag_context
+
+        # Construire le prompt système via le callback NuruCore
+        if self._system_prompt_builder:
+            system_prompt = self._system_prompt_builder(
+                intent=intent,
+                facts=self.memory_store.get_recent_facts(limit=20),
+                procedures=self.memory_store.get_procedures(),
+            )
+        else:
+            system_prompt = f"Tu es NURU, assistant personnel de Leblanc."
+
+        if self.context_budget:
+            full_prompt = self.context_budget.allocate(
+                system=system_prompt,
+                rag=full_rag,
+                facts=self.memory_store.get_recent_facts(limit=20),
+                history=self.memory_store.get_recent_history(limit=8),
+                include_system=(intent != "COMPLEX"),
+            )
+        else:
+            full_prompt = f"{system_prompt}\n\n{full_rag}"
+
+        if intent == "COMPLEX":
+            full_prompt += f"\n## QUESTION À TRAITER :\n{query}"
+        elif intent == "RAG" and full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
+            full_prompt += (
+                f"\n\n## INSTRUCTION STRICTE — RAG UNIQUEMENT\n"
+                f"Tu dois répondre UNIQUEMENT à partir du CONTEXTE ci-dessus "
+                f"(entre === DÉBUT DU CONTEXTE === et === FIN DU CONTEXTE ===).\n"
+                f"- N'utilise PAS tes connaissances internes.\n"
+                f"- Si l'information n'est pas dans le contexte, dis "
+                f"\"Je ne trouve pas cette information dans les documents.\"\n"
+                f"- N'invente RIEN. Ne complète PAS.\n"
+                f"- Cite la source avec [Source: nom_du_fichier].\n\n"
+                f"{query}<|end|>\n<|assistant|>\n"
+            )
+        else:
+            full_prompt += f"{query}<|end|>\n<|assistant|>\n"
+        return system_prompt, full_prompt
+
+    async def _generate(self, system_prompt, full_prompt, query, intent, ctx, web_context="", rag_context=""):
+        # NURU V5 : Fallback cloud renforcé — si RAM < 1 Go ET online,
+        # on passe en cloud même pour RAG (évite les hallucinations du petit modèle qui swap)
+        ram_too_low = ctx.ram_free_mb < 1000
+        use_cloud = intent == "COMPLEX" or self.policy_engine.should_use_cloud(ctx) or (intent == "RAG" and ctx.is_online and ram_too_low)
+        if use_cloud:
+            if not ctx.is_online:
+                logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")
+            else:
+                logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB)")
+                # NURU V5 : Injecter le contexte RAG (documents locaux) ET web dans
+                # le system_prompt pour que le LLM cloud utilise les deux
+                cloud_system = system_prompt
+                if rag_context.strip():
+                    cloud_system += (
+                        f"\n\n## CONTEXTE DE VOS DOCUMENTS (prioritaire)\n{rag_context}\n\n"
+                        f"Les informations ci-dessus sont extraites de VOS documents personnels. "
+                        f"Elles sont prioritaires sur toute autre source. "
+                        f"Réponds à la question en te basant d'abord sur ces documents.\n"
+                    )
+                if web_context.strip():
+                    cloud_system += (
+                        f"\n\n## CONTEXTE DE RECHERCHE WEB\n{web_context}\n\n"
+                        f"Les informations ci-dessus sont des résultats de recherche web."
+                    )
+                async for token in self.cloud_llm.generate_stream(
+                    query, intent=intent, system_prompt=cloud_system
+                ):
+                    yield token
+                return
+        # Fallback local
+        logger.info(f"💻 Local (intent={intent})")
+        try:
+            gen = self.local_llm.generate_stream(full_prompt, intent=intent)
+            if self.runtime:
+                async for token in self.runtime.schedule_generator("generation", gen):
+                    yield token
+            else:
+                async for token in gen:
+                    yield token
+        except Exception as e:
+            logger.error(f"Local fail: {e}. Fallback Cloud.")
+            yield " [Bascule Cloud...] "
+            async for token in self.cloud_llm.generate_stream(
+                query, intent=intent, system_prompt=system_prompt
+            ):
+                yield token
+
+    def _finalize(self, response, duration, intent, rag_result):
+        tokens = len(response) // 4
+        tps = tokens / duration if duration > 0 else 0
+        model = "local" if intent != "COMPLEX" else "cloud"
+        route = "LOCAL" if intent != "COMPLEX" else "CLOUD"
+        rag_score = (rag_result.top_score if rag_result else 0) or getattr(self.rag_engine, "last_top_score", 0)
+
+        if self.runtime:
+            self.runtime.update_generation_stats(
+                tokens=tokens, seconds=duration, model=model,
+                route=route, rag_score=rag_score,
+            )
+        return OrchestratorResult(
+            response=response, route=route, confidence=rag_score,
+            duration_s=duration, tokens_generated=tokens,
+            tokens_per_sec=tps, model=model,
+        )

@@ -1,0 +1,37 @@
+[project]
+name = "nuru-v45"
+version = "4.5.0"
+description = "NURU V4.5 — Assistant IA local pour Apple Silicon (Phi-4-mini / Groq / RAG)"
+authors = [
+    { name = "Leblanc BAHIGA Mudarhi" }
+]
+dependencies = [
+    "mlx-lm",
+    "mlx-whisper",
+    "mlx-embeddings",
+    "sqlite-vec",
+    "pysqlite3",
+    "pyside6",
+    "qasync",
+    "psutil",
+    "httpx",
+    "numpy",
+    "pymupdf",
+    "python-docx",
+    "loguru",
+    "sentence-transformers",
+    "sounddevice",
+    "soundfile",
+    "watchdog",
+    "pyyaml",
+    "pydantic-settings",
+    "keyring",
+    "cachetools",
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

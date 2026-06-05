@@ -1,0 +1,8 @@
+ai
+core
+infra
+observability
+plugins
+rag
+ui
+utils
