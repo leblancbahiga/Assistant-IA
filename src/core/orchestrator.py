@@ -196,6 +196,20 @@ class NuruOrchestrator:
         # ── 6. Construction prompt ──
         system_prompt, full_prompt = self._build_prompt(intent, query, rag_context, web_context)
 
+        # Action E : Budget token post-template — écrêtage final du prompt complet
+        max_safe_chars = config.rag_max_context_tokens * 4  # ~4 chars/token
+        if len(full_prompt) > max_safe_chars:
+            excess = len(full_prompt) - max_safe_chars
+            logger.debug(f"🧃 TokenJuice: écrêtage post-template de {excess} chars")
+            # On tronque le contexte RAG (la partie la plus longue) d'abord
+            if rag_context and rag_context in full_prompt:
+                # Réduire le contexte RAG de l'excédent
+                trimmed_rag = rag_context[:len(rag_context) - excess - 100] + "\n[... tronqué pour budget token ...]"
+                full_prompt = full_prompt.replace(rag_context, trimmed_rag, 1)
+            # Si toujours trop long, tronquer la fin du prompt
+            if len(full_prompt) > max_safe_chars:
+                full_prompt = full_prompt[:max_safe_chars - 100] + "\n[... tronqué ...]"
+
         # ── 7. Génération (streaming) ──
         response_content = ""
         start_gen = time.time()

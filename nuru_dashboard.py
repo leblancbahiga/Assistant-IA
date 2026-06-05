@@ -10,6 +10,7 @@ Inspiré des architectures "Continuous Agent" (OpenJarvis) et
 """
 import sys
 import asyncio
+import time
 import logging
 from pathlib import Path
 
@@ -40,7 +41,9 @@ async def continuous_background_daemon(core: NuruCore):
 
     background_started = False
     tick_count = 0
+    last_user_activity = time.time()  # Action D : timestamp de la dernière activité utilisateur
     auto_fetch_ok = hasattr(core, 'auto_fetcher') and core.auto_fetcher is not None
+    IDLE_MINUTES = 5  # Minutes d'inactivité avant de lancer le mining
 
     while True:
         try:
@@ -72,10 +75,12 @@ async def continuous_background_daemon(core: NuruCore):
                 except Exception as e:
                     logger.error(f">> Auto-Fetch error: {e}")
 
-            # 3. Learning Loop : mining periodique (toutes les 10 min)
+            # 3. Learning Loop : mining periodique — UNIQUEMENT si inactif depuis 5 min
+            idle_seconds = time.time() - last_user_activity
             if (hasattr(core, 'orchestrator')
                     and hasattr(core.orchestrator, 'trace_collector')
-                    and tick_count % 10 == 0):
+                    and tick_count % 10 == 0
+                    and idle_seconds > IDLE_MINUTES * 60):
                 tc = core.orchestrator.trace_collector
                 count = tc.count()
                 if count > 0 and count % 20 == 0:

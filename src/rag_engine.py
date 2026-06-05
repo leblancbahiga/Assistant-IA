@@ -109,6 +109,19 @@ class RAGEngine:
                 hash TEXT
             )
         """)
+        # V6 : Table Parent-Child pour remontée hiérarchique
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chunk_hierarchy (
+                chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT,
+                parent_id INTEGER DEFAULT NULL,
+                doc_summary TEXT DEFAULT '',
+                section_title TEXT DEFAULT '',
+                level TEXT DEFAULT 'section',
+                content TEXT,
+                FOREIGN KEY (parent_id) REFERENCES chunk_hierarchy(chunk_id)
+            )
+        """)
         conn.commit()
         conn.close()
 
@@ -379,6 +392,80 @@ class RAGEngine:
         conn.commit()
         conn.close()
         logger.info(f"{len(chunks)} chunks ajoutés à l'index.")
+
+    def add_chunks_with_parents(self, chunks: List[dict], doc_summary: str = ""):
+        """V6 : Ajoute des chunks avec hiérarchie Parent-Child.
+        
+        Chaque chunk peut avoir un parent_id. Lors du retrieval, si un enfant
+        match, on remonte au parent pour fournir un contexte complet.
+        """
+        conn = self._get_conn()
+        
+        for chunk in chunks:
+            level = chunk.get("level", "section")
+            
+            # Insérer dans la table hiérarchique
+            cur = conn.execute(
+                """INSERT INTO chunk_hierarchy 
+                   (source, parent_id, doc_summary, section_title, level, content) 
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                [
+                    chunk["source"],
+                    chunk.get("parent_id"),
+                    doc_summary,
+                    chunk.get("title", ""),
+                    level,
+                    chunk["content"],
+                ]
+            )
+            chunk_id = cur.lastrowid
+            
+            # Si c'est un document/résumé (pas de parent), c'est le parent de référence
+            if level in ("document", "section") and not chunk.get("parent_id"):
+                chunk["chunk_hierarchy_id"] = chunk_id
+            
+            # Insertion Vectorielle
+            conn.execute(
+                "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
+                [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk.get("date", "")]
+            )
+            # Insertion FTS
+            conn.execute(
+                "INSERT INTO chunks_fts(content, source) VALUES (?, ?)",
+                [chunk["content"], chunk["source"]]
+            )
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"{len(chunks)} chunks (avec hiérarchie) ajoutés à l'index.")
+
+    def _fetch_parent_context(self, source: str, chunk_text: str) -> str:
+        """V6 : Remonte au parent d'un chunk pour enrichir le contexte.
+        
+        Si le chunk actuel est trop court ou trop spécifique, on fetch
+        la section parente complète pour donner plus de contexte au LLM.
+        """
+        if len(chunk_text) > 2000:
+            return chunk_text  # Déjà assez long
+        
+        conn = self._get_conn()
+        try:
+            # Chercher un parent : une section plus longue de la même source
+            parent = conn.execute(
+                """SELECT content FROM chunk_hierarchy 
+                   WHERE source = ? AND level IN ('document', 'section')
+                   AND LENGTH(content) > 1000
+                   ORDER BY LENGTH(content) DESC LIMIT 1""",
+                (source,)
+            ).fetchone()
+            conn.close()
+            
+            if parent and parent[0] != chunk_text:
+                return parent[0]
+        except Exception:
+            conn.close()
+        
+        return chunk_text
     
     def clear_reranker(self, force: bool = False):
         """Décharge le reranker cross-encoder pour libérer la RAM.
