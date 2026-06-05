@@ -399,10 +399,22 @@ class NuruOrchestrator:
         # NURU V6 : Stratégie Archon (RAG local + synthèse cloud)
         if hybrid == "rag" and intent == "RAG" and ctx.is_online and rag_context.strip():
             logger.info("☁️ Stratégie Archon: RAG local → synthèse cloud")
-            cloud_system = system_prompt
-            cloud_system += (
-                f"\n\n## CONTEXTE DE VOS DOCUMENTS\n{rag_context}\n\n"
-                f"Réponds à partir de ces documents uniquement."
+            # NURU V6 FIX : Prompt anti-hallucination renforcé pour Groq
+            cloud_system = (
+                f"Tu es NURU, assistant IA personnel. Tu dois répondre UNIQUEMENT à partir des documents ci-dessous.\n\n"
+                f"## RÈGLES IMPÉRATIVES (sous peine d'être déconnecté) :\n"
+                f"1. NE RIEN INVENTER — si le contexte ne contient pas l'information, dis exactement :\n"
+                f"   \"Je ne trouve pas cette information dans les documents.\"\n"
+                f"2. NE PAS DÉDUIRE — des projets agricoles dans un contexte ne signifie PAS que la personne est ingénieur agronome.\n"
+                f"3. NE PAS GÉNÉRALISER — ne transforme pas un poste spécifique en \"expérience en gestion de projets\".\n"
+                f"4. FORMAT OBLIGATOIRE — commence chaque fait par [Source: fichier] puis le fait exact trouvé.\n"
+                f"5. Si tu ne peux pas citer un fait avec sa source précise, ne l'écris PAS.\n"
+                f"6. Ne suggère JAMAIS de consulter d'autres documents — réponds avec ce que tu as.\n\n"
+                f"=== DOCUMENTS ===\n"
+                f"{rag_context}\n"
+                f"=== FIN DES DOCUMENTS ===\n\n"
+                f"Question : {query}\n\n"
+                f"Réponse :"
             )
             async for token in self.cloud_llm.generate_stream(
                 query, intent=intent, system_prompt=cloud_system
@@ -418,18 +430,22 @@ class NuruOrchestrator:
                 logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")
             else:
                 logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB, hybrid={hybrid})")
-                cloud_system = system_prompt
+                # NURU V6 FIX : Instruction stricte pour le cloud aussi
+                cloud_system = (
+                    f"Tu es NURU, assistant personnel de Leblanc. Tu réponds en français.\n\n"
+                )
                 if rag_context.strip():
                     cloud_system += (
-                        f"\n\n## CONTEXTE DE VOS DOCUMENTS (prioritaire)\n{rag_context}\n\n"
-                        f"Les informations ci-dessus sont extraites de VOS documents personnels. "
-                        f"Elles sont prioritaires sur toute autre source. "
-                        f"Réponds à la question en te basant d'abord sur ces documents.\n"
+                        f"## CONTEXTE DE VOS DOCUMENTS (prioritaire)\n"
+                        f"Les informations ci-dessous sont extraites de VOS documents personnels. "
+                        f"Elles sont prioritaires sur toute autre source.\n"
+                        f"- N'invente PAS d'information.\n"
+                        f"- Cite tes sources avec [Source: fichier].\n"
+                        f"{rag_context}\n\n"
                     )
                 if web_context.strip():
                     cloud_system += (
-                        f"\n\n## CONTEXTE DE RECHERCHE WEB\n{web_context}\n\n"
-                        f"Les informations ci-dessus sont des résultats de recherche web."
+                        f"## CONTEXTE DE RECHERCHE WEB\n{web_context}\n\n"
                     )
                 async for token in self.cloud_llm.generate_stream(
                     query, intent=intent, system_prompt=cloud_system

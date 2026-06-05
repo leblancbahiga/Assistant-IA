@@ -35,8 +35,9 @@ class LocalLLM:
         # Si un modèle est déjà chargé, sa mémoire sera libérée s'il est différent,
         # ou conservée s'il est identique. Donc on ajoute une estimation de sa taille à la RAM disponible.
         if self._model is not None and self._current_model_id is not None:
-            # Estimation de la RAM occupée par le modèle chargé (en Go)
-            estimated_model_ram = 2.5 if "4b" in self._current_model_id.lower() else 1.0
+            # Correction 2B : Cast sécurisé en str pour éviter AttributeError sur None
+            model_id_safe = str(self._current_model_id).lower()
+            estimated_model_ram = 2.5 if "4b" in model_id_safe else 1.0
             ram_available_gb += estimated_model_ram
 
         # Seuil critique (switch Cloud total)
@@ -83,7 +84,8 @@ class LocalLLM:
         model_id = self._get_required_model(intent)
         
         try:
-            self._load_model(model_id)
+            # Correction 4 : Chargement déporté via to_thread pour ne pas geler l'Event Loop
+            await asyncio.to_thread(self._load_model, model_id)
         except Exception as e:
             logger.error(f"Impossible de charger le modèle {model_id} : {e}")
             raise # Déclenche le fallback dans NuruCore
@@ -118,6 +120,8 @@ class LocalLLM:
                 logits_processors=logits_processors
             ):
                 yield response.text
+                # Correction 2A : Libération explicite de l'Event Loop
+                await asyncio.sleep(0)
 
             # V4.5 Phase 0 : Planifie le déchargement après keep-alive
             self._schedule_unload()

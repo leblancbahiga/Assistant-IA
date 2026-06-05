@@ -38,11 +38,19 @@ async def continuous_background_daemon(core: NuruCore):
     """
     logger.info(">> Daemon continu activé (Auto-Fetch, Learning, Wiki Sync).")
 
+    background_started = False
     tick_count = 0
     auto_fetch_ok = hasattr(core, 'auto_fetcher') and core.auto_fetcher is not None
 
     while True:
         try:
+            # 0. Au premier tick, lancer les tâches de fond de NuruCore
+            #    (maintenant que la boucle asyncio tourne)
+            if not background_started:
+                core.start_background_tasks()
+                background_started = True
+                logger.info(">> Tâches de fond NuruCore démarrées")
+
             # 1. Vérification RAM
             import psutil
             free_gb = psutil.virtual_memory().available / (1024**3)
@@ -115,7 +123,8 @@ def main():
     # Initialisation NURU
     logger.info(">> Initialisation du NuruCore...")
     core = NuruCore()
-    core.start_background_tasks()
+    # Ne pas appeler start_background_tasks() ici — pas de boucle event loop
+    # Les tâches de fond sont lancées par le daemon continu
 
     # Activation de l'Auto-Fetch (optionnel, selon config)
     if config.auto_fetch_enabled:

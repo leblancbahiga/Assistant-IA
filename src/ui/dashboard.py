@@ -45,6 +45,7 @@ try:
     from src.ui.components.api_docs_page import ApiDocsPage
     from src.ui.components.guides_page import GuidesPage
     from src.ui.components.prompts_page import PromptsPage
+    from src.ui.components.v6_system_page import SystemPage
     from src.config import config
     from src.nuru_core import NuruCore
     from src.core.events import EventBus
@@ -314,7 +315,7 @@ class CyberDashboard(QMainWindow):
         vbox.setSpacing(0)
         app_name = QLabel("NURU")
         app_name.setObjectName("AppName")
-        app_ver = QLabel("v4.5")
+        app_ver = QLabel("v6.0")
         app_ver.setObjectName("AppVersion")
         vbox.addWidget(app_name)
         vbox.addWidget(app_ver)
@@ -329,7 +330,7 @@ class CyberDashboard(QMainWindow):
         
         self.main_menu = QListWidget()
         self.main_menu.setObjectName("SidebarMenu")
-        for icon, text in [("📚", "Base Documentaire"), ("⚙️", "Paramètres")]:
+        for icon, text in [("📚", "Base Documentaire"), ("⚙️", "Paramètres"), ("📊", "Système V6")]:
             item = QListWidgetItem(f"{icon}  {text}")
             item.setSizeHint(QSize(0, 40))
             self.main_menu.addItem(item)
@@ -400,6 +401,20 @@ class CyberDashboard(QMainWindow):
         status_layout.addWidget(status_dot)
         title_vbox.addWidget(status_frame, 0, Qt.AlignLeft)
         
+        # NURU V6 : Badge de stratégie hybride
+        self.strategy_badge = QLabel("🌀 LOCAL")
+        self.strategy_badge.setObjectName("StrategyBadge")
+        self.strategy_badge.setStyleSheet("""
+            background-color: rgba(57, 255, 20, 0.1);
+            border: 1px solid #39FF14;
+            border-radius: 4px;
+            color: #39FF14;
+            font-size: 10px;
+            padding: 2px 8px;
+            font-weight: bold;
+        """)
+        title_vbox.addWidget(self.strategy_badge, 0, Qt.AlignLeft)
+        
         h_layout.addLayout(title_vbox)
         h_layout.addStretch()
         layout.addWidget(header)
@@ -428,6 +443,10 @@ class CyberDashboard(QMainWindow):
         try: self.stacked.addWidget(SessionsPage(self.core.memory))
         except Exception as e: logger.error(f"Error loading SessionsPage: {e}")
         
+        # NURU V6 : Page Système (modules V6)
+        try: self.stacked.addWidget(SystemPage(config=config, core=self.core))
+        except Exception as e: logger.error(f"Error loading SystemPage: {e}")
+        
         layout.addWidget(self.stacked, 1)
         self.main_layout.addWidget(container, 1)
 
@@ -447,7 +466,7 @@ class CyberDashboard(QMainWindow):
 
     def _on_menu_clicked(self, item):
         idx = self.main_menu.row(item)
-        target = {0: 1, 1: 2}.get(idx, 0)
+        target = {0: 1, 1: 2, 2: 7}.get(idx, 0)
         self.stacked.setCurrentIndex(target)
 
     def _wire_signals(self):
@@ -472,6 +491,29 @@ class CyberDashboard(QMainWindow):
             ram_color = self.telemetry_vm.ram_color(snapshot.ram_status)
 
             self.metrics_overlay.update_metrics(free_gb, total_gb, snapshot.ram_status)
+            
+            # NURU V6 : Mettre à jour le badge de stratégie
+            try:
+                hybrid = getattr(config, 'hybrid_mode', 'local_only')
+                colors = {
+                    "local_only": ("#39FF14", "🌀 LOCAL"),
+                    "verify": ("#FF00FF", "✅ VERIFY"),
+                    "plan": ("#FFB000", "📋 PLAN"),
+                    "rag": ("#00F2FF", "🌀 ARCHON"),
+                }
+                color, label = colors.get(hybrid, ("#39FF14", "🌀 LOCAL"))
+                self.strategy_badge.setStyleSheet(f"""
+                    background-color: rgba({','.join(map(str, QColor(color).getRgb()[:3]))}, 0.1);
+                    border: 1px solid {color};
+                    border-radius: 4px;
+                    color: {color};
+                    font-size: 10px;
+                    padding: 2px 8px;
+                    font-weight: bold;
+                """)
+                self.strategy_badge.setText(label)
+            except Exception:
+                pass
         except Exception as e:
             logger.debug(f"Metrics update fail: {e}")
 

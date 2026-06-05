@@ -5,17 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="3593a8dd-1a26-409b-af6b-c7b826474b13" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/nuru-v45.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/nuru-v45.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/NURU-V5.md" beforeDir="false" afterPath="$PROJECT_DIR$/NURU-V5.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config/settings.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/config/settings.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/indexes/nuru.db" beforeDir="false" afterPath="$PROJECT_DIR$/indexes/nuru.db" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/logs/nuru.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/nuru.log" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nuru_dashboard.py" beforeDir="false" afterPath="$PROJECT_DIR$/nuru_dashboard.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/core/orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/orchestrator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/query_context.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/query_context.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/router.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ingestion.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ingestion.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/dashboard.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/dashboard.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

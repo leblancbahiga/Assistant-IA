@@ -5,13 +5,13 @@
 # strict   : uniquement documents, refuse si pas de preuves
 # hybrid   : (défaut) RAG d'abord, connaissances générales ensuite
 # free     : pas de grounding, conversation libre
-response_mode: "hybrid"
+response_mode: "strict"
 
 # ─── RAG ───
 # Seuil de confiance pour accepter un résultat RAG
-rag_score_threshold: 0.50
+rag_score_threshold: 0.40
 # Seuil réduit si la recherche plein texte (FTS) confirme un résultat
-rag_score_fallback: 0.40
+rag_score_fallback: 0.30
 # Nombre de chunks maximum à utiliser
 rag_k: 5
 # Taille max du contexte RAG en tokens
@@ -64,4 +64,4 @@ auto_fetch_interval_min: 30
 # verify     : Phi-4-mini répond, Groq vérifie
 # plan       : Groq planifie, Phi-4-mini exécute
 # rag        : RAG locale récupère, Groq synthétise (Archon)
-hybrid_mode: "rag"
+hybrid_mode: "local_only"
