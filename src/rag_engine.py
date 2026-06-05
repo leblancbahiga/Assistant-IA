@@ -207,6 +207,18 @@ class RAGEngine:
         from src.rag.retrieval import reciprocal_rank_fusion
         fused = reciprocal_rank_fusion(vec_results, fts_results, top_k=k)
 
+        # NURU V6 : Profile Boost — multiplier le score des documents de Leblanc
+        try:
+            from src.profile_boost import get_boost_score
+            fused = [
+                (content, source, score * get_boost_score(source))
+                for content, source, score in fused
+            ]
+            # Re-trier par score boosté
+            fused.sort(key=lambda x: x[2], reverse=True)
+        except Exception:
+            pass
+
         # Déduplication par contenu après RRF
         for content, source, score in fused:
             if content not in seen_contents:
