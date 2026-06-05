@@ -25,6 +25,7 @@ class ConsolePage(QWidget):
         self._web_search_enabled = False
         self._sources = []
         self._last_query = ""
+        self._current_cot: QFrame = None  # V6 : Zone Chain of Thought
         self.setup_ui()
     
     def setup_ui(self):
@@ -136,20 +137,17 @@ class ConsolePage(QWidget):
     def add_message(self, sender: str, text: str, is_user: bool) -> ChatBubble:
         """Add a message with rich text formatting support"""
         bubble = ChatBubble(sender, "", is_user=is_user)
-        
+
         # Enable rich text formatting in the bubble's message area
-        if hasattr(bubble, 'msg_text'):  # ChatBubble uses QTextEdit
-            # Apply formatting to the text
+        if hasattr(bubble, 'msg_text'):
             formatted_text = self._format_message_text(text)
             bubble.msg_text.setHtml(formatted_text)
-            # Ensure scrollbar stays at bottom
             bubble.msg_text.verticalScrollBar().setValue(
                 bubble.msg_text.verticalScrollBar().maximum()
             )
         else:
-            # Fallback to plain text if msg_text attribute doesn't exist
             bubble = ChatBubble(sender, text, is_user=is_user)
-        
+
         self.chat_layout.addWidget(bubble)
         self._scroll_to_bottom()
 
@@ -158,6 +156,73 @@ class ConsolePage(QWidget):
             bubble.feedback_given.connect(lambda v, m: self.feedback_received.emit(v, m, self._last_query))
 
         return bubble
+
+    def add_cot(self, title: str = "Analyse du système..."):
+        """V6 : Ajoute une zone Chain of Thought repliable avant la réponse."""
+        cot_frame = QFrame()
+        cot_frame.setObjectName("CoTFrame")
+        cot_frame.setStyleSheet("""
+            #CoTFrame {
+                background-color: rgba(255, 176, 0, 0.05);
+                border: 1px solid rgba(255, 176, 0, 0.2);
+                border-left: 3px solid #FFB000;
+                border-radius: 6px;
+                margin: 4px 20px 4px 50px;
+                padding: 8px;
+            }
+        """)
+
+        cot_layout = QVBoxLayout(cot_frame)
+        cot_layout.setSpacing(4)
+
+        # Header cliquable
+        header_layout = QHBoxLayout()
+        toggle_btn = QPushButton("▶")
+        toggle_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; color: #FFB000; border: none;
+                font-size: 10px; font-weight: bold;
+            }
+            QPushButton:hover { color: #39FF14; }
+        """)
+        toggle_btn.setFixedSize(20, 20)
+        toggle_btn.setCursor(Qt.PointingHandCursor)
+
+        cot_title = QLabel(f"🧠 {title}")
+        cot_title.setStyleSheet("color: #FFB000; font-size: 10px; font-weight: bold;")
+
+        header_layout.addWidget(toggle_btn)
+        header_layout.addWidget(cot_title)
+        header_layout.addStretch()
+        cot_layout.addLayout(header_layout)
+
+        # Contenu (caché par défaut)
+        self._cot_content = QLabel("Analyse en cours...")
+        self._cot_content.setStyleSheet("color: #A78BFA; font-size: 11px; padding-left: 24px;")
+        self._cot_content.setWordWrap(True)
+        self._cot_content.setVisible(False)
+        cot_layout.addWidget(self._cot_content)
+
+        # Toggle
+        toggle_btn.clicked.connect(
+            lambda: self._cot_content.setVisible(not self._cot_content.isVisible())
+        )
+
+        self.chat_layout.addWidget(cot_frame)
+        self._scroll_to_bottom()
+
+        # Stocker pour mise à jour
+        self._current_cot = cot_frame
+        return cot_frame
+
+    def update_cot(self, text: str):
+        """V6 : Met à jour le contenu de la zone CoT."""
+        if hasattr(self, '_cot_content') and self._cot_content:
+            current = self._cot_content.text()
+            if current == "Analyse en cours...":
+                self._cot_content.setText(text)
+            else:
+                self._cot_content.setText(current + "\n" + text)
 
     def _format_message_text(self, text: str) -> str:
         """Convert plain text with special markers to HTML for rich display"""

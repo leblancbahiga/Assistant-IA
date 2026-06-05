@@ -1,14 +1,44 @@
+"""
+NURU V6 — ChatBubble amélioré : avatars neon, glow, indicateur de frappe.
+
+Style Geek & Funk : violet abyssal, vert acide, rose néon, ambre.
+"""
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QSizePolicy, QFrame
-from PySide6.QtCore import Qt, Signal, QRect
-from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import Qt, Signal, QTimer, QPropertyAnimation, QEasingCurve
+from PySide6.QtGui import QTextCursor, QColor
 import datetime
 
 
-class ChatBubble(QWidget):
-    """Bulle de discussion V4.0 avec avatars circulaires et feedback V4.5."""
+class TypingIndicator(QLabel):
+    """Indicateur de frappe clignotant pour l'assistant."""
 
-    # V4.5 Phase 4 : Signal de feedback (up/down) avec le texte du message
-    feedback_given = Signal(str, str)  # (vote: 'up'|'down', message_text)
+    def __init__(self, parent=None):
+        super().__init__("▊", parent)
+        self.setStyleSheet("color: #FF00FF; font-size: 18px; font-weight: bold;")
+        self._visible = True
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._blink)
+        self._timer.start(500)
+
+    def _blink(self):
+        self._visible = not self._visible
+        self.setText("▊" if self._visible else " ")
+
+    def stop(self):
+        self._timer.stop()
+        self.setText("")
+
+
+class ChatBubble(QWidget):
+    """Bulle de discussion V6 — style Geek & Funk avec glow neon.
+
+    - Avatar circulaire coloré (rose pour l'IA, vert pour l'utilisateur)
+    - Bordure gauche neon (rose assistant, vert user)
+    - Glow externe via ombre
+    - Indicateur de frappe clignotant pendant la génération
+    """
+
+    feedback_given = Signal(str, str)
 
     def __init__(self, sender: str, message: str, is_user: bool = False, parent=None):
         super().__init__(parent)
@@ -17,104 +47,147 @@ class ChatBubble(QWidget):
         main_layout.setContentsMargins(8, 6, 8, 6)
         main_layout.setAlignment(Qt.AlignTop)
 
-        # Avatar circulaire (discret, sans bordure colorée)
-        self.icon_label = QLabel()
-        self.icon_label.setFixedSize(24, 24)
+        # Avatar neon
+        self.avatar = QLabel()
+        self.avatar.setFixedSize(32, 32)
         if is_user:
-            self.icon_label.setStyleSheet(
-                "background-color: #3A3A3A; "
-                "border-radius: 12px;"
+            self.avatar.setText("👤")
+            self.avatar.setStyleSheet(
+                "background-color: rgba(57, 255, 20, 0.15);"
+                "border: 2px solid #39FF14;"
+                "border-radius: 16px;"
+                "font-size: 14px;"
+                "qproperty-alignment: AlignCenter;"
             )
         else:
-            self.icon_label.setStyleSheet(
-                "background-color: #2A2A2A; "
-                "border-radius: 12px;"
+            self.avatar.setText("🧠")
+            self.avatar.setStyleSheet(
+                "background-color: rgba(255, 0, 255, 0.15);"
+                "border: 2px solid #FF00FF;"
+                "border-radius: 16px;"
+                "font-size: 14px;"
+                "qproperty-alignment: AlignCenter;"
             )
 
-        main_layout.addWidget(self.icon_label, 0, Qt.AlignTop)
+        main_layout.addWidget(self.avatar, 0, Qt.AlignTop)
 
-        # Contenu
-        content_wrapper = QFrame()
-        content_wrapper.setObjectName("BubbleFrame")
-        if not is_user:
-            content_wrapper.setObjectName("AssistantBubbleFrame")
-        
-        content_layout = QVBoxLayout(content_wrapper)
-        content_layout.setContentsMargins(15, 12, 15, 12)
+        # Conteneur de la bulle
+        bubble_color = "#FF00FF" if not is_user else "#39FF14"
+        bg_color = "#1A152E" if not is_user else "#2D2545"
+        self.bubble = QFrame()
+        self.bubble.setStyleSheet(f"""
+            #BubbleFrame {{
+                background-color: {bg_color};
+                border: 1px solid {bubble_color}44;
+                border-left: 3px solid {bubble_color};
+                border-radius: 12px;
+                padding: 12px;
+            }}
+        """)
+
+        content_layout = QVBoxLayout(self.bubble)
+        content_layout.setContentsMargins(12, 10, 12, 10)
         content_layout.setSpacing(4)
 
         # Header
-        header_layout = QHBoxLayout()
-        name_label = QLabel(sender.upper())
-        name_label.setObjectName("BubbleName")
+        header = QHBoxLayout()
+        name_lbl = QLabel(sender.upper())
+        name_lbl.setStyleSheet(
+            f"color: {bubble_color}; font-size: 9px; font-weight: bold; letter-spacing: 1px;"
+        )
+        time_lbl = QLabel(datetime.datetime.now().strftime("%H:%M"))
+        time_lbl.setStyleSheet("color: #6b7280; font-size: 9px;")
 
-        time_label = QLabel(datetime.datetime.now().strftime("%H:%M:%S"))
-        time_label.setObjectName("BubbleTime")
+        # Badge IA
+        if not is_user:
+            badge = QLabel("⚡ IA")
+            badge.setStyleSheet(
+                "background-color: rgba(255, 0, 255, 0.2);"
+                "color: #FF00FF; font-size: 8px; font-weight: bold;"
+                "border-radius: 4px; padding: 1px 6px;"
+            )
+            header.addWidget(badge)
+            header.addSpacing(8)
 
-        header_layout.addWidget(name_label)
-        header_layout.addStretch()
-        header_layout.addWidget(time_label)
+        header.addWidget(name_lbl)
+        header.addStretch()
+        header.addWidget(time_lbl)
+        content_layout.addLayout(header)
 
-        content_layout.addLayout(header_layout)
-
-        # Message (QTextEdit pour supporter les longs textes et le streaming)
+        # Message
         self.msg_text = QTextEdit()
         self.msg_text.setReadOnly(True)
         self.msg_text.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.msg_text.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.msg_text.setFrameShape(QFrame.NoFrame)
-        self.msg_text.setObjectName("BubbleText")
+        self.msg_text.setStyleSheet("background: transparent; color: #E0E7FF; font-size: 13px;")
         self.msg_text.setPlainText(message)
-        
-        # Ajuster la hauteur au contenu
         self.msg_text.document().setDocumentMargin(0)
         self.msg_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.msg_text.textChanged.connect(self._resize_to_content)
-
         content_layout.addWidget(self.msg_text)
 
-        # V4.5 Phase 4 : Boutons de feedback 👍/👎 (uniquement pour assistant)
+        # Indicateur de frappe (caché par défaut)
+        self.typing = TypingIndicator()
+        self.typing.setVisible(False)
+        content_layout.addWidget(self.typing)
+
+        # Feedback (assistant uniquement)
         if not is_user:
-            feedback_layout = QHBoxLayout()
-            feedback_layout.setContentsMargins(0, 4, 0, 0)
-            feedback_layout.setSpacing(8)
+            fb_layout = QHBoxLayout()
+            fb_layout.setContentsMargins(0, 6, 0, 0)
+            fb_layout.setSpacing(6)
 
             self.btn_up = QPushButton("👍")
-            self.btn_up.setObjectName("BtnFeedback")
-            self.btn_up.setFixedSize(32, 28)
+            self.btn_up.setStyleSheet("""
+                QPushButton { background: transparent; color: #6b7280; border: none; font-size: 12px; }
+                QPushButton:hover { color: #39FF14; }
+            """)
+            self.btn_up.setFixedSize(28, 24)
             self.btn_up.setCursor(Qt.PointingHandCursor)
 
             self.btn_down = QPushButton("👎")
-            self.btn_down.setObjectName("BtnFeedback")
-            self.btn_down.setFixedSize(32, 28)
+            self.btn_down.setStyleSheet("""
+                QPushButton { background: transparent; color: #6b7280; border: none; font-size: 12px; }
+                QPushButton:hover { color: #FF00FF; }
+            """)
+            self.btn_down.setFixedSize(28, 24)
             self.btn_down.setCursor(Qt.PointingHandCursor)
 
-            self.feedback_status = QLabel("")
-            self.feedback_status.setObjectName("FeedbackStatus")
+            self.fb_status = QLabel("")
+            self.fb_status.setStyleSheet("color: #6b7280; font-size: 9px;")
 
-            feedback_layout.addWidget(self.btn_up)
-            feedback_layout.addWidget(self.btn_down)
-            feedback_layout.addWidget(self.feedback_status)
-            feedback_layout.addStretch()
-            content_layout.addLayout(feedback_layout)
+            fb_layout.addWidget(self.btn_up)
+            fb_layout.addWidget(self.btn_down)
+            fb_layout.addWidget(self.fb_status)
+            fb_layout.addStretch()
+            content_layout.addLayout(fb_layout)
 
-        main_layout.addWidget(content_wrapper, 1)
+        main_layout.addWidget(self.bubble, 1)
         if is_user:
-            main_layout.insertStretch(0, 1) # Align user to right
+            main_layout.insertStretch(0, 1)
         else:
-            main_layout.addStretch(1) # Align assistant to left
+            main_layout.addStretch(1)
 
+    def append_text(self, text: str):
+        try:
+            cursor = self.msg_text.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            cursor.insertText(text)
+            self.msg_text.setTextCursor(cursor)
+        except RuntimeError:
+            pass
 
-    def _on_feedback(self, vote: str):
-        """Émet le signal de feedback et désactive les deux boutons."""
-        self.btn_up.setEnabled(False)
-        self.btn_down.setEnabled(False)
-        emoji = "👍" if vote == "up" else "👎"
-        self.feedback_status.setText(f"{emoji} Merci de votre retour !")
-        self.feedback_given.emit(vote, self.msg_text.toPlainText())
+    def show_typing(self):
+        """Affiche l'indicateur de frappe."""
+        self.typing.setVisible(True)
+
+    def hide_typing(self):
+        """Cache l'indicateur de frappe."""
+        self.typing.stop()
+        self.typing.setVisible(False)
 
     def _resize_to_content(self):
-        """Ajuste la hauteur du QTextEdit au contenu."""
         try:
             doc = self.msg_text.document()
             doc.setTextWidth(self.msg_text.viewport().width())
@@ -122,14 +195,4 @@ class ChatBubble(QWidget):
             if h > 0:
                 self.msg_text.setFixedHeight(int(h) + 4)
         except Exception:
-            pass
-
-    def append_text(self, text: str):
-        """Streaming de texte."""
-        try:
-            cursor = self.msg_text.textCursor()
-            cursor.movePosition(QTextCursor.MoveOperation.End)
-            cursor.insertText(text)
-            self.msg_text.setTextCursor(cursor)
-        except RuntimeError:
             pass

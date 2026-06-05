@@ -137,7 +137,24 @@ QProgressBar#RamBar::chunk {
     border-radius: 0px;
 }
 
-/* Bulles de Chat */
+/* Bulles de Chat V6 — Neon Funk */
+#ChatBubbleAssistant {
+    background-color: #1A152E;
+    border-left: 3px solid #FF00FF;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 5px;
+}
+
+#ChatBubbleUser {
+    background-color: #2D2545;
+    border-left: 3px solid #39FF14;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 5px;
+}
+
+/* Bulles legacy (V5) */
 #BubbleFrame {
     background-color: rgba(139, 92, 246, 0.15);
     border: 1px solid rgba(139, 92, 246, 0.5);

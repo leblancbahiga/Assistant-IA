@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QSpacerItem, QSizePolicy as QSizePolicyEnum,
     QGraphicsDropShadowEffect
 )
-from PySide6.QtCore import Qt, QTimer, Slot, Signal, QThread, QSize, QPoint, QPropertyAnimation, QRect
+from PySide6.QtCore import Qt, QTimer, Slot, Signal, QThread, QSize, QPoint, QPropertyAnimation, QRect, QEasingCurve
 from PySide6.QtGui import QFont, QIcon, QColor, QPalette
 
 # Setup path
@@ -467,7 +467,18 @@ class CyberDashboard(QMainWindow):
     def _on_menu_clicked(self, item):
         idx = self.main_menu.row(item)
         target = {0: 1, 1: 2, 2: 7}.get(idx, 0)
-        self.stacked.setCurrentIndex(target)
+        self.switch_page(target)
+
+    def switch_page(self, index: int):
+        """V6 : Transition animée entre les pages du dashboard."""
+        self.fade_anim = QPropertyAnimation(self.stacked, b"windowOpacity")
+        self.fade_anim.setDuration(250)
+        self.fade_anim.setStartValue(0.5)
+        self.fade_anim.setEndValue(1.0)
+        self.fade_anim.setEasingCurve(QEasingCurve.InOutQuad)
+
+        self.stacked.setCurrentIndex(index)
+        self.fade_anim.start()
 
     def _wire_signals(self):
         self._bus = EventBus()
