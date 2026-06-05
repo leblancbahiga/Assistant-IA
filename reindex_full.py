@@ -136,8 +136,9 @@ async def index_all(only_personal: bool = True):
     rag = RAGEngine()
     embedder = Embedder()
     
-    from src.rag.v2_chunking import HierarchicalChunkerV2
-    chunker = HierarchicalChunkerV2(max_section_chars=4000)
+    # Détecter le profil adapté pour le chunker
+    from src.rag.v2_chunking import HierarchicalChunkerV2, ChunkV2
+    chunker_profile = "cv"  # par défaut, sera ajusté par fichier
     
     # Désactiver le reranker pour économiser la RAM
     rag.reranker.unload()
@@ -200,7 +201,9 @@ async def index_all(only_personal: bool = True):
             # 3. Résumé du document
             summary = await summarize_document(text, fname)
             
-            # 4. Chunking V2 (chunks larges, pas de limite de temps)
+            # 4. Chunking V2 avec profil adapté au type de document
+            profile = HierarchicalChunkerV2.detect_profile(fname)
+            chunker = HierarchicalChunkerV2(profile=profile)
             v2_chunks = chunker.chunk(
                 text,
                 source=fname,

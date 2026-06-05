@@ -184,10 +184,10 @@ class RAGEngine:
         result.top_score = top1_score
         result.all_scores = [1 - d for _, _, d in vec_results] if vec_results else []
 
-        # NURU V5 : Seuil aligné sur PolicyEngine.MID_CONFIDENCE (0.48)
-        # Le PolicyEngine fait le filtrage fin, pas le RAG
-        MIN_ABSOLUTE_SCORE = 0.50
-        FALLBACK_THRESHOLD = 0.40  # Seuil réduit si FTS confirme
+        # NURU V5 : Seuil depuis config.settings.yaml
+        # V6 : seuils alignés sur les nouvelles valeurs de settings.yaml
+        MIN_ABSOLUTE_SCORE = config.rag_score_threshold
+        FALLBACK_THRESHOLD = config.rag_score_fallback
 
         is_reliable = top1_score >= MIN_ABSOLUTE_SCORE or (len(fts_results) > 0 and top1_score >= FALLBACK_THRESHOLD)
 
@@ -242,7 +242,7 @@ class RAGEngine:
             
             try:
                 self.reranker.load_model()
-                reranked = await self.reranker.rerank(query, combined_results, top_k=3) or []
+                reranked = await self.reranker.rerank(query, combined_results, top_k=k) or []
             finally:
                 # IMMÉDIATEMENT après usage, décharger le reranker PyTorch/MPS
                 # pour libérer la mémoire GPU avant que le LLM (MLX) ne charge.
@@ -254,7 +254,7 @@ class RAGEngine:
                 logger.info("↪️ Utilisation BM25 direct (pas de reranker).")
             else:
                 logger.warning("⚠️ Fallback: reranker vide, utilisation BM25 à la place.")
-            reranked = self.bm25_rerank(query, combined_results, top_k=3)
+            reranked = self.bm25_rerank(query, combined_results, top_k=k)
         
         # Seconde confidence gate APRÈS reranking (uniquement si reranker a été utilisé)
         if should_rerank and reranked and reranked[0][2] < 0.10:

@@ -126,7 +126,7 @@ class IngestionEngine:
                     from src.nuru_brain import WikiWriter
                     wiki = WikiWriter()
                     source_name = os.path.basename(filepath)
-                    for c in chunks[:5]:  # Limiter à 5 chunks par fichier
+                    for c in chunks:  # V6 Pas de limite — tous les chunks dans le Wiki
                         wiki.write_chunk(
                             content=c["content"],
                             source=source_name,

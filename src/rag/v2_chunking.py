@@ -1,17 +1,12 @@
 """
-NURU V6 — Chunking hiérarchique robuste V2.
+NURU V6 — Chunking hiérarchique robuste V2 (corrigé).
 
-Problèmes du chunking V1 :
-1. Chunks trop petits (max 1200 chars) → contexte haché
-2. Pas d'agrégation → 50 petits bouts pour un CV de 10 pages
-3. Pas de résumé de document → LLM n'a pas de vue d'ensemble
-4. Métadonnées pauvres → pas de scoring par importance
-
-Philosophie V2 — Hiérarchie riche :
-1. Résumé du document entier (head)
-2. Sections principales (body → sections)
-3. Détails par section (body → subsections/paragraphs)
-4. Marqueurs d'importance ([IMPORTANT], [DETAIL], [META])
+Problèmes V2 corrigés :
+1. Résumé trop superficiel (10 premières lignes) → extraction structurée de TOUTES les sections
+2. Détection des sections fragile → fallback phrase pour textes non structurés
+3. Fusion des petits paragraphes insuffisante → accumulation jusqu'à MAX_SECTION_CHARS
+4. MIN_CHUNK_CHARS trop bas (200) → 500
+5. Profils par type de document (CV vs rapport vs note)
 """
 import re
 import logging
@@ -20,45 +15,63 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Seuils de taille
-MAX_SECTION_CHARS = 4000     # Taille max d'une section
-MAX_SUBSECTION_CHARS = 2000  # Taille max d'une sous-section
-MIN_CHUNK_CHARS = 200        # En dessous : fusionner avec le voisin
-OVERLAP_CHARS = 100          # Chevauchement entre chunks
+# ── Profils de chunking ──
+PROFILES = {
+    "cv": {"max_section": 6000, "min_chunk": 500, "overlap": 200},
+    "rapport": {"max_section": 4000, "min_chunk": 300, "overlap": 100},
+    "note": {"max_section": 2000, "min_chunk": 150, "overlap": 50},
+}
 
-# Marqueurs d'importance détectés dans le texte
+# Par défaut (profil CV — le plus permissif pour les données denses)
+MAX_SECTION_CHARS = 6000
+MIN_CHUNK_CHARS = 500
+OVERLAP_CHARS = 200
+
+# Si le texte fait moins de cette taille, on ne chunk pas du tout
+SHORT_DOC_THRESHOLD = 8000  # ~2000 tokens
+
 IMPORTANCE_PATTERNS = {
     "high": re.compile(
         r'(expérience professionnelle|formation|diplôme|compétence|'
         r'résumé|profil|career|education|skill|achievement|'
-        r'réalisation|mission|responsabilité|poste occupé)',
+        r'réalisation|mission|responsabilité|poste occupé|'
+        r'emploi|travail|job|expérience)',
         re.IGNORECASE
     ),
     "medium": re.compile(
         r'(projet|référence|langue|réf[ée]rence|certification|'
-        r'publication|distinction|prix|bourse)',
+        r'publication|distinction|prix|bourse|langue|informatique)',
         re.IGNORECASE
     ),
 }
 
+# Détection du type de document par le nom de fichier
+CV_PATTERNS = re.compile(
+    r'\b(cv|curriculum|vitae|resume|profil|motivation|lettre|candidature|cover)\b'
+    r'|cv[_\-]',
+    re.IGNORECASE,
+)
+
+RAPPORT_PATTERNS = re.compile(
+    r'\b(rapport|report|étude|analysis|survey|baseline|assessment|review)\b',
+    re.IGNORECASE,
+)
+
 
 @dataclass
 class ChunkV2:
-    """Chunk hiérarchique V2 avec métadonnées riches."""
-    content: str                    # Texte du chunk
-    source: str                     # Nom du fichier source
-    doc_title: str = ""             # Titre du document parent
-    section_title: str = ""         # Titre de la section
-    level: str = "paragraph"        # document | section | subsection | paragraph
-    importance: str = "normal"      # high | medium | normal | meta
+    content: str
+    source: str
+    doc_title: str = ""
+    section_title: str = ""
+    level: str = "paragraph"       # document | section | subsection | paragraph
+    importance: str = "normal"
     char_count: int = 0
     word_count: int = 0
-    chunk_index: int = 0            # Position dans le document
-    total_chunks: int = 0           # Nombre total de chunks du document
+    chunk_index: int = 0
+    total_chunks: int = 0
 
     def to_dict(self) -> dict:
-        """Sérialisation pour insertion dans l'index."""
-        # Contexte enrichi
         context_parts = []
         if self.level == "document":
             context_parts.append(f"[RÉSUMÉ] {self.doc_title}")
@@ -66,12 +79,9 @@ class ChunkV2:
             context_parts.append(f"[{self.doc_title} - {self.section_title}]")
         else:
             context_parts.append(f"[{self.doc_title}]")
-        
         if self.importance == "high":
             context_parts.append("[IMPORTANT]")
-        
         content = " ".join(context_parts) + "\n" + self.content
-        
         return {
             "content": content,
             "source": self.source,
@@ -83,28 +93,51 @@ class ChunkV2:
 
 
 class HierarchicalChunkerV2:
-    """Chunker hiérarchique robuste pour documents longs.
+    """Chunker hiérarchique avec profils par type de document."""
 
-    Pipeline :
-    1. Résumé du document entier (toujours indexé)
-    2. Découpage en sections par titres
-    3. Sections longues → sous-sections + paragraphes
-    4. Marqueurs d'importance
-    """
+    def __init__(self, profile: str = "cv"):
+        p = PROFILES.get(profile, PROFILES["cv"])
+        self.max_section_chars = p["max_section"]
+        self.min_chunk_chars = p["min_chunk"]
+        self.overlap_chars = p["overlap"]
 
-    def __init__(self, max_section_chars: int = MAX_SECTION_CHARS):
-        self.max_section_chars = max_section_chars
+    @staticmethod
+    def detect_profile(filename: str) -> str:
+        """Détecte le profil de chunking adapté au fichier."""
+        if CV_PATTERNS.search(filename):
+            return "cv"
+        if RAPPORT_PATTERNS.search(filename):
+            return "rapport"
+        return "note"
 
     def chunk(self, text: str, source: str = "",
               doc_title: str = "") -> list[ChunkV2]:
-        """Point d'entrée : découpe un texte en chunks hiérarchiques."""
         if not text.strip():
             return []
 
         doc_title = doc_title or source or "Document"
+        text = text.strip()
+
+        # ── DOCUMENTS COURTS : pas de chunking du tout ──
+        if len(text) < SHORT_DOC_THRESHOLD:
+            chunk = ChunkV2(
+                content=text,
+                source=source,
+                doc_title=doc_title,
+                section_title="Document complet",
+                level="document",
+                importance="high",
+                char_count=len(text),
+                word_count=len(text.split()),
+                chunk_index=0,
+                total_chunks=1,
+            )
+            logger.info(f"📄 Chunker V2: document court ({len(text)} chars) → 1 chunk unique")
+            return [chunk]
+
         all_chunks: list[ChunkV2] = []
 
-        # 1. Résumé du document (les 200 premiers caractères comme résumé)
+        # 1. Résumé structuré de tout le document
         summary = self._make_summary(text, source, doc_title)
         if summary:
             all_chunks.append(summary)
@@ -113,44 +146,20 @@ class HierarchicalChunkerV2:
         sections = self._split_sections(text)
 
         for section_title, section_body in sections:
-            chunk_index = len(all_chunks)
-            
-            # Marqueur d'importance
-            importance = self._detect_importance(section_title + " " + section_body[:200])
+            if not section_body.strip():
+                continue
 
-            if len(section_body) <= self.max_section_chars:
-                # Section de taille normale
-                chunk = ChunkV2(
-                    content=section_body.strip(),
-                    source=source,
-                    doc_title=doc_title,
-                    section_title=section_title,
-                    level="section",
-                    importance=importance,
-                    char_count=len(section_body),
-                    word_count=len(section_body.split()),
-                    chunk_index=chunk_index,
-                )
-                all_chunks.append(chunk)
-            else:
-                # Section longue → sous-sections
-                subsections = self._split_subsections(section_title, section_body)
-                for sub_title, sub_body in subsections:
-                    chunk = ChunkV2(
-                        content=sub_body.strip(),
-                        source=source,
-                        doc_title=doc_title,
-                        section_title=sub_title or section_title,
-                        level="subsection",
-                        importance=importance,
-                        char_count=len(sub_body),
-                        word_count=len(sub_body.split()),
-                        chunk_index=chunk_index,
-                    )
-                    all_chunks.append(chunk)
-                    chunk_index += 1
+            importance = self._detect_importance(
+                section_title + " " + section_body[:300]
+            )
 
-        # 3. Marquer le nombre total de chunks
+            # Accumulation des paragraphes jusqu'à MAX_SECTION_CHARS
+            accumulated = self._accumulate_paragraphs(
+                section_body, section_title, source, doc_title,
+                importance, len(all_chunks)
+            )
+            all_chunks.extend(accumulated)
+
         total = len(all_chunks)
         for c in all_chunks:
             c.total_chunks = total
@@ -163,43 +172,118 @@ class HierarchicalChunkerV2:
         return all_chunks
 
     def _make_summary(self, text: str, source: str, doc_title: str) -> Optional[ChunkV2]:
-        """Crée un chunk résumé avec les infos clés du document."""
-        # Résumé : début du document + métadonnées
-        lines = text.strip().split("\n")[:10]  # Premières 10 lignes
-        summary_text = "\n".join(lines)
-        
-        # Si le doc a un titre détectable
-        title_match = re.match(r'^#\s+(.+)$', text, re.MULTILINE)
-        if title_match:
-            summary_text = f"Titre: {title_match.group(1)}\n" + summary_text
+        """Résumé structuré — extrait les infos clés de tout le document."""
+        sections = self._split_sections(text)
+        summary_parts = [f"Document: {doc_title}"]
 
-        if len(summary_text) < 50:
+        for title, body in sections[:8]:  # Max 8 sections résumées
+            if title and body:
+                # Première phrase significative de chaque section
+                first_line = body.strip().split('\n')[0][:300]
+                summary_parts.append(f"• {title}: {first_line}")
+
+        summary_text = "\n".join(summary_parts)
+
+        if len(summary_text) < 80:
             return None
 
         return ChunkV2(
-            content=summary_text[:2000],  # Limiter le résumé
+            content=summary_text[:3000],
             source=source,
             doc_title=doc_title,
             section_title="Résumé du document",
             level="document",
             importance="high",
-            char_count=len(summary_text[:2000]),
-            word_count=len(summary_text[:2000].split()),
+            char_count=len(summary_text[:3000]),
+            word_count=len(summary_text[:3000].split()),
             chunk_index=0,
         )
 
+    def _accumulate_paragraphs(self, text: str, section_title: str,
+                                source: str, doc_title: str,
+                                importance: str, start_index: int) -> list[ChunkV2]:
+        """Accumule les paragraphes d'une section jusqu'à MAX_SECTION_CHARS."""
+        paragraphs = self._split_paragraphs(text)
+        if not paragraphs:
+            # Fallback : la section entière en un chunk
+            return [ChunkV2(
+                content=text.strip(),
+                source=source, doc_title=doc_title,
+                section_title=section_title,
+                level="section", importance=importance,
+                char_count=len(text), word_count=len(text.split()),
+                chunk_index=start_index,
+            )]
+
+        chunks = []
+        buffer = ""
+        idx = start_index
+
+        for para in paragraphs:
+            # Si le paragraphe seul dépasse la limite, le traiter comme chunk unique
+            if len(para) >= self.max_section_chars:
+                # Sauvegarder le buffer d'abord
+                if buffer:
+                    chunks.append(ChunkV2(
+                        content=buffer.strip(),
+                        source=source, doc_title=doc_title,
+                        section_title=section_title,
+                        level="subsection", importance=importance,
+                        char_count=len(buffer), word_count=len(buffer.split()),
+                        chunk_index=idx,
+                    ))
+                    idx += 1
+                    buffer = ""
+                # Puis le gros paragraphe
+                chunks.append(ChunkV2(
+                    content=para.strip(),
+                    source=source, doc_title=doc_title,
+                    section_title=section_title,
+                    level="subsection", importance=importance,
+                    char_count=len(para), word_count=len(para.split()),
+                    chunk_index=idx,
+                ))
+                idx += 1
+                continue
+
+            # Accumulation
+            candidate = (buffer + "\n\n" + para) if buffer else para
+            if len(candidate) <= self.max_section_chars:
+                buffer = candidate
+            else:
+                if buffer:
+                    chunks.append(ChunkV2(
+                        content=buffer.strip(),
+                        source=source, doc_title=doc_title,
+                        section_title=section_title,
+                        level="section", importance=importance,
+                        char_count=len(buffer), word_count=len(buffer.split()),
+                        chunk_index=idx,
+                    ))
+                    idx += 1
+                buffer = para
+
+        # Dernier buffer
+        if buffer:
+            chunks.append(ChunkV2(
+                content=buffer.strip(),
+                source=source, doc_title=doc_title,
+                section_title=section_title,
+                level="section", importance=importance,
+                char_count=len(buffer), word_count=len(buffer.split()),
+                chunk_index=idx,
+            ))
+
+        return chunks
+
     def _split_sections(self, text: str) -> list[tuple[str, str]]:
-        """Détecte les sections par titres markdown ou lignes majuscules."""
+        """Détecte les sections. Fallback phrase si aucun titre détecté."""
         lines = text.split("\n")
         sections: list[tuple[str, list[str]]] = [("", [])]
 
-        # Patterns de titres
         heading_re = re.compile(r'^(#{1,3})\s+(.+)$')
-        caps_re = re.compile(r'^([A-Z][A-Z\s\-À-ÜÉÈÊË]{3,})$')
-        # Nouveau : titres de CV comme "EXPÉRIENCE PROFESSIONNELLE"
-        cv_header_re = re.compile(
-            r'^([A-ZÉÈÊËÀ-Ü]{4,}(?:\s+[A-ZÉÈÊËÀ-Ü]{2,})*)$'
-        )
+        caps_re = re.compile(r'^([A-Z][A-Z\s\-À-ÜÉÈÊË]{4,})$')
+        cv_header_re = re.compile(r'^([A-ZÉÈÊËÀ-Ü]{4,}(?:\s+[A-ZÉÈÊËÀ-Ü]{2,})*)$')
 
         for line in lines:
             m = heading_re.match(line) or caps_re.match(line) or cv_header_re.match(line)
@@ -208,38 +292,20 @@ class HierarchicalChunkerV2:
             else:
                 sections[-1][1].append(line)
 
-        return [(t, "\n".join(b).strip()) for t, b in sections if b]
+        result = [(t, "\n".join(b).strip()) for t, b in sections if b]
 
-    def _split_subsections(self, parent_title: str, text: str) -> list[tuple[str, str]]:
-        """Découpe une section longue en sous-sections."""
-        # D'abord essayer les paragraphes
-        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text) if len(p.strip()) > MIN_CHUNK_CHARS]
-        
-        if not paragraphs:
-            # Fallback : découpage par taille
-            paragraphs = []
-            while text:
-                chunk = text[:self.max_section_chars // 2]
-                text = text[self.max_section_chars // 2 - OVERLAP_CHARS:]
-                paragraphs.append(chunk.strip())
+        # Fallback : si aucune section détectée, section unique
+        if not result:
+            result = [("", text.strip())]
 
-        # Grouper les petits paragraphes
-        merged = []
-        buffer = ""
-        for p in paragraphs:
-            if len(buffer) + len(p) < self.max_section_chars // 2:
-                buffer += "\n\n" + p if buffer else p
-            else:
-                if buffer:
-                    merged.append((parent_title, buffer))
-                buffer = p
-        if buffer:
-            merged.append((parent_title, buffer))
+        return result
 
-        return merged
+    def _split_paragraphs(self, text: str) -> list[str]:
+        """Paragraphes par doubles sauts de ligne, filtre les micro-chunks."""
+        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text)]
+        return [p for p in paragraphs if len(p) >= self.min_chunk_chars]
 
     def _detect_importance(self, text: str) -> str:
-        """Détecte le niveau d'importance d'un chunk."""
         text_lower = text.lower()
         for pattern_name, pattern in IMPORTANCE_PATTERNS.items():
             if pattern.search(text_lower):

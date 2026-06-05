@@ -9,9 +9,9 @@ response_mode: "strict"
 
 # ─── RAG ───
 # Seuil de confiance pour accepter un résultat RAG
-rag_score_threshold: 0.40
+rag_score_threshold: 0.30
 # Seuil réduit si la recherche plein texte (FTS) confirme un résultat
-rag_score_fallback: 0.30
+rag_score_fallback: 0.20
 # Nombre de chunks maximum à utiliser
 rag_k: 3
 # Taille max du contexte RAG en tokens
