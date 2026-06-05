@@ -116,12 +116,9 @@ class CrossEncoderReranker:
             # Inférence cross-encoder
             scores = self._model.predict(pairs, show_progress_bar=False)
             
-            # Normaliser les scores en [0, 1] via sigmoid inverse
-            # Les scores MiniLM sont des logits bruts, on les softmax-normalise
-            if len(scores) > 1:
-                scores_norm = 1.0 / (1.0 + np.exp(-scores))
-            else:
-                scores_norm = np.array([float(scores)])
+            # Correction 3 : Normalisation robuste via np.atleast_1d (évite crash sur scalaire)
+            scores = np.atleast_1d(scores)
+            scores_norm = 1.0 / (1.0 + np.exp(-scores))
             
             # Construire les résultats rerankés
             import re

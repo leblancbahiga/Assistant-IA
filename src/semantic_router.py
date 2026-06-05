@@ -130,9 +130,12 @@ class SemanticRouter:
         # ====================================
         # NIVEAU 2 : WEB TRIGGER (Actualité — pas de RAG inutile)
         # NURU V5 : priorité RAG — si mots-clés docs, on ignore les web triggers
+        # Correction 7 : Regex \b pour éviter faux positifs (ex: "fao" dans "il faudrait")
         # ====================================
-        has_rag_keyword = any(kw in query_lower for kw in RAG_KEYWORDS)
-        has_web_trigger = any(trigger in query_lower for trigger in WEB_TRIGGERS)
+        rag_pattern = re.compile(r'\b(' + '|'.join(map(re.escape, RAG_KEYWORDS)) + r')\b', re.IGNORECASE)
+        web_pattern = re.compile(r'\b(' + '|'.join(map(re.escape, WEB_TRIGGERS)) + r')\b', re.IGNORECASE)
+        has_rag_keyword = bool(rag_pattern.search(query_lower))
+        has_web_trigger = bool(web_pattern.search(query_lower))
         if has_web_trigger and not has_rag_keyword:
             result.decision = "CLOUD_GROQ"
             result.confidence = 0.8

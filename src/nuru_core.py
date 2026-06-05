@@ -138,10 +138,12 @@ class NuruCore:
         self._extractor = PostSessionExtractor()
         
     def _is_online(self) -> bool:
-        """Vérifie rapidement si l'API Groq est accessible."""
+        """Vérifie rapidement si l'API Groq est accessible (Timeout réduit)."""
         import socket
         try:
-            socket.create_connection(("api.groq.com", 443), timeout=2)
+            # Correction 6 : Timeout abaissé à 0.5s. 2s de blocage synchrone
+            # sont catastrophiques pour une UI asynchrone.
+            socket.create_connection(("api.groq.com", 443), timeout=0.5)
             return True
         except (socket.timeout, OSError):
             return False
@@ -303,11 +305,16 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
         # ═══════════════════════════════════════════
         response_content = ""
         sentence_buffer = ""
-        start_gen_time = time.time()
+        start_gen_time = None  # Correction 9 : Chrono déclenché au premier token uniquement
 
         async def run_inference(source_gen):
-            nonlocal response_content, sentence_buffer
+            nonlocal response_content, sentence_buffer, start_gen_time
+            background_tts_tasks = set()  # Correction 5 : Références fortes TTS
             async for token in source_gen:
+                # Correction 9 : Le chrono démarre au premier vrai token
+                if start_gen_time is None:
+                    start_gen_time = time.time()
+                    
                 if token.startswith('<|') or token in ('</s>', '<s>'):
                     continue
                 response_content += token
@@ -317,7 +324,10 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
                 if use_tts and any(c in token for c in ".!?\n"):
                     clean_sentence = sentence_buffer.strip()
                     if len(clean_sentence) > 5:
-                        asyncio.create_task(self.audio.speak(clean_sentence))
+                        # Correction 5 : Strong reference + auto-nettoyage
+                        task = asyncio.create_task(self.audio.speak(clean_sentence))
+                        background_tts_tasks.add(task)
+                        task.add_done_callback(background_tts_tasks.discard)
                         sentence_buffer = ""
 
         # V4.5 Correction : Décision cloud plus intelligente
@@ -484,10 +494,13 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
         ):
             yield token
 
-        # Extraction post-session
-        try:
-            history = self.memory.get_recent_history(limit=20)
-            for fact in self._extractor.extract(history):
-                self.memory.add_fact(fact, category="user_profile")
-        except Exception:
-            pass
+        # Correction 8 : Extraction post-session déportée en background (évite freeze UI)
+        async def background_extraction():
+            try:
+                history = self.memory.get_recent_history(limit=20)
+                facts = await asyncio.to_thread(self._extractor.extract, history)
+                for fact in facts:
+                    self.memory.add_fact(fact, category="user_profile")
+            except Exception as e:
+                logger.debug(f"Extraction post-session: {e}")
+        asyncio.create_task(background_extraction())
