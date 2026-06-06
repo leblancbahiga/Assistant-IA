@@ -547,8 +547,14 @@ class NuruOrchestrator:
         except Exception as e:
             logger.error(f"Local fail: {e}. Fallback Cloud.")
             yield " [Bascule Cloud...] "
+            # V6.2 : Inclure le contexte RAG dans le prompt cloud (pas seulement la query)
+            cloud_prompt = query
+            cloud_sys = system_prompt
+            if rag_context and rag_context.strip() and "AUCUNE SOURCE" not in rag_context:
+                cloud_sys = f"{system_prompt}\n\n## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag_context.strip()}\n\nInstructions : réponds UNIQUEMENT à partir du contexte ci-dessus. Si l'information n'y est pas, dis-le clairement."
+                cloud_prompt = f"{query}\n\n[RAG context provided above]"
             async for token in self.cloud_llm.generate_stream(
-                query, intent=intent, system_prompt=system_prompt
+                cloud_prompt, intent=intent, system_prompt=cloud_sys
             ):
                 yield token
 
