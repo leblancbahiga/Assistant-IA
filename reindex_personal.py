@@ -4,6 +4,7 @@ Seulement les CV + lettres de motivation de Leblanc.
 """
 import sys
 import os
+import hashlib
 import asyncio
 from pathlib import Path
 
@@ -105,6 +106,12 @@ async def index_personal():
                 print("⏭️  aucun chunk")
                 continue
 
+            # V6.2 : Vérifier le hash avant d'indexer (déduplication)
+            file_hash = hashlib.sha256(fpath.read_bytes()).hexdigest()
+            if rag.is_file_up_to_date(str(fpath), 0, file_hash):
+                print(f"⏭️ déjà indexé (hash: {file_hash[:12]}...)")
+                continue
+            
             # Embedding par lots pour économiser les appels MLX
             chunks_to_index = []
             for c in v2_chunks:
@@ -121,6 +128,7 @@ async def index_personal():
                 })
 
             rag.add_chunks(chunks_to_index)
+            rag.mark_file_indexed(str(fpath), 0, file_hash)
             total += len(chunks_to_index)
             print(f"✅ {len(chunks_to_index)} chunks")
             

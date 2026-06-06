@@ -1,6 +1,6 @@
 """
 ApiDocsPage — Page de documentation API interactive de l'architecture NURU
-V4.5 : Cyberpunk obsidienne, glassmorphism, sections interactives.
+V6.2 : Aether Dashboard, RAG hybride avancé, mémoire long terme structurée.
 """
 
 from PySide6.QtWidgets import (

@@ -28,7 +28,7 @@ MIN_CHUNK_CHARS = 500
 OVERLAP_CHARS = 200
 
 # Si le texte fait moins de cette taille, on ne chunk pas du tout
-SHORT_DOC_THRESHOLD = 8000  # ~2000 tokens
+SHORT_DOC_THRESHOLD = 2000  # ~500 tokens — V6.2 : abaissé pour chunker les docs courts
 
 IMPORTANCE_PATTERNS = {
     "high": re.compile(

@@ -82,12 +82,13 @@ class SystemModuleCard(QFrame):
 
 
 class V6ControlPanel(QFrame):
-    """Panneau de contrôle des modules V6."""
+    """Panneau de contrôle des modules V6 avec persistance immédiate."""
     
     toggled = Signal(str, bool)  # module_name, enabled
     
-    def __init__(self, parent=None):
+    def __init__(self, config=None, parent=None):
         super().__init__(parent)
+        self.config = config
         self.setObjectName("MetricCard")
         self.setStyleSheet("""
             #MetricCard {
@@ -106,6 +107,7 @@ class V6ControlPanel(QFrame):
         layout.addWidget(title)
         
         self.toggles = {}
+        self.status_icons = {}
         modules = [
             ("🧃 TokenJuice", "token_juice"),
             ("📝 Learning Loop", "learning"),
@@ -117,10 +119,20 @@ class V6ControlPanel(QFrame):
         for label, name in modules:
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
+            
             lbl = QLabel(label)
             lbl.setStyleSheet("color: #E0E7FF; font-size: 12px;")
+            
+            # Indicateur visuel d'état réel
+            status_icon = QLabel("✅")
+            status_icon.setStyleSheet("font-size: 14px;")
+            self.status_icons[name] = status_icon
+            
             cb = QCheckBox()
-            cb.setChecked(True)
+            # Lire l'état actuel depuis la config
+            initial = self._get_module_state(name)
+            cb.setChecked(initial)
+            self._update_status_icon(name, initial)
             cb.setStyleSheet("""
                 QCheckBox::indicator {
                     width: 16px; height: 16px;
@@ -134,8 +146,11 @@ class V6ControlPanel(QFrame):
             """)
             cb.toggled.connect(lambda checked, n=name: self.toggled.emit(n, checked))
             self.toggles[name] = cb
+            
             row.addWidget(lbl)
             row.addStretch()
+            row.addWidget(status_icon)
+            row.addSpacing(4)
             row.addWidget(cb)
             layout.addLayout(row)
         
@@ -145,6 +160,11 @@ class V6ControlPanel(QFrame):
         strategy_lbl.setStyleSheet("color: #6b7280; font-size: 11px;")
         self.strategy_combo = QComboBox()
         self.strategy_combo.addItems(["local_only", "verify", "plan", "rag"])
+        # Lire le mode actuel depuis la config
+        if config and hasattr(config, 'hybrid_mode'):
+            idx = self.strategy_combo.findText(config.hybrid_mode)
+            if idx >= 0:
+                self.strategy_combo.setCurrentIndex(idx)
         self.strategy_combo.setStyleSheet("""
             QComboBox {
                 background-color: rgba(0, 0, 0, 0.4);
@@ -159,10 +179,41 @@ class V6ControlPanel(QFrame):
                 width: 20px;
             }
         """)
+        # Connecter le changement de stratégie à la persistance
+        self.strategy_combo.currentTextChanged.connect(self._on_strategy_changed)
+        
         strategy_row.addWidget(strategy_lbl)
         strategy_row.addWidget(self.strategy_combo)
         strategy_row.addStretch()
         layout.addLayout(strategy_row)
+    
+    def _get_module_state(self, name: str) -> bool:
+        """Lit l'état d'un module depuis la config."""
+        if self.config is None:
+            return False
+        attr = getattr(self.config, 'MODULE_ATTR_MAP', {}).get(name)
+        if attr and hasattr(self.config, attr):
+            return getattr(self.config, attr)
+        return False
+    
+    def _update_status_icon(self, name: str, enabled: bool):
+        """Met à jour l'icône d'état visuel."""
+        icon = self.status_icons.get(name)
+        if icon:
+            icon.setText("✅" if enabled else "❌")
+    
+    def update_from_config(self):
+        """Synchronise tous les toggles avec la config (après changement externe)."""
+        for name, cb in self.toggles.items():
+            state = self._get_module_state(name)
+            cb.setChecked(state)
+            self._update_status_icon(name, state)
+    
+    def _on_strategy_changed(self, text: str):
+        """Persiste le changement de mode hybride dans la config."""
+        if self.config and hasattr(self.config, 'set_hybrid_mode'):
+            self.config.set_hybrid_mode(text)
+            logger.info(f"Mode hybride changé → {text}")
 
 
 class SystemPage(QWidget):
@@ -227,7 +278,7 @@ class SystemPage(QWidget):
         layout.addLayout(grid)
         
         # Panneau de contrôle
-        self.control_panel = V6ControlPanel()
+        self.control_panel = V6ControlPanel(config=self.config)
         self.control_panel.toggled.connect(self._on_module_toggle)
         layout.addWidget(self.control_panel)
         
@@ -303,5 +354,18 @@ class SystemPage(QWidget):
             pass
     
     def _on_module_toggle(self, name: str, enabled: bool):
+        """Persiste le changement d'état d'un module V6 dans settings.yaml."""
         logger.info(f"Module {name} → {'ON' if enabled else 'OFF'}")
-        # La modification réelle de config se ferait via le settings panel
+        
+        if self.config and hasattr(self.config, 'set_module_enabled'):
+            success = self.config.set_module_enabled(name, enabled)
+            if success:
+                # Mettre à jour l'indicateur visuel
+                self.control_panel._update_status_icon(name, enabled)
+                logger.info(f"Module {name} persistant → {'✅' if enabled else '❌'}")
+            else:
+                logger.error(f"Échec de la persistance pour {name}")
+                # Revenir à l'état précédent en cas d'échec
+                cb = self.control_panel.toggles.get(name)
+                if cb:
+                    cb.setChecked(not enabled)

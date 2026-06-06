@@ -247,13 +247,14 @@ class CyberDashboard(QMainWindow):
         self.app_state = AppState()
         self.active_threads = []
         # NURU V5 : ViewModel pour les métriques système
-        self.telemetry_vm = TelemetryViewModel()
+        self.telemetry_vm = TelemetryViewModel(runtime_manager=self.core.runtime if hasattr(self.core, 'runtime') else None)
         
         # Suivi des métriques RAG pour l'observabilité
         self._rag_scores_session = []  # Scores RAG de la session
         self._rag_docs_found = []      # Nb documents trouvés par requête
         self._rag_rejections = 0       # Compteur de refus StrictRAG
         self._rag_queries_total = 0    # Requêtes RAG totales
+        self._rag_sources_diversity = []  # Diversité des sources par requête
         
         # Window setup
         self.setWindowTitle("NURU")
@@ -305,12 +306,6 @@ class CyberDashboard(QMainWindow):
         self.console_page.add_message("NURU", "Bonjour, comment puis-je vous aider en cette journée ?", is_user=False)
 
         self.stacked.setCurrentIndex(0)
-        
-        # Abonnement aux événements RAG (EventBus singleton)
-        # Note: la mise à jour UI réelle se fait via le signal rag_data de InferenceWorker,
-        # qui est thread-safe. L'EventBus est utilisé pour les logs backend uniquement.
-        self._bus = EventBus()
-        self._bus.subscribe("generation_complete", self._on_rag_event_safe)
         
         logger.info("CyberDashboard initialized.")
 
@@ -652,6 +647,9 @@ class CyberDashboard(QMainWindow):
         self.rag_docs_card = self._make_metric_card("DOCUMENTS/REQ", "--", "#00d4ff")
         layout.addWidget(self.rag_docs_card)
 
+        self.rag_diversity_card = self._make_metric_card("DIVERSITÉ", "--", "#fbbf24")
+        layout.addWidget(self.rag_diversity_card)
+
         self.rag_rejection_card = self._make_metric_card("TAUX REFUS", "--", "#ef4444")
         layout.addWidget(self.rag_rejection_card)
 
@@ -773,21 +771,35 @@ class CyberDashboard(QMainWindow):
         self.cot_text.setText("En attente d'une requête...")
 
     def _update_rag_observability(self):
-        """Met à jour toutes les cartes du dashboard d'observabilité RAG."""
+        """Met à jour toutes les cartes du dashboard d'observabilité RAG.
+        
+        Calcule :
+        - Recall@5 estimé : % de requêtes ayant trouvé ≥ 1 document
+        - Score RAG moyen (pertinence moyenne)
+        - Documents trouvés par requête (moyenne)
+        - Diversité des sources : ratio sources uniques / nb de requêtes
+        - Taux de refus
+        """
         total = self._rag_queries_total
         
         if total == 0:
             return
         
-        # Recall@5 : estimé depuis le nombre de requêtes avec documents trouvés
+        # Recall@5 estimé : % de requêtes avec documents trouvés
         recalls = [1 if d > 0 else 0 for d in self._rag_docs_found]
         recall_at_5 = (sum(recalls) / len(recalls) * 100) if recalls else 0.0
         
-        # Score RAG moyen de la session
+        # Score RAG moyen de la session (pertinence moyenne)
         avg_rag_score = (sum(self._rag_scores_session) / len(self._rag_scores_session)) if self._rag_scores_session else 0.0
         
         # Documents trouvés par requête (moyenne)
         avg_docs = (sum(self._rag_docs_found) / len(self._rag_docs_found)) if self._rag_docs_found else 0.0
+        
+        # Diversité des sources : ratio sources uniques / queries
+        if self._rag_sources_diversity:
+            diversity = (sum(self._rag_sources_diversity) / len(self._rag_sources_diversity))
+        else:
+            diversity = 0.0
         
         # Taux de refus
         rejection_rate = (self._rag_rejections / total * 100) if total > 0 else 0.0
@@ -796,6 +808,7 @@ class CyberDashboard(QMainWindow):
         self.rag_recall_card.layout().itemAt(1).widget().setText(f"{recall_at_5:.1f}%")
         self.rag_avg_score_card.layout().itemAt(1).widget().setText(f"{avg_rag_score:.2f}")
         self.rag_docs_card.layout().itemAt(1).widget().setText(f"{avg_docs:.1f}")
+        self.rag_diversity_card.layout().itemAt(1).widget().setText(f"{diversity:.1f}")
         self.rag_rejection_card.layout().itemAt(1).widget().setText(f"{rejection_rate:.1f}%")
         
         # Colorer le taux de refus
@@ -823,10 +836,11 @@ class CyberDashboard(QMainWindow):
                 )
 
     def _on_rag_generation_complete(self, event_data: dict):
-        """Callback EventBus : met à jour les métriques RAG après chaque génération."""
+        """Callback EventBus : met à jour les métriques RAG après chaque génération.
+        Thread-safe : ne fait que mettre à jour les données internes (append sur listes).
+        La mise à jour UI se fait via _update_rag_observability() sur le thread principal.
+        """
         try:
-            # Si le callback a été appelé avec un argument direct (emit synchrone)
-            # ou s'il vient du EventBus avec data
             if isinstance(event_data, dict):
                 rag_score = event_data.get("rag_score", 0.0)
                 rag_result = event_data.get("rag_result", {})
@@ -835,35 +849,42 @@ class CyberDashboard(QMainWindow):
                     docs_found = rag_result.get("documents_found", 0)
                     rejected = rag_result.get("rejected_chunks", 0)
                     rejection_reason = rag_result.get("rejection_reason", "")
+                    sources = rag_result.get("sources", [])
                     
+                    # Mise à jour thread-safe des données internes
                     self._rag_queries_total += 1
                     self._rag_scores_session.append(rag_score)
                     self._rag_docs_found.append(docs_found)
                     
-                    # Compter les refus (rejected_chunks > 0 ou top_score trop bas)
+                    # Diversité des sources (nombre de sources uniques)
+                    unique_sources = len(set(s.get('name', '') for s in sources)) if sources else 0
+                    self._rag_sources_diversity.append(unique_sources)
+                    
+                    # Compter les refus
                     if rejected > 0 or (rag_score < 0.3 and rejection_reason):
                         self._rag_rejections += 1
                     
-                    # Mettre à jour le badge RAG dans la dernière bulle assistant
-                    self.console_page.update_last_assistant_rag(rag_score)
+                    # Planifier la mise à jour de l'UI sur le thread principal Qt
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(0, self._update_rag_observability)
                     
-                    # Mettre à jour la carte RAG du panneau système
-                    try:
-                        rag_color = "#22c55e" if rag_score > 0.5 else "#fbbf24" if rag_score > 0.2 else "#ef4444"
-                        self.metric_rag_score.set_value_and_color(f"{rag_score:.2f}", rag_color)
-                    except Exception:
-                        pass
+                    # Badge RAG sur la bulle (via signal si possible)
+                    if rag_score > 0:
+                        def _update_badge():
+                            try:
+                                self.console_page.update_last_assistant_rag(rag_score)
+                                rag_color = "#22c55e" if rag_score > 0.5 else "#fbbf24" if rag_score > 0.2 else "#ef4444"
+                                self.metric_rag_score.set_value_and_color(f"{rag_score:.2f}", rag_color)
+                            except Exception:
+                                pass
+                        QTimer.singleShot(0, _update_badge)
                     
-                    # Mettre à jour le dashboard d'observabilité
-                    self._update_rag_observability()
-                    
-                    # Mettre à jour les sources dans la barre du console
-                    sources = rag_result.get("sources", [])
+                    # Sources
                     if sources:
-                        self.console_page.set_sources(sources)
+                        QTimer.singleShot(0, lambda s=sources: self.console_page.set_sources(s))
                     
                     logger.debug(
-                        f"📊 RAG Observabilité: score={rag_score:.2f}, docs={docs_found}, "
+                        f"📊 RAG EventBus: score={rag_score:.2f}, docs={docs_found}, "
                         f"rejet={rejected}, total_requetes={self._rag_queries_total}"
                     )
         except Exception as e:
@@ -926,6 +947,8 @@ class CyberDashboard(QMainWindow):
         self._bus = EventBus()
         self.new_chat_btn.clicked.connect(self._on_console_clear)
         self.console_page.clear_requested.connect(self._on_console_clear)
+        # Abonnement direct à generation_complete pour les métriques RAG
+        self._bus.subscribe("generation_complete", self._on_rag_generation_complete)
 
     def _init_timers(self):
         self._timer = QTimer(self)
@@ -962,11 +985,16 @@ class CyberDashboard(QMainWindow):
             except Exception:
                 pass
 
-            # Carte Tokens (économie / débit)
+            # Carte Tokens (vitesse réelle en tok/s)
             try:
                 tok_per_sec = snapshot.tokens_per_sec
-                tok_str = f"+{tok_per_sec:.0f}" if tok_per_sec > 0 else f"{tok_per_sec:.0f}"
-                self.metric_tokens.set_value_and_color(f"{tok_str}%", "#00d4ff")
+                if tok_per_sec > 0:
+                    tok_str = f"{tok_per_sec:.1f}"
+                    tok_color = "#39FF14" if tok_per_sec > 20 else "#00d4ff"
+                else:
+                    tok_str = "0.0"
+                    tok_color = "#6b7280"
+                self.metric_tokens.set_value_and_color(f"{tok_str} tok/s", tok_color)
             except Exception:
                 pass
 
@@ -1028,6 +1056,10 @@ class CyberDashboard(QMainWindow):
                 if rejected > 0 or (top_score < 0.3 and rag_data.get("rejection_reason", "")):
                     self._rag_rejections += 1
                 
+                # Diversité des sources : nombre de sources uniques
+                unique_sources = len(set(s.get('name', '') for s in sources)) if sources else 0
+                self._rag_sources_diversity.append(unique_sources)
+                
                 self._update_rag_observability()
         except Exception as e:
             logger.debug(f"RAG data from worker: {e}")
@@ -1048,11 +1080,13 @@ class CyberDashboard(QMainWindow):
         self._rag_docs_found = []
         self._rag_rejections = 0
         self._rag_queries_total = 0
+        self._rag_sources_diversity = []
         
         # Réinitialiser l'affichage
         self.rag_recall_card.layout().itemAt(1).widget().setText("--")
         self.rag_avg_score_card.layout().itemAt(1).widget().setText("--")
         self.rag_docs_card.layout().itemAt(1).widget().setText("--")
+        self.rag_diversity_card.layout().itemAt(1).widget().setText("--")
         self.rag_rejection_card.layout().itemAt(1).widget().setText("--")
 
 

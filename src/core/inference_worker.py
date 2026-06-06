@@ -100,7 +100,8 @@ class InferenceWorker(QRunnable):
         # Depuis le EventBus / RuntimeManager
         if hasattr(self.core, 'runtime'):
             rm = self.core.runtime
-            if hasattr(rm, 'get_rag_score'):
-                data['top_score'] = data.get('top_score', 0) or rm.get_rag_score()
+            if hasattr(rm, '_last_generation_stats'):
+                rag_score = rm._last_generation_stats.get('rag_score', 0.0)
+                data['top_score'] = data.get('top_score', 0) or rag_score
         
         return data

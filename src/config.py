@@ -6,7 +6,7 @@ Accès via le singleton `config`.
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, ClassVar
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import keyring
 import yaml
@@ -68,6 +68,7 @@ class Config(BaseSettings):
 
     # ── Stratégies Hybrides (NURU V6) ──
     hybrid_mode: str = "local_only"  # local_only | verify | plan | rag
+    hybrid_enabled: bool = True
 
     # ── Mémoire ──
     session_window: int = 5
@@ -126,6 +127,64 @@ class Config(BaseSettings):
                 setattr(self, key, value)
 
         return data
+
+    MODULE_ATTR_MAP: ClassVar[dict] = {
+        "token_juice": "token_juice_enabled",
+        "learning": "learning_enabled",
+        "nuru_brain": "nuru_brain_enabled",
+        "auto_fetch": "auto_fetch_enabled",
+        "hybrid": "hybrid_enabled",
+    }
+
+    def set_module_enabled(self, module_name: str, enabled: bool) -> bool:
+        """Active/désactive un module V6 et persiste dans settings.yaml.
+        
+        Args:
+            module_name: Nom court du module ('token_juice', 'learning', etc.)
+            enabled: True pour activer, False pour désactiver
+        
+        Returns:
+            True si la sauvegarde a réussi, False sinon.
+        """
+        attr = self.MODULE_ATTR_MAP.get(module_name)
+        if attr is None:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Module inconnu: {module_name}")
+            return False
+        
+        setattr(self, attr, enabled)
+        return self._save_yaml_key(attr)
+
+    def _save_yaml_key(self, key: str) -> bool:
+        """Sauvegarde une clé spécifique dans settings.yaml."""
+        yaml_path = self.config_path
+        try:
+            if yaml_path.exists():
+                with open(yaml_path) as f:
+                    data = yaml.safe_load(f) or {}
+            else:
+                data = {}
+
+            val = getattr(self, key)
+            if isinstance(val, Path):
+                val = str(val)
+            data[key] = val
+
+            with open(yaml_path, 'w') as f:
+                yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+            
+            logger = logging.getLogger(__name__)
+            logger.info(f"Config sauvegardée: {key} = {val}")
+            return True
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erreur sauvegarde config: {e}")
+            return False
+
+    def set_hybrid_mode(self, mode: str) -> bool:
+        """Définit le mode hybride et persiste."""
+        self.hybrid_mode = mode
+        return self._save_yaml_key("hybrid_mode")
 
     model_config = SettingsConfigDict(
         env_file=".env",

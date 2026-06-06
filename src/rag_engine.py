@@ -150,29 +150,99 @@ class RAGEngine:
         conn.close()
 
     def is_file_up_to_date(self, filepath: str, mtime: float = 0, file_hash: str = "") -> bool:
-        """Vérifie si le fichier a déjà été indexé avec le même hash SHA256 (V4)."""
+        """Vérifie si le fichier a déjà été indexé avec le même hash SHA256 (V6.2).
+        
+        V6.2 : Vérifie d'abord par filepath, puis par hash global.
+        Si le contenu existe déjà dans l'index (même hash à un autre chemin),
+        on considère le fichier comme déjà indexé.
+        """
         if not file_hash:
             return False
             
         conn = self._get_conn()
+        
+        # 1. Vérification par filepath (compatible V4)
         row = conn.execute(
             "SELECT hash FROM indexed_files WHERE filepath = ?", (filepath,)
         ).fetchone()
-        conn.close()
         
         if row and row[0] == file_hash:
+            conn.close()
             return True
+        
+        # 2. V6.2 : Vérification GLOBALE par hash (même contenu = déjà indexé)
+        #    Indépendamment du chemin du fichier
+        hash_row = conn.execute(
+            "SELECT filepath FROM indexed_files WHERE hash = ? LIMIT 1", (file_hash,)
+        ).fetchone()
+        
+        if hash_row:
+            logger.info(f"🔄 Déduplication V6.2 : {os.path.basename(filepath)} déjà indexé "
+                       f"sous {os.path.basename(hash_row[0])} (même hash SHA256)")
+            conn.close()
+            return True
+        
+        conn.close()
         return False
 
     def mark_file_indexed(self, filepath: str, mtime: float, file_hash: str = ""):
-        """Enregistre un fichier comme indexé avec son hash SHA256."""
+        """Enregistre un fichier comme indexé avec son hash SHA256 (V6.2).
+        
+        V6.2 : Si le hash existe déjà (même contenu ailleurs), on met à jour
+        l'entrée existante au lieu d'en créer une nouvelle.
+        Supprime aussi les entrées obsolètes pour le même filepath.
+        """
         conn = self._get_conn()
+        if file_hash:
+            # V6.2 : Nettoyer les anciennes entrées pour ce hash (même contenu à d'autres chemins)
+            conn.execute(
+                "DELETE FROM indexed_files WHERE hash = ? AND filepath != ?",
+                (file_hash, filepath)
+            )
         conn.execute(
             "INSERT OR REPLACE INTO indexed_files (filepath, mtime, hash) VALUES (?, ?, ?)",
             (filepath, mtime, file_hash)
         )
         conn.commit()
         conn.close()
+
+    def dedup_indexed_files_by_hash(self):
+        """V6.2 : Nettoie les doublons dans indexed_files (même hash, chemins différents).
+        
+        Pour chaque hash, ne garde que la première entrée.
+        À appeler après une indexation complète ou lors du démarrage.
+        """
+        conn = self._get_conn()
+        try:
+            dups = conn.execute("""
+                SELECT hash, COUNT(*) AS n
+                FROM indexed_files
+                GROUP BY hash
+                HAVING n > 1
+            """).fetchall()
+            
+            total_deleted = 0
+            for hash_val, count in dups:
+                first = conn.execute(
+                    "SELECT filepath FROM indexed_files WHERE hash = ? ORDER BY filepath LIMIT 1",
+                    (hash_val,)
+                ).fetchone()
+                if first:
+                    deleted = conn.execute(
+                        "DELETE FROM indexed_files WHERE hash = ? AND filepath != ?",
+                        (hash_val, first[0])
+                    ).rowcount
+                    total_deleted += deleted
+            
+            conn.commit()
+            if total_deleted > 0:
+                logger.info(f"🧹 V6.2 : {total_deleted} entrées en double nettoyées dans indexed_files")
+            return total_deleted
+        except Exception as e:
+            logger.warning(f"Erreur nettoyage indexed_files: {e}")
+            return 0
+        finally:
+            conn.close()
 
     def remove_file_index(self, source_name: str):
         """Supprime tous les chunks associés à une source."""
@@ -627,9 +697,30 @@ class RAGEngine:
             )
         return "=== DÉBUT DU CONTEXTE ===\n" + "\n".join(context_parts) + "\n=== FIN DU CONTEXTE ==="
 
-    def add_chunks(self, chunks: List[dict]):
-        """Ajoute des chunks à l'index vectoriel et FTS."""
+    def add_chunks(self, chunks: List[dict], dedup_source: bool = True):
+        """Ajoute des chunks à l'index vectoriel et FTS (V6.2 : avec déduplication).
+        
+        V6.2 : Avant d'insérer, supprime les anciens chunks de la même source
+        pour éviter les doublons. Utilise dedup_source=False pour ajouter
+        sans supprimer (usage interne).
+        """
+        if not chunks:
+            return
+            
         conn = self._get_conn()
+        source_name = chunks[0].get("source", "")
+        
+        # V6.2 : Supprimer les anciens chunks de cette source avant d'insérer
+        # pour éviter les doublons cumulatifs
+        if dedup_source and source_name:
+            old_count = conn.execute(
+                "SELECT COUNT(*) FROM chunks WHERE source = ?", (source_name,)
+            ).fetchone()[0]
+            if old_count > 0:
+                conn.execute("DELETE FROM chunks WHERE source = ?", (source_name,))
+                conn.execute("DELETE FROM chunks_fts WHERE source = ?", (source_name,))
+                logger.info(f"🔄 V6.2 Déduplication : {old_count} anciens chunks de '{source_name}' remplacés")
+        
         for chunk in chunks:
             # V6.1 : date par défaut = aujourd'hui
             chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
@@ -645,7 +736,7 @@ class RAGEngine:
             )
         conn.commit()
         conn.close()
-        logger.info(f"{len(chunks)} chunks ajoutés à l'index.")
+        logger.info(f"{len(chunks)} chunks ajoutés à l'index (source: {source_name}).")
 
     def add_chunks_with_parents(self, chunks: List[dict], doc_summary: str = ""):
         """V6 : Ajoute des chunks avec hiérarchie Parent-Child.
