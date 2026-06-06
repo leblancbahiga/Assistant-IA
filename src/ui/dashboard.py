@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QPushButton, QFrame, QProgressBar, QStackedWidget,
     QSizePolicy, QPlainTextEdit, QScrollArea, QTextEdit,
     QLineEdit, QSpacerItem, QSizePolicy as QSizePolicyEnum,
-    QGraphicsDropShadowEffect
+    QGraphicsDropShadowEffect,
 )
 from PySide6.QtCore import Qt, QTimer, Slot, Signal, QThread, QSize, QPoint, QPropertyAnimation, QRect, QEasingCurve
 from PySide6.QtGui import QFont, QIcon, QColor, QPalette
@@ -257,10 +257,33 @@ class CyberDashboard(QMainWindow):
         
         # Window setup
         self.setWindowTitle("NURU")
+        self.setMinimumSize(900, 600)
         self.resize(1150, 800)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        # Fenêtre sans bordure avec ombre native macOS
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowSystemMenuHint |
+            Qt.WindowType.WindowMinimizeButtonHint
+        )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        
+
+        # Poignée de redimensionnement (bas-droit)
+        self._resize_handle = QFrame(self)
+        self._resize_handle.setObjectName("ResizeHandle")
+        self._resize_handle.setFixedSize(16, 16)
+        self._resize_handle.setCursor(Qt.CursorShape.SizeFDiagCursor)
+        self._resize_handle.setStyleSheet("""
+            QFrame#ResizeHandle {
+                background: rgba(0, 163, 255, 0.3);
+                border-top-left-radius: 8px;
+            }
+            QFrame#ResizeHandle:hover {
+                background: rgba(0, 163, 255, 0.6);
+            }
+        """)
+        self._resize_handle.mousePressEvent = lambda e: self._start_resize(e)
+        self._resize_handle.mouseMoveEvent = lambda e: self._do_resize(e)
+
         # Main Layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -454,7 +477,17 @@ class CyberDashboard(QMainWindow):
         except Exception as e: logger.error(f"Error loading DocumentsPage: {e}")
         
         try: self.stacked.addWidget(SettingsPage(config))
-        except Exception as e: logger.error(f"Error loading SettingsPage: {e}")
+        except Exception as e:
+            logger.error(f"Error loading SettingsPage: {e}")
+            # Ajouter une page placeholder pour maintenir l'index du menu
+            placeholder = QWidget()
+            placeholder.setObjectName("SettingsPage")
+            layout = QVBoxLayout(placeholder)
+            err_lbl = QLabel(f"⚠ Erreur de chargement des paramètres\n\n{str(e)}")
+            err_lbl.setStyleSheet("color: #ef4444; font-size: 14px;")
+            err_lbl.setAlignment(Qt.AlignCenter)
+            layout.addWidget(err_lbl)
+            self.stacked.addWidget(placeholder)
         
         try: self.stacked.addWidget(ApiDocsPage())
         except Exception as e: logger.error(f"Error loading ApiDocsPage: {e}")
@@ -783,9 +816,27 @@ class CyberDashboard(QMainWindow):
         target = {0: 1, 1: 2, 2: 7}.get(idx, 0)
         self.switch_page(target)
 
+    def _start_resize(self, event):
+        self._resize_start = event.globalPosition().toPoint()
+        self._resize_geom = self.geometry()
+
+    def _do_resize(self, event):
+        if not hasattr(self, '_resize_start'):
+            return
+        delta = event.globalPosition().toPoint() - self._resize_start
+        new_w = max(self.minimumWidth(), self._resize_geom.width() + delta.x())
+        new_h = max(self.minimumHeight(), self._resize_geom.height() + delta.y())
+        self.resize(new_w, new_h)
+
     def resizeEvent(self, event):
         """Redimensionne l'overlay de fond avec la fenêtre."""
         super().resizeEvent(event)
+        # Positionner la poignée dans le coin inférieur droit
+        if hasattr(self, '_resize_handle'):
+            self._resize_handle.move(
+                self.width() - self._resize_handle.width(),
+                self.height() - self._resize_handle.height()
+            )
         # Mettre à jour la taille de l'overlay sombre
         container = self.findChild(QFrame, "CentralContainer")
         if container:
@@ -839,6 +890,20 @@ class CyberDashboard(QMainWindow):
             self.ram_detail.setText(
                 f"{ram_pct}% utilisé  •  {free_gb:.1f}G libre"
             )
+
+            # Mettre à jour la carte Tok/s
+            try:
+                tok_per_sec = snapshot.tokens_per_sec
+                self.tok_card.layout().itemAt(1).widget().setText(f"{tok_per_sec:.1f}")
+            except Exception:
+                pass
+
+            # Mettre à jour la carte RAG
+            try:
+                rag_score = snapshot.rag_score
+                self.rag_card.layout().itemAt(1).widget().setText(f"{rag_score:.2f}")
+            except Exception:
+                pass
 
             # Badge stratégie
             try:
@@ -910,6 +975,7 @@ class CyberDashboard(QMainWindow):
         self.current_bubble.append_text(f"\n[Erreur: {error_msg}]")
 
     def _on_console_clear(self):
+        self.stacked.setCurrentIndex(0)
         self.console_page.clear_chat()
         self.console_page.add_message("NURU", "Bonjour, comment puis-je vous aider en cette journée ?", is_user=False)
         
