@@ -490,12 +490,9 @@ class MessageRow(QWidget):
             layout.addStretch(1)
 
     def _avatar_text_for_role(self) -> str:
-        if self._role == "nuru":
+        if self._role in ("nuru", "assistant"):
             return "N"
-        # Pour user, extraire initiales du message_id
-        parts = self._message_id.replace("_", " ").replace("-", " ").split()
-        initials = "".join(p[0].upper() for p in parts if p)
-        return initials[:2] if initials else "U"
+        return "U"
 
     @staticmethod
     def _generate_id() -> str:

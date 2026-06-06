@@ -105,7 +105,7 @@ QTextEdit#SmartTextEdit::placeholder { color: #555e78; }
 /* ══════════════════════════════════════
    METRICS PANEL (MetricsPanel)
 ══════════════════════════════════════ */
-#MetricsPanel { background-color: #111318; border-left: 1px solid #2e3347; min-width: 164px; max-width: 180px; }
+#MetricsPanel { background-color: #111318; border-left: 1px solid #2e3347; min-width: 200px; max-width: 220px; }
 #MetricsPanelTitle { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: #555e78; text-transform: uppercase; padding: 12px 12px 8px; border-bottom: 1px solid #2e3347; }
 
 /* StrategyBadge */

@@ -240,7 +240,10 @@ class StrategyBadge(QFrame):
     ):
         super().__init__(parent)
         self._strategy = strategy.upper()
-        self._model = model
+        # Court-circuiter le nom du modèle pour lisibilité
+        short = model.replace("mlx-community/", "").replace("Qwen2.5-", "")
+        short = short.replace("-Instruct", "").replace("-instruct", "").replace("-4bit", "")
+        self._model = short
         self.setObjectName("StrategyBadge")
         self.setFixedHeight(32)
 
@@ -260,6 +263,7 @@ class StrategyBadge(QFrame):
 
         self._model_label = QLabel(self._model)
         self._model_label.setStyleSheet("color: #6b7280; font-size: 9px;")
+        self._model_label.setMaximumWidth(80)
         layout.addWidget(self._model_label)
 
         layout.addStretch()
@@ -268,7 +272,10 @@ class StrategyBadge(QFrame):
     def set_strategy(self, strategy: str, model: str = "") -> None:
         """Change la stratégie et le sous-texte modèle."""
         self._strategy = strategy.upper()
-        self._model = model
+        # Court-circuiter le nom du modèle pour lisibilité
+        short = model.replace("mlx-community/", "").replace("Qwen2.5-", "")
+        short = short.replace("-Instruct", "").replace("-instruct", "").replace("-4bit", "")
+        self._model = short
         self._name_label.setText(self._strategy)
         self._model_label.setText(self._model)
         self._apply_style()
