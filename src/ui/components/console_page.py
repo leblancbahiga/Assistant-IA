@@ -54,9 +54,6 @@ class ChatHeader(QWidget):
         # ── Titre ──
         self._title_label = QLabel("Nouvelle conversation")
         self._title_label.setObjectName("ChatHeaderTitle")
-        self._title_label.setStyleSheet(
-            "color: #e2e8f0; font-size: 16px; font-weight: bold;"
-        )
         layout.addWidget(self._title_label)
 
         layout.addSpacing(8)
@@ -83,23 +80,6 @@ class ChatHeader(QWidget):
         self._btn_new.setFixedSize(36, 36)
         self._btn_new.setCursor(Qt.PointingHandCursor)
         self._btn_new.setToolTip("Nouveau Chat")
-        self._btn_new.setStyleSheet("""
-            QPushButton#NewChatHeaderBtn {
-                background-color: rgba(168, 85, 247, 0.12);
-                color: #a855f7;
-                border: 1px solid rgba(168, 85, 247, 0.25);
-                border-radius: 18px;
-                font-size: 18px;
-                font-weight: bold;
-            }
-            QPushButton#NewChatHeaderBtn:hover {
-                background-color: rgba(168, 85, 247, 0.25);
-                border: 1px solid rgba(168, 85, 247, 0.5);
-            }
-            QPushButton#NewChatHeaderBtn:pressed {
-                background-color: rgba(168, 85, 247, 0.35);
-            }
-        """)
         self._btn_new.clicked.connect(self.new_chat_clicked.emit)
         layout.addWidget(self._btn_new)
 
@@ -148,11 +128,9 @@ class MessagesArea(QScrollArea):
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setObjectName("MessagesArea")
-        self.setStyleSheet("border: none; background: transparent;")
 
         # Conteneur interne
         self._container = QWidget()
-        self._container.setStyleSheet("background: transparent;")
         self._layout = QVBoxLayout(self._container)
         self._layout.setContentsMargins(20, 10, 20, 10)
         self._layout.setSpacing(12)
@@ -335,13 +313,6 @@ class InputArea(QWidget):
         # ── Conteneur principal ──
         input_frame = QFrame()
         input_frame.setObjectName("InputFrameV7")
-        input_frame.setStyleSheet("""
-            #InputFrameV7 {
-                background-color: rgba(22, 22, 42, 0.85);
-                border: 1px solid rgba(255, 255, 255, 0.06);
-                border-radius: 14px;
-            }
-        """)
         input_layout = QHBoxLayout(input_frame)
         input_layout.setContentsMargins(8, 6, 8, 6)
         input_layout.setSpacing(6)
@@ -353,22 +324,6 @@ class InputArea(QWidget):
         self._btn_mic.setCursor(Qt.PointingHandCursor)
         self._btn_mic.setToolTip("Mode vocal")
         self._btn_mic.setCheckable(True)
-        self._btn_mic.setStyleSheet("""
-            QPushButton#MicButton {
-                background-color: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 17px;
-                font-size: 16px;
-            }
-            QPushButton#MicButton:hover {
-                background-color: rgba(0, 212, 255, 0.12);
-                border: 1px solid rgba(0, 212, 255, 0.3);
-            }
-            QPushButton#MicButton:checked {
-                background-color: rgba(239, 68, 68, 0.15);
-                border: 1px solid rgba(239, 68, 68, 0.4);
-            }
-        """)
         self._btn_mic.clicked.connect(self.voice_toggled.emit)
         input_layout.addWidget(self._btn_mic)
 
@@ -378,35 +333,10 @@ class InputArea(QWidget):
         self._btn_attach.setFixedSize(34, 34)
         self._btn_attach.setCursor(Qt.PointingHandCursor)
         self._btn_attach.setToolTip("Joindre un fichier")
-        self._btn_attach.setStyleSheet("""
-            QPushButton#AttachButton {
-                background-color: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 17px;
-                font-size: 16px;
-            }
-            QPushButton#AttachButton:hover {
-                background-color: rgba(168, 85, 247, 0.12);
-                border: 1px solid rgba(168, 85, 247, 0.3);
-            }
-        """)
         input_layout.addWidget(self._btn_attach)
 
         # ── SmartTextEdit ──
         self._text_edit = SmartTextEdit()
-        self._text_edit.setStyleSheet("""
-            QTextEdit#SmartTextEdit {
-                background: transparent;
-                color: #e2e8f0;
-                font-size: 13px;
-                border: none;
-                padding: 8px 4px;
-                selection-background-color: rgba(168, 85, 247, 0.3);
-            }
-            QTextEdit#SmartTextEdit::placeholder {
-                color: #6b7280;
-            }
-        """)
         self._text_edit.send_triggered.connect(self._on_send)
         input_layout.addWidget(self._text_edit, stretch=1)
 
@@ -417,24 +347,6 @@ class InputArea(QWidget):
         self._btn_strict.setCursor(Qt.PointingHandCursor)
         self._btn_strict.setCheckable(True)
         self._btn_strict.setToolTip("Mode Strict (RAG uniquement)")
-        self._btn_strict.setStyleSheet("""
-            QPushButton#StrictButton {
-                background-color: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 17px;
-                font-size: 16px;
-                color: #6b7280;
-            }
-            QPushButton#StrictButton:hover {
-                background-color: rgba(239, 68, 68, 0.12);
-                border: 1px solid rgba(239, 68, 68, 0.3);
-            }
-            QPushButton#StrictButton:checked {
-                background-color: rgba(239, 68, 68, 0.15);
-                border: 1px solid rgba(239, 68, 68, 0.5);
-                color: #ef4444;
-            }
-        """)
         self._btn_strict.toggled.connect(self.strict_toggled.emit)
         input_layout.addWidget(self._btn_strict)
 
@@ -444,23 +356,6 @@ class InputArea(QWidget):
         self._btn_send.setFixedSize(34, 34)
         self._btn_send.setCursor(Qt.PointingHandCursor)
         self._btn_send.setToolTip("Envoyer")
-        self._btn_send.setStyleSheet("""
-            QPushButton#SendButtonV7 {
-                background-color: rgba(168, 85, 247, 0.15);
-                color: #a855f7;
-                border: 1px solid rgba(168, 85, 247, 0.3);
-                border-radius: 17px;
-                font-size: 18px;
-                font-weight: bold;
-            }
-            QPushButton#SendButtonV7:hover {
-                background-color: rgba(168, 85, 247, 0.3);
-                border: 1px solid rgba(168, 85, 247, 0.5);
-            }
-            QPushButton#SendButtonV7:pressed {
-                background-color: rgba(168, 85, 247, 0.4);
-            }
-        """)
         self._btn_send.clicked.connect(self._on_send)
         input_layout.addWidget(self._btn_send)
 
@@ -470,7 +365,6 @@ class InputArea(QWidget):
         self._hint = QLabel("Entrée = Envoyer  •  Shift+Entrée = Nouvelle ligne")
         self._hint.setObjectName("InputHint")
         self._hint.setAlignment(Qt.AlignCenter)
-        self._hint.setStyleSheet("color: #4b5563; font-size: 10px;")
         layout.addWidget(self._hint)
 
         # ── Listening label (micro actif) ──
@@ -480,9 +374,6 @@ class InputArea(QWidget):
         self._listening_label.setObjectName("ListeningLabel")
         self._listening_label.setAlignment(Qt.AlignCenter)
         self._listening_label.setVisible(False)
-        self._listening_label.setStyleSheet("""
-            color: #ef4444; font-size: 11px; font-weight: bold;
-        """)
         layout.addWidget(self._listening_label)
 
     # ── API publique ──

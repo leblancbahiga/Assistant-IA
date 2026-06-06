@@ -150,9 +150,7 @@ class ChatBubble(QFrame):
         self._text_label = QLabel()
         self._text_label.setWordWrap(True)
         self._text_label.setTextFormat(Qt.RichText)
-        self._text_label.setStyleSheet(
-            f"color: {TEXT_COLOR}; font-size: 13px; background: transparent;"
-        )
+        self._text_label.setObjectName("BubbleText")
         self._text_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         layout.addWidget(self._text_label)
 
@@ -173,20 +171,20 @@ class ChatBubble(QFrame):
         self._citations_layout.addStretch()
         layout.addLayout(self._citations_layout)
 
-        # ── 2d. Actions (nuru seulement si show_actions) ──
+        # ── 2d. Actions (👍 👎 📋) — nuru seulement ──
         if self._show_actions:
             actions_layout = QHBoxLayout()
-            actions_layout.setContentsMargins(0, 4, 0, 0)
-            actions_layout.setSpacing(6)
+            actions_layout.setContentsMargins(0, 0, 0, 0)
+            actions_layout.setSpacing(2)
 
             self._btn_up = QPushButton("👍")
             self._btn_down = QPushButton("👎")
             self._btn_copy = QPushButton("📋")
 
             for btn in (self._btn_up, self._btn_down, self._btn_copy):
+                btn.setObjectName("BubbleAction")
                 btn.setFixedSize(28, 28)
                 btn.setCursor(Qt.PointingHandCursor)
-                btn.setStyleSheet(self._action_btn_style())
 
             self._btn_up.setToolTip("Utile")
             self._btn_down.setToolTip("Pas utile")
@@ -259,41 +257,34 @@ class ChatBubble(QFrame):
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
-
         label = QLabel("Confiance")
-        label.setStyleSheet(f"color: {MUTED_COLOR}; font-size: 9px; font-weight: bold; background: transparent;")
+        label.setObjectName("ConfidenceLabel")
+        label.setFixedHeight(14)
         layout.addWidget(label)
 
         bar = QFrame()
+        bar.setObjectName("ConfidenceBarBg")
         bar.setFixedHeight(4)
         bar.setFixedWidth(64)
         pct = max(0, min(100, int(score * 100)))
         level = "high" if score >= 0.75 else ("mid" if score >= 0.40 else "low")
         bar_color = CONFIDENCE_COLORS[level]
-        bar.setStyleSheet(
-            f"background-color: rgba(255,255,255,0.08);"
-            f"border-radius: 2px;"
-        )
-        bar.setObjectName("ConfidenceBarBg")
         # Utilise un QFrame fill via un sous-label
         bar_layout = QHBoxLayout(bar)
         bar_layout.setContentsMargins(0, 0, 0, 0)
         fill = QFrame()
+        fill.setObjectName("ConfidenceFill")
         fill.setFixedHeight(4)
-        fill.setFixedWidth(int(64 * score))
-        fill.setStyleSheet(
-            f"background-color: {bar_color};"
-            f"border-radius: 2px;"
-        )
+        fill.setMinimumWidth(0)
+        fill.setMaximumWidth(64)
+        fill.setFixedWidth(max(1, int(pct / 100 * 64)))
         bar_layout.addWidget(fill)
         bar_layout.addStretch()
 
         layout.addWidget(bar)
 
         value_label = QLabel(f"{pct}%")
-        value_label.setStyleSheet(
-            f"color: {bar_color}; font-size: 9px; font-weight: bold; background: transparent;"
-        )
+        value_label.setObjectName("ConfidenceValue")
         layout.addWidget(value_label)
         layout.addStretch()
 
@@ -305,37 +296,43 @@ class ChatBubble(QFrame):
         if self._feedback_state == "up":
             return
         self._feedback_state = "up"
-        self._btn_up.setStyleSheet(self._active_btn_style())
-        self._btn_down.setStyleSheet(self._action_btn_style())
+        self._btn_up.setProperty("feedback", "up")
+        self._btn_down.setProperty("feedback", "")
+        self.style().unpolish(self._btn_up)
+        self.style().polish(self._btn_up)
+        self.style().unpolish(self._btn_down)
+        self.style().polish(self._btn_down)
         self.feedback_positive.emit()
 
     def _on_feedback_down(self) -> None:
         if self._feedback_state == "down":
             return
         self._feedback_state = "down"
-        self._btn_down.setStyleSheet(self._active_btn_style())
-        self._btn_up.setStyleSheet(self._action_btn_style())
+        self._btn_down.setProperty("feedback", "down")
+        self._btn_up.setProperty("feedback", "")
+        self.style().unpolish(self._btn_up)
+        self.style().polish(self._btn_up)
+        self.style().unpolish(self._btn_down)
+        self.style().polish(self._btn_down)
         self.feedback_negative.emit()
-
-    def _on_citation_clicked(self, path: str, page: int) -> None:
-        self.citation_clicked.emit(path, page)
 
     def _copy_text(self) -> None:
         from PySide6.QtGui import QGuiApplication
 
         QGuiApplication.clipboard().setText(self._full_text)
-        self._btn_copy.setStyleSheet(
-            "QPushButton {"
-            "  background-color: rgba(34,197,94,0.15);"
-            "  color: #22c55e;"
-            "  border: 1px solid rgba(34,197,94,0.3);"
-            "  border-radius: 6px;"
-            "  font-size: 13px;"
-            "}"
-        )
+        self._btn_copy.setProperty("copied", "true")
+        self.style().unpolish(self._btn_copy)
+        self.style().polish(self._btn_copy)
         QTimer.singleShot(
-            1500, lambda: self._btn_copy.setStyleSheet(self._action_btn_style())
+            1500, lambda: (
+                self._btn_copy.setProperty("copied", ""),
+                self.style().unpolish(self._btn_copy),
+                self.style().polish(self._btn_copy),
+            )
         )
+
+    def _on_citation_clicked(self, path: str, page: int) -> None:
+        self.citation_clicked.emit(path, page)
 
     # ── 2g. API publique ──
 

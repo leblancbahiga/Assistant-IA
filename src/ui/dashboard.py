@@ -135,27 +135,16 @@ class NavSidebar(QWidget):
 
         logo_label = QLabel("N")
         logo_label.setObjectName("LogoLabel")
-        logo_label.setStyleSheet(
-            "font-size: 22px; font-weight: 700; color: #7f77dd;"
-        )
         header_layout.addWidget(logo_label)
 
         name_label = QLabel("NURU")
         name_label.setObjectName("LogoLabel")
-        name_label.setStyleSheet(
-            "font-size: 20px; font-weight: 700; color: #e8eaf0; letter-spacing: -0.3px;"
-        )
         header_layout.addWidget(name_label)
 
         header_layout.addStretch()
 
         badge = QLabel("V7")
         badge.setObjectName("VersionBadge")
-        badge.setStyleSheet(
-            "background-color: #242836; color: #555e78; font-size: 10px;"
-            " font-weight: 600; padding: 2px 8px; border-radius: 4px;"
-            " border: 1px solid #2e3347; margin: 0;"
-        )
         header_layout.addWidget(badge)
 
         layout.addWidget(header)
@@ -165,11 +154,6 @@ class NavSidebar(QWidget):
             # Section label
             section = QLabel(group["label"])
             section.setObjectName("NavSectionLabel")
-            section.setStyleSheet(
-                "color: #555e78; font-size: 10px; font-weight: 700;"
-                " text-transform: uppercase; letter-spacing: 1.2px;"
-                " padding: 16px 16px 6px 16px; background: transparent;"
-            )
             layout.addWidget(section)
 
             for label_text, slug in group["items"]:
@@ -178,26 +162,6 @@ class NavSidebar(QWidget):
                 btn.setProperty("slug", slug)
                 btn.setCursor(Qt.PointingHandCursor)
                 btn.setCheckable(True)
-                btn.setStyleSheet(
-                    "QPushButton#NavButton {"
-                    "  background-color: transparent; color: #9098b0;"
-                    "  border: none; border-radius: 6px;"
-                    "  padding: 8px 16px; margin: 0 8px;"
-                    "  font-size: 13px; font-weight: 500; text-align: left;"
-                    "}"
-                    "QPushButton#NavButton:hover {"
-                    "  background-color: #242836; color: #e8eaf0;"
-                    "}"
-                    "QPushButton#NavButton:pressed {"
-                    "  background-color: #2e3347; color: #e8eaf0;"
-                    "}"
-                    "QPushButton#NavButton[active=\"true\"],"
-                    "QPushButton#NavButton:checked {"
-                    "  background-color: #1a1d26; color: #7f77dd;"
-                    "  border-left: 2px solid #7f77dd;"
-                    "  padding: 8px 16px 8px 14px;"
-                    "}"
-                )
                 btn.clicked.connect(lambda _checked=False, s=slug: self._on_nav_click(s))
                 layout.addWidget(btn)
                 self._buttons[slug] = btn
@@ -207,9 +171,6 @@ class NavSidebar(QWidget):
         # ── Footer : Info modèle ──
         self._model_label = QLabel("Modèle: ...  •  En attente")
         self._model_label.setObjectName("ModelInfoFooter")
-        self._model_label.setStyleSheet(
-            "color: #4b5563; font-size: 9px; padding: 8px 16px;"
-        )
         self._model_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._model_label)
 
@@ -269,22 +230,16 @@ class PlaceholderPage(QWidget):
         layout.setContentsMargins(40, 60, 40, 40)
         layout.setAlignment(Qt.AlignCenter)
 
+        # ── titre ──
         self._title_label = QLabel(title)
         self._title_label.setObjectName("PageTitle")
-        self._title_label.setStyleSheet(
-            "font-size: 22px; font-weight: 700; color: #e8eaf0;"
-            " padding: 0 0 4px 0; background: transparent;"
-        )
         self._title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._title_label)
 
         if description:
+            # ── sous-titre ──
             self._desc_label = QLabel(description)
             self._desc_label.setObjectName("PageSubtitle")
-            self._desc_label.setStyleSheet(
-                "font-size: 13px; color: #9098b0;"
-                " padding: 0; background: transparent;"
-            )
             self._desc_label.setAlignment(Qt.AlignCenter)
             self._desc_label.setWordWrap(True)
             layout.addWidget(self._desc_label)
@@ -327,8 +282,9 @@ class CyberDashboard(QMainWindow):
     new_chat = Signal()
     voice_toggled = Signal()
 
-    def __init__(self):
+    def __init__(self, core=None):
         super().__init__()
+        self._core = core
         logger.info("CyberDashboard V7 — initialisation...")
 
         # ── État interne ──
