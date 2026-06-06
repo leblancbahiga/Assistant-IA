@@ -37,7 +37,7 @@ class Config(BaseSettings):
     # ── Cloud ──
     cloud_model: str = "llama-3.3-70b-versatile"
     cloud_provider: str = "groq"
-    cloud_fallback: str = "gemini-1.5-flash"
+    cloud_fallback: str = "openrouter/google/gemini-2.0-flash-001"
 
     # ── RAG ──
     rag_k: int = 5

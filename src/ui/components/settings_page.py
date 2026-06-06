@@ -232,7 +232,6 @@ class SettingsPage(QWidget):
             "Phi-4-mini-instruct-4bit (local)",
             "Qwen2.5-1.5B-Instruct-4bit (local)",
             "llama-3.3-70b-versatile (Groq)",
-            "gemini-1.5-flash (Gemini)",
             "deepseek-chat (Deepseek)",
         ])
         rl1.addWidget(lbl1)
