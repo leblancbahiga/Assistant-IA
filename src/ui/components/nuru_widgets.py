@@ -609,8 +609,9 @@ class MetricsPanel(QWidget):
         """Met à jour la barre métrique Tokens (réduction de tokens)."""
         bar = self._metrics.get("tokens")
         if bar:
-            bar.set_percent(abs(percent))
-            display = label or f"{percent:+.0f}%"
+            safe = max(0.0, percent)
+            bar.set_percent(abs(safe))
+            display = label or f"{safe:.0f}%"
             bar.set_value(display)
 
     def set_traces(self, count: int, label: str = "") -> None:

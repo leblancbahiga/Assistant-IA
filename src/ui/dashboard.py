@@ -648,10 +648,14 @@ class CyberDashboard(QMainWindow):
             if hasattr(self._metrics, "set_strategy"):
                 self._metrics.set_strategy(rag_mode, model_name)
 
-            # 3. Score RAG moyen
-            if hasattr(self._metrics, "set_rag_score") and self._rag_scores_session:
-                avg_rag = sum(self._rag_scores_session) / len(self._rag_scores_session)
-                self._metrics.set_rag_score(avg_rag)
+            # 3. Score RAG moyen (uniquement si requêtes traitées)
+            if hasattr(self._metrics, "set_rag_score"):
+                if self._rag_scores_session:
+                    avg_rag = sum(self._rag_scores_session) / len(self._rag_scores_session)
+                    self._metrics.set_rag_score(avg_rag)
+                elif not self._is_processing:
+                    # Reset à zéro si pas de requête active
+                    self._metrics.set_rag_score(0.0)
 
             # 4. Mise à jour du footer sidebar
             if hasattr(self._sidebar, "set_model_info"):
@@ -659,7 +663,7 @@ class CyberDashboard(QMainWindow):
                 status = "Actif" if self._is_processing else "En attente"
                 self._sidebar.set_model_info(model_name, status, queries)
 
-            # 5. Métrique LLM temps réel (pendant génération)
+            # 5. Métrique LLM temps réel ou reset
             if hasattr(self._metrics, "set_llm"):
                 if self._is_processing and self._total_tokens_received > 0:
                     cutoff = now - 3.0
@@ -667,6 +671,9 @@ class CyberDashboard(QMainWindow):
                     window = min(3.0, now - self._token_timestamps[0]) if self._token_timestamps else 1.0
                     tok_s = len(recent) / window if window > 0 else 0.0
                     self._metrics.set_llm(tok_s, self._total_tokens_received)
+                else:
+                    # Reset quand la génération est terminée
+                    self._metrics.set_llm(0.0, 0, "0 tok/s")
 
             # 6. Traces depuis le core
             if self._core is not None and hasattr(self._metrics, "set_traces"):
