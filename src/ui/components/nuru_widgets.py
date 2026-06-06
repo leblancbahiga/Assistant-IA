@@ -596,6 +596,15 @@ class MetricsPanel(QWidget):
             display = label or f"{score:.2f}"
             bar.set_value(display)
 
+    def set_llm(self, tok_per_sec: float, total_tokens: int = 0, label: str = "") -> None:
+        """Met à jour la barre métrique LLM (tok/s)."""
+        bar = self._metrics.get("llm")
+        if bar:
+            pct = min(100.0, (total_tokens / 500.0) * 100.0) if total_tokens > 0 else 0.0
+            bar.set_percent(pct)
+            display = label or f"{tok_per_sec:.1f} tok/s"
+            bar.set_value(display)
+
     def set_token_reduction(self, percent: float, label: str = "") -> None:
         """Met à jour la barre métrique Tokens (réduction de tokens)."""
         bar = self._metrics.get("tokens")

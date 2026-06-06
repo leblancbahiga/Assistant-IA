@@ -309,6 +309,10 @@ class CyberDashboard(QMainWindow):
         self._current_bubble = None
         self._current_query = ""
         self._current_strict = False
+        self._is_processing = False
+        self._total_tokens_received = 0
+        self._token_timestamps: list[float] = []
+        self._last_llm_update = 0.0
 
         self._build_window()
         self._build_ui()
@@ -455,10 +459,22 @@ class CyberDashboard(QMainWindow):
     def _on_query(self, text: str, strict_mode: bool) -> None:
         """Traite une requête utilisateur en temps réel.
 
+        Avec debounce : ignore les doubles clics.
         Si ``self._core`` est défini, utilise ``InferenceWorker`` (thread pool)
-        pour un streaming non-bloquant. Sinon, émet le signal générique.
+        pour un streaming non-bloquant. Sinon, mode démo.
         """
         logger.info("Requête reçue : text=%s, strict=%s", text[:60], strict_mode)
+
+        # ── Debounce : ignorer si déjà en cours ──
+        if self._is_processing:
+            logger.info("Requête ignorée (déjà en cours de traitement)")
+            return
+        self._is_processing = True
+
+        # Réinitialiser les compteurs de tokens
+        self._total_tokens_received = 0
+        self._token_timestamps.clear()
+        self._last_llm_update = 0.0
 
         if self._core is not None and HAS_WORKER:
             # ── Mode réel : InferenceWorker ──
@@ -483,11 +499,31 @@ class CyberDashboard(QMainWindow):
 
     def _on_token(self, token: str) -> None:
         """Reçoit un token du stream LLM."""
+        import time as _time
+
+        now = _time.time()
+        self._total_tokens_received += 1
+        self._token_timestamps.append(now)
+
         if not hasattr(self, "_current_bubble") or self._current_bubble is None:
             self.console_page.messages.hide_typing()
             row = self.console_page.messages.add_message(text="", role="assistant")
             self._current_bubble = row
+
         self._current_bubble.append_text(token)
+
+        # Scroll to bottom à chaque token
+        self.console_page.messages._scroll_to_bottom()
+
+        # Mettre à jour la métrique LLM toutes les 500ms
+        if now - self._last_llm_update > 0.5:
+            cutoff = now - 3.0
+            recent = [t for t in self._token_timestamps if t > cutoff]
+            window = min(3.0, now - cutoff)
+            tok_s = len(recent) / window if window > 0 else 0.0
+            if hasattr(self._metrics, "set_llm"):
+                self._metrics.set_llm(tok_s, self._total_tokens_received)
+            self._last_llm_update = now
 
     def _on_rag_data(self, rag_data: dict) -> None:
         """Reçoit les métadonnées RAG après génération."""
@@ -521,12 +557,26 @@ class CyberDashboard(QMainWindow):
     def _on_generation_finished(self, full_response: str) -> None:
         """Fin de génération."""
         self.console_page.messages.hide_typing()
+        self._is_processing = False
+
+        # Mettre à jour métrique LLM finale
+        if self._total_tokens_received > 0 and self._token_timestamps:
+            import time as _time
+            elapsed = _time.time() - self._token_timestamps[0]
+            tok_s = self._total_tokens_received / elapsed if elapsed > 0 else 0.0
+            if hasattr(self._metrics, "set_llm"):
+                self._metrics.set_llm(tok_s, self._total_tokens_received,
+                                      f"{tok_s:.1f} tok/s" if tok_s > 0 else "Terminé")
+
+        # Scroll final
+        self.console_page.messages._scroll_to_bottom()
         self._current_bubble = None
-        logger.info("Génération terminée (%d chars)", len(full_response))
+        logger.info("Génération terminée (%d chars, %d tokens)", len(full_response), self._total_tokens_received)
 
     def _on_generation_error(self, error_msg: str) -> None:
         """Erreur de génération."""
         self.console_page.messages.hide_typing()
+        self._is_processing = False
         if hasattr(self, "_current_bubble") and self._current_bubble:
             self._current_bubble.append_text(f"\n\n[Erreur: {error_msg}]")
         self._current_bubble = None
@@ -555,6 +605,9 @@ class CyberDashboard(QMainWindow):
         self._current_bubble = None
         self._current_query = ""
         self._current_strict = False
+        self._is_processing = False
+        self._total_tokens_received = 0
+        self._token_timestamps.clear()
         self._pages.setCurrentIndex(0)
         self._sidebar.set_active("console")
 
@@ -571,7 +624,10 @@ class CyberDashboard(QMainWindow):
 
     def _update_metrics(self) -> None:
         """Met à jour les métriques système (RAM, LLM, RAG) toutes les secondes."""
+        import time as _time
         try:
+            now = _time.time()
+
             # 1. RAM système
             mem = psutil.virtual_memory()
             total_gb = mem.total / (1024**3)
@@ -600,22 +656,28 @@ class CyberDashboard(QMainWindow):
             # 4. Mise à jour du footer sidebar
             if hasattr(self._sidebar, "set_model_info"):
                 queries = len(self._rag_scores_session)
-                status = "Actif" if queries > 0 else "En attente"
+                status = "Actif" if self._is_processing else "En attente"
                 self._sidebar.set_model_info(model_name, status, queries)
 
-            # 5. Métriques LLM depuis le core si disponible
-            if self._core is not None:
-                if hasattr(self._metrics, "set_llm_tokens") and hasattr(self._core, "orchestrator"):
-                    try:
-                        llm = self._core.orchestrator.llm
-                        if hasattr(llm, "get_stats"):
-                            stats = llm.get_stats()
-                            self._metrics.set_llm_tokens(
-                                stats.get("tokens_per_sec", 0),
-                                stats.get("tokens_total", 0),
-                            )
-                    except Exception:
-                        pass
+            # 5. Métrique LLM temps réel (pendant génération)
+            if hasattr(self._metrics, "set_llm"):
+                if self._is_processing and self._total_tokens_received > 0:
+                    cutoff = now - 3.0
+                    recent = [t for t in self._token_timestamps if t > cutoff]
+                    window = min(3.0, now - self._token_timestamps[0]) if self._token_timestamps else 1.0
+                    tok_s = len(recent) / window if window > 0 else 0.0
+                    self._metrics.set_llm(tok_s, self._total_tokens_received)
+
+            # 6. Traces depuis le core
+            if self._core is not None and hasattr(self._metrics, "set_traces"):
+                try:
+                    if hasattr(self._core, "orchestrator") and \
+                       hasattr(self._core.orchestrator, "trace_collector"):
+                        tc = self._core.orchestrator.trace_collector
+                        traces = tc.count() if hasattr(tc, "count") else 0
+                        self._metrics.set_traces(traces)
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.debug("Échec mise à jour métriques : %s", e)
