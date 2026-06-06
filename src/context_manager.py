@@ -38,7 +38,7 @@ class ContextBudget:
             lines.append(f"{prefix}: {msg['content']}")
         return "\n".join(lines)
     
-    def _build_prompt(self, system: str, rag: str, facts: str, history: str, include_system: bool = True, model_family: str = "phi") -> str:
+    def _build_prompt(self, system: str, rag: str, facts: str, history: str, user_facts: str = "", include_system: bool = True, model_family: str = "phi") -> str:
         """Assemble le prompt final."""
         parts = []
         if include_system:
@@ -46,45 +46,66 @@ class ContextBudget:
             if model_family == "phi":
                 parts[-1] += "<|end|>\n"
             parts.append("<|user|>\n")
-        
+
         if rag.strip():
             parts.append(f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag.strip()}\n")
         else:
-            parts.append("## CONTEXTE DOCUMENTAIRE (SOURCES)\n[AUCUNE SOURCE DOCUMENTAIRE PERTINENTE TROUVÉE]\n")
-            
+            parts.append(f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n[AUCUNE SOURCE DOCUMENTAIRE PERTINENTE TROUVÉE]\n")
+
+        if user_facts.strip():
+            parts.append(f"## INFORMATIONS SUR L'UTILISATEUR\n{user_facts.strip()}\n")
+
         if history.strip():
             parts.append(f"## HISTORIQUE RÉCENT\n{history.strip()}\n")
-            
+
         if not include_system:
              parts.append("\n--- FIN DU CONTEXTE ---\n")
-             
+
         return "".join(parts)
     
-    def allocate(self, system: str, rag: str, facts: list[str], history: list[dict], include_system: bool = True, model_family: str = "phi") -> str:
-        """Construit le prompt dans le budget tokens."""
+    def allocate(self, system: str, rag: str, facts: list[str], history: list[dict], user_facts: list[str] = None, include_system: bool = True, model_family: str = "phi") -> str:
+        """Construit le prompt dans le budget tokens.
+
+        Budget alloué :
+        - 80%  → Contexte documentaire (RAG / Web)
+        - 10%  → Informations utilisateur (Long-Term Memory)
+        -  5%  → Faits généraux
+        - 10%  → Historique récent (augmenté si user_facts est vide)
+        """
+        user_facts = user_facts or []
+
         # 1. Estimer le system prompt
         system_tokens = self._estimate_tokens(system)
         budget = self.available - (system_tokens if include_system else 0)
-        
+
         if budget <= 0:
             logger.warning("System prompt trop long, troncature nécessaire")
             system = self._truncate_by_chars(system, self.available * 4)
             budget = 0
-        
+
         # 2. RAG : priorité 80% du budget restant
         rag_budget = int(budget * 0.8)
         rag_text = "\n".join(rag) if isinstance(rag, list) else rag
         if self._estimate_tokens(rag_text) > rag_budget:
             rag_text = self._truncate_by_chars(rag_text, rag_budget * 4)
-        
-        # 3. Faits : 5% du budget
+
+        # 3. User Facts (LTM) : 10% du budget
+        user_facts_budget = int(budget * 0.10)
+        user_facts_text = "\n".join(user_facts) if user_facts else ""
+        if user_facts_text and self._estimate_tokens(user_facts_text) > user_facts_budget:
+            user_facts_text = self._truncate_by_chars(user_facts_text, user_facts_budget * 4)
+
+        # 4. Faits : 5% du budget
         facts_budget = int(budget * 0.05)
         facts_text = "\n".join(facts)
         if self._estimate_tokens(facts_text) > facts_budget:
             facts_text = self._truncate_by_chars(facts_text, facts_budget * 4)
-        
-        # 4. Historique : 15% du budget
-        history_budget = int(budget * 0.15)
+
+        # 5. Historique : 10% du budget (ou 15% si pas de user_facts)
+        if user_facts_text:
+            history_budget = int(budget * 0.10)
+        else:
+            history_budget = int(budget * 0.15)
         history_text = self._format_history(history)
         if self._estimate_tokens(history_text) > history_budget:
             # Garder les 4 derniers échanges
@@ -92,14 +113,14 @@ class ContextBudget:
             history_text = self._format_history(history)
             if self._estimate_tokens(history_text) > history_budget:
                 history_text = self._truncate_by_chars(history_text, history_budget * 4)
-        
-        # 5. Assemblage
-        prompt = self._build_prompt(system, rag_text, facts_text, history_text, include_system=include_system, model_family=model_family)
-        
-        # 6. Vérification finale
+
+        # 6. Assemblage
+        prompt = self._build_prompt(system, rag_text, facts_text, history_text, user_facts=user_facts_text, include_system=include_system, model_family=model_family)
+
+        # 7. Vérification finale
         total = self._estimate_tokens(prompt)
         if total > self.available:
             logger.warning(f"Prompt final trop long ({total} tokens), hard truncate")
             prompt = self._truncate_by_chars(prompt, self.available * 4)
-        
+
         return prompt

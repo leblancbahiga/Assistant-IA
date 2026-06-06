@@ -23,7 +23,9 @@ class IngestionEngine:
         self.embedder = Embedder()
 
     def _parse_file(self, file_path: str) -> str:
-        """Extrait le texte brut d'un fichier selon son extension."""
+        """Extrait le texte brut d'un fichier selon son extension.
+        V6.1 : Fallback OCR pour les PDF scannés via Tesseract.
+        """
         path = Path(file_path)
         ext = path.suffix.lower()
         text = ""
@@ -33,6 +35,12 @@ class IngestionEngine:
                 with fitz.open(str(path)) as doc:
                     for page in doc:
                         text += page.get_text()
+                # V6.1 : Si PyMuPDF n'a rien extrait → PDF scanné → OCR
+                if not text.strip() and len(doc) > 0:
+                    from src.ocr import ocr_fallback
+                    ocr_text = ocr_fallback(str(path), "")
+                    if ocr_text:
+                        text = ocr_text
             elif ext == ".docx":
                 doc = Document(str(path))
                 text = "\n".join([p.text for p in doc.paragraphs])

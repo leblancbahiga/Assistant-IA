@@ -16,12 +16,55 @@ class CircuitBreakerState:
     timeout: float = 30.0  # secondes avant de réessayer
 
 class CloudLLM:
-    """Client API pour les modèles Cloud (DeepSeek, OpenRouter) avec Circuit Breaker."""
+    """Client API pour les modèles Cloud (DeepSeek, OpenRouter, Groq) avec Circuit Breaker."""
 
     def __init__(self):
         self.provider = config.cloud_provider
         self.model = config.cloud_model
         self.circuit_breaker = CircuitBreakerState()
+
+    def generate(self, prompt: str, timeout: float = 5.0, model: Optional[str] = None) -> str:
+        """Version synchrone NON-streaming pour expansion rapide de requête (QueryRewriter).
+
+        Appel direct à l'API Groq avec timeout court. Supporte aussi les autres providers.
+        Retourne le texte de la réponse ou lève une exception en cas d'échec.
+        """
+        provider = self.provider
+        model = model or self.model
+
+        if provider == "groq":
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            api_key = config.groq_key
+        elif provider == "deepseek":
+            url = "https://api.deepseek.com/v1/chat/completions"
+            api_key = config.deepseek_key
+        elif provider == "openrouter":
+            url = "https://api.openrouter.ai/api/v1/chat/completions"
+            api_key = config.openrouter_key
+        else:
+            raise ValueError(f"Provider Cloud inconnu pour generate() synchrone : {provider}")
+
+        if not api_key:
+            raise ValueError(f"Clé API manquante pour {provider}")
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "max_tokens": 150,
+            "stream": False,
+        }
+
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"].strip()
         
     def _parse_provider_model(self, config_str: str, default_provider: str):
         """Parse 'provider/model_name' format."""

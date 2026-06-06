@@ -103,6 +103,10 @@ class NuruOrchestrator:
         )
         # NURU V6 : Learning Loop — collecteur de traces
         self.trace_collector = TraceCollector()
+        # NURU V4.5 : Long-Term Memory — faits utilisateur structurés
+        self.long_term_memory = None  # Initialisé via set_long_term_memory()
+        # Suivi du dernier résultat RAG pour l'observabilité UI
+        self.last_rag_result = None
 
     async def process_query(
         self,
@@ -194,7 +198,13 @@ class NuruOrchestrator:
             return
 
         # ── 6. Construction prompt ──
-        system_prompt, full_prompt = self._build_prompt(intent, query, rag_context, web_context)
+        # NURU V4.5 : injection des faits utilisateur Long-Term Memory
+        user_facts_str = ""
+        if self.long_term_memory:
+            relevant_facts = await self.long_term_memory.get_relevant_facts(query, limit=10)
+            if relevant_facts:
+                user_facts_str = self.long_term_memory.format_facts_for_prompt(relevant_facts)
+        system_prompt, full_prompt = self._build_prompt(intent, query, rag_context, web_context, user_facts_str=user_facts_str)
 
         # Action E : Budget token post-template — écrêtage final du prompt complet
         max_safe_chars = config.rag_max_context_tokens * 4  # ~4 chars/token
@@ -262,7 +272,23 @@ class NuruOrchestrator:
 
         # ── 8. Finalisation ──
         result = self._finalize(response_content, duration, intent, rag_result)
-        await self.event_bus.emit("generation_complete", result.to_dict())
+        event_data = result.to_dict()
+        # Enrichir avec les données RAG pour le dashboard d'observabilité
+        if rag_result:
+            event_data["rag_result"] = {
+                "documents_found": getattr(rag_result, "documents_found", 0),
+                "chunks_retrieved": getattr(rag_result, "chunks_retrieved", 0),
+                "chunks_injected": getattr(rag_result, "chunks_injected", 0),
+                "top_score": getattr(rag_result, "top_score", 0.0),
+                "retrieval_time_ms": getattr(rag_result, "retrieval_time_ms", 0.0),
+                "rejected_chunks": getattr(rag_result, "rejected_chunks", 0),
+                "rejection_reason": getattr(rag_result, "rejection_reason", ""),
+                "sources": getattr(rag_result, "sources", []),
+                "query_rewritten": getattr(rag_result, "query_rewritten", ""),
+                "tokens_injected": getattr(rag_result, "tokens_injected", 0),
+            }
+            event_data["rag_score"] = round(getattr(rag_result, "top_score", 0.0), 2)
+        await self.event_bus.emit("generation_complete", event_data)
 
         # ── 9. Réflexion ──
         if self.reflection:
@@ -293,6 +319,38 @@ class NuruOrchestrator:
             latency_ms=int(duration * 1000) if 'duration' in dir() else 0,
             model=result.model,
         ))
+
+        # ── 11. Long-Term Memory : extraction post-réponse ──
+        asyncio.create_task(self._ltm_extract_post_response(
+            query=original_query,
+            response=response_content,
+            intent=intent,
+        ))
+
+    def set_long_term_memory(self, ltm):
+        """Injecte le module Long-Term Memory (injection de dépendance)."""
+        self.long_term_memory = ltm
+        logger.info("🧠 Long-Term Memory activée")
+
+    async def _ltm_extract_post_response(self, query: str, response: str, intent: str):
+        """Extraction asynchrone des faits après chaque réponse (fire-and-forget)."""
+        if not self.long_term_memory:
+            return
+        try:
+            history = [
+                {"role": "user", "content": query},
+                {"role": "assistant", "content": response},
+            ]
+            facts = await self.long_term_memory.extract_facts(history)
+            for fact in facts:
+                self.long_term_memory.store_fact(
+                    fact_type=fact.get("fact_type", "other"),
+                    content=fact.get("content", ""),
+                    source="conversation",
+                    confidence=fact.get("confidence", 0.8),
+                )
+        except Exception as e:
+            logger.debug(f"🧠 LTM extrait post-réponse ignoré ({e})")
 
     # ─── Privées ───
 
@@ -335,6 +393,8 @@ class NuruOrchestrator:
                     rag_context, rag_result = c
                 elif isinstance(c, str):
                     web_context = c
+        # Stocker pour observabilité UI
+        self.last_rag_result = rag_result
         return rag_context, rag_result, web_context
 
     async def _maybe_web_fallback(self, query, intent, rag_context, rag_result, web_context):
@@ -358,7 +418,7 @@ class NuruOrchestrator:
                 intent = "COMPLEX"
         return rag_context, intent
 
-    def _build_prompt(self, intent, query, rag_context, web_context):
+    def _build_prompt(self, intent, query, rag_context, web_context, user_facts_str=""):
         full_rag = ""
         if intent == "COMPLEX":
             full_rag = web_context + ("\n\n" + rag_context if rag_context else "")
@@ -375,12 +435,19 @@ class NuruOrchestrator:
         else:
             system_prompt = f"Tu es NURU, assistant personnel de Leblanc."
 
+        # NURU V4.5 : Injection des faits utilisateur long terme dans le système
+        if user_facts_str:
+            system_prompt += f"\n\n## INFORMATIONS SUR L'UTILISATEUR\n{user_facts_str}"
+
         if self.context_budget:
+            # Formater user_facts en liste pour le budget
+            user_facts_lines = user_facts_str.split("\n") if user_facts_str else []
             full_prompt = self.context_budget.allocate(
                 system=system_prompt,
                 rag=full_rag,
                 facts=self.memory_store.get_recent_facts(limit=20),
                 history=self.memory_store.get_recent_history(limit=8),
+                user_facts=user_facts_lines,
                 include_system=(intent != "COMPLEX"),
             )
         else:

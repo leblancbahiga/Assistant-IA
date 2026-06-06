@@ -27,7 +27,12 @@ dependencies = [
     "pydantic-settings",
     "keyring",
     "cachetools",
+    "pytesseract",
+    "pdf2image",
 ]
+
+[project.optional-dependencies]
+ocr = ["pytesseract", "pdf2image"]
 
 [build-system]
 requires = ["setuptools", "wheel"]

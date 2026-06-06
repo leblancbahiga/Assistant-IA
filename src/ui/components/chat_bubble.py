@@ -5,6 +5,7 @@ NURU V6 — ChatBubble : design sobre anthracite/bleu électrique.
 - Entête "NURU SYSTEM" / "VOUS"
 - Indicateur de frappe clignotant
 - Boutons de feedback pour l'assistant
+- Badge de confiance RAG (score top1)
 """
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QSizePolicy, QFrame
 from PySide6.QtCore import Qt, Signal, QTimer
@@ -40,12 +41,16 @@ class ChatBubble(QWidget):
     - En-tête avec nom + horodatage
     - Indicateur de frappe clignotant pendant la génération
     - Boutons de feedback 👍/👎 sur les réponses de l'assistant
+    - Badge de confiance RAG (score top1) pour les réponses assistant
     """
 
     feedback_given = Signal(str, str)  # (vote: 'up'|'down', message)
 
-    def __init__(self, sender: str, message: str, is_user: bool = False, parent=None):
+    def __init__(self, sender: str, message: str, is_user: bool = False, rag_score: float = None, parent=None):
         super().__init__(parent)
+
+        self._rag_score = rag_score
+        self._is_user = is_user
 
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(8, 6, 8, 6)
@@ -117,6 +122,13 @@ class ChatBubble(QWidget):
 
         header.addWidget(name_lbl)
         header.addStretch()
+
+        # ── Badge de confiance RAG (assistant uniquement) ──
+        if not is_user and rag_score is not None:
+            rag_badge = self._make_rag_badge(rag_score)
+            header.addWidget(rag_badge)
+            header.addSpacing(6)
+
         header.addWidget(time_lbl)
         content_layout.addLayout(header)
 
@@ -176,6 +188,55 @@ class ChatBubble(QWidget):
             main_layout.insertStretch(0, 1)
         else:
             main_layout.addStretch(1)
+
+    def _make_rag_badge(self, score: float) -> QLabel:
+        """Crée un badge de confiance RAG coloré selon le score."""
+        score_clamped = max(0.0, min(1.0, score))
+        
+        # Couleur selon le niveau de confiance
+        if score_clamped >= 0.75:
+            color = "#39FF14"  # vert — haute confiance
+            bg = "rgba(57, 255, 20, 0.12)"
+        elif score_clamped >= 0.40:
+            color = "#FFB000"  # orange — confiance moyenne
+            bg = "rgba(255, 176, 0, 0.12)"
+        else:
+            color = "#ef4444"  # rouge — faible confiance
+            bg = "rgba(239, 68, 68, 0.12)"
+        
+        badge = QLabel(f"🧠 {score_clamped:.2f}")
+        badge.setStyleSheet(
+            f"background-color: {bg};"
+            f"color: {color}; font-size: 9px; font-weight: bold;"
+            f"border-radius: 4px; padding: 2px 6px;"
+        )
+        return badge
+
+    def set_rag_score(self, score: float):
+        """Met à jour ou ajoute le badge de confiance RAG après coup."""
+        self._rag_score = score
+        if self._is_user:
+            return
+        
+        # Chercher un badge RAG existant dans l'en-tête
+        header_layout = self.bubble.layout().itemAt(0)  # First item is header
+        if header_layout and isinstance(header_layout, QHBoxLayout):
+            # Supprimer l'ancien badge RAG s'il existe
+            for i in range(header_layout.count() - 1, -1, -1):
+                item = header_layout.itemAt(i)
+                if item and item.widget():
+                    txt = item.widget().text()
+                    if txt.startswith("🧠"):
+                        item.widget().deleteLater()
+                        header_layout.removeItem(item)
+                        break
+            
+            # Insérer le nouveau badge avant le timestamp
+            rag_badge = self._make_rag_badge(score)
+            # Le timestamp est le dernier élément, insérer avant
+            last_idx = header_layout.count() - 1
+            header_layout.insertWidget(last_idx, rag_badge)
+            header_layout.insertSpacing(last_idx + 1, 6)
 
     def append_text(self, text: str):
         """Ajoute du texte au message existant (streaming)."""

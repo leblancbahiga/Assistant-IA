@@ -14,6 +14,7 @@ class WorkerSignals(QObject):
     """Signaux thread-safe pour communication avec l'UI."""
     token_received = Signal(str)
     finished = Signal(str)
+    rag_data = Signal(dict)  # RAG result data (scores, sources, etc.)
     error = Signal(str)
 
 
@@ -52,6 +53,14 @@ class InferenceWorker(QRunnable):
                     logger.error(f"Stream error: {e}")
                     self.signals.token_received.emit(f"\n[Erreur: {e}]")
 
+                # Récupérer les données RAG depuis le core après la génération
+                try:
+                    rag_data = self._get_rag_data()
+                    if rag_data:
+                        self.signals.rag_data.emit(rag_data)
+                except Exception as e:
+                    logger.debug(f"RAG data retrieval: {e}")
+
             loop.run_until_complete(stream())
             loop.close()
 
@@ -60,3 +69,38 @@ class InferenceWorker(QRunnable):
         except Exception as e:
             logger.error(f"InferenceWorker error: {e}")
             self.signals.error.emit(str(e))
+
+    def _get_rag_data(self) -> dict:
+        """Extrait les données RAG du core après génération."""
+        data = {}
+        
+        # Depuis le RAG engine last_top_score
+        if hasattr(self.core, 'rag') and hasattr(self.core.rag, 'last_top_score'):
+            data['top_score'] = self.core.rag.last_top_score
+        
+        # Depuis l'orchestrator
+        if hasattr(self.core, 'orchestrator'):
+            orch = self.core.orchestrator
+            if hasattr(orch, 'rag_engine') and hasattr(orch.rag_engine, 'last_top_score'):
+                data['top_score'] = data.get('top_score', 0) or orch.rag_engine.last_top_score
+            if hasattr(orch, 'last_rag_result'):
+                last = orch.last_rag_result
+                if last:
+                    data['documents_found'] = getattr(last, 'documents_found', 0)
+                    data['chunks_retrieved'] = getattr(last, 'chunks_retrieved', 0)
+                    data['chunks_injected'] = getattr(last, 'chunks_injected', 0)
+                    data['top_score'] = data.get('top_score', 0) or getattr(last, 'top_score', 0)
+                    data['rejected_chunks'] = getattr(last, 'rejected_chunks', 0)
+                    data['rejection_reason'] = getattr(last, 'rejection_reason', '')
+                    data['retrieval_time_ms'] = getattr(last, 'retrieval_time_ms', 0.0)
+                    sources = getattr(last, 'sources', [])
+                    data['sources'] = sources
+                    data['documents_found'] = len(set(s.get('name', '') for s in sources))
+        
+        # Depuis le EventBus / RuntimeManager
+        if hasattr(self.core, 'runtime'):
+            rm = self.core.runtime
+            if hasattr(rm, 'get_rag_score'):
+                data['top_score'] = data.get('top_score', 0) or rm.get_rag_score()
+        
+        return data

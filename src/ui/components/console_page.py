@@ -26,6 +26,7 @@ class ConsolePage(QWidget):
         self._sources = []
         self._last_query = ""
         self._current_cot: QFrame = None  # V6 : Zone Chain of Thought
+        self._last_assistant_bubble: ChatBubble = None  # Dernière bulle assistant
         self.setup_ui()
     
     def setup_ui(self):
@@ -134,9 +135,9 @@ class ConsolePage(QWidget):
     
     # ─── PUBLIC API ───
 
-    def add_message(self, sender: str, text: str, is_user: bool) -> ChatBubble:
-        """Add a message with rich text formatting support"""
-        bubble = ChatBubble(sender, "", is_user=is_user)
+    def add_message(self, sender: str, text: str, is_user: bool, rag_score: float = None) -> ChatBubble:
+        """Add a message with rich text formatting support and optional RAG score."""
+        bubble = ChatBubble(sender, "", is_user=is_user, rag_score=rag_score)
 
         # Enable rich text formatting in the bubble's message area
         if hasattr(bubble, 'msg_text'):
@@ -146,7 +147,7 @@ class ConsolePage(QWidget):
                 bubble.msg_text.verticalScrollBar().maximum()
             )
         else:
-            bubble = ChatBubble(sender, text, is_user=is_user)
+            bubble = ChatBubble(sender, text, is_user=is_user, rag_score=rag_score)
 
         self.chat_layout.addWidget(bubble)
         self._scroll_to_bottom()
@@ -154,8 +155,18 @@ class ConsolePage(QWidget):
         # V4.5 Phase 4 : Connecter le feedback des messages assistant
         if not is_user:
             bubble.feedback_given.connect(lambda v, m: self.feedback_received.emit(v, m, self._last_query))
+            self._last_assistant_bubble = bubble
 
         return bubble
+
+    def update_last_assistant_rag(self, rag_score: float):
+        """Met à jour le badge RAG sur la dernière bulle assistant."""
+        if self._last_assistant_bubble:
+            self._last_assistant_bubble.set_rag_score(rag_score)
+
+    def get_last_assistant_bubble(self):
+        """Retourne la dernière bulle assistant (pour mise à jour)."""
+        return self._last_assistant_bubble
 
     def add_cot(self, title: str = "Analyse du système..."):
         """V6 : Ajoute une zone Chain of Thought repliable avant la réponse."""
@@ -406,6 +417,7 @@ class ConsolePage(QWidget):
             item = self.chat_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        self._last_assistant_bubble = None
     
     # ─── PRIVATE ───
     

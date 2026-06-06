@@ -249,6 +249,12 @@ class CyberDashboard(QMainWindow):
         # NURU V5 : ViewModel pour les métriques système
         self.telemetry_vm = TelemetryViewModel()
         
+        # Suivi des métriques RAG pour l'observabilité
+        self._rag_scores_session = []  # Scores RAG de la session
+        self._rag_docs_found = []      # Nb documents trouvés par requête
+        self._rag_rejections = 0       # Compteur de refus StrictRAG
+        self._rag_queries_total = 0    # Requêtes RAG totales
+        
         # Window setup
         self.setWindowTitle("NURU")
         self.resize(1150, 800)
@@ -265,7 +271,7 @@ class CyberDashboard(QMainWindow):
         # Build components
         self._build_sidebar()
         self._build_central_area()
-        self._build_right_panel()  # V6 : colonne métriques + CoT
+        self._build_right_panel()  # V6 : colonne métriques + CoT + RAG Observabilité
         
         self._wire_signals()
         self._init_timers()
@@ -276,6 +282,13 @@ class CyberDashboard(QMainWindow):
         self.console_page.add_message("NURU", "Bonjour, comment puis-je vous aider en cette journée ?", is_user=False)
 
         self.stacked.setCurrentIndex(0)
+        
+        # Abonnement aux événements RAG (EventBus singleton)
+        # Note: la mise à jour UI réelle se fait via le signal rag_data de InferenceWorker,
+        # qui est thread-safe. L'EventBus est utilisé pour les logs backend uniquement.
+        self._bus = EventBus()
+        self._bus.subscribe("generation_complete", self._on_rag_event_safe)
+        
         logger.info("CyberDashboard initialized.")
 
     def load_styles(self):
@@ -462,8 +475,27 @@ class CyberDashboard(QMainWindow):
         layout.addWidget(self.stacked, 1)
         self.main_layout.addWidget(container, 1)
 
+    def _make_metric_card(self, title: str, value: str, color: str) -> QFrame:
+        """Crée une carte métrique compacte."""
+        card = QFrame()
+        card.setStyleSheet(f"""
+            background-color: #161B22;
+            border: 1px solid #1F2937;
+            border-radius: 8px; padding: 10px;
+        """)
+        inner = QVBoxLayout(card)
+        inner.setSpacing(4)
+        lbl = QLabel(title)
+        lbl.setStyleSheet(f"color: {color}; font-size: 9px; font-weight: bold;")
+        val = QLabel(value)
+        val.setStyleSheet(f"color: #E5E7EB; font-size: 16px; font-weight: bold;")
+        val.setAlignment(Qt.AlignLeft)
+        inner.addWidget(lbl)
+        inner.addWidget(val)
+        return card
+
     def _build_right_panel(self):
-        """V6 : Colonne droite — métriques en temps réel + zone Chain of Thought.
+        """V6 : Colonne droite — métriques en temps réel + zone Chain of Thought + RAG Observabilité.
 
         Design sobre : fond anthracite, accents bleu électrique, vert acide.
         """
@@ -479,7 +511,15 @@ class CyberDashboard(QMainWindow):
             }
         """)
 
-        layout = QVBoxLayout(self.right_panel)
+        # Panneau défilable pour tout le contenu
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("border: none; background: transparent;")
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(scroll_content)
         layout.setContentsMargins(16, 20, 16, 20)
         layout.setSpacing(16)
 
@@ -543,11 +583,53 @@ class CyberDashboard(QMainWindow):
         self.mode_card = self._make_metric_card("MODE", "local", "#FFB000")
         layout.addWidget(self.mode_card)
 
-        # ── Séparateur ──
+        # ── SÉPARATEUR ──
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet("color: #1F2937;")
         layout.addWidget(sep)
+
+        # ════════════════════════════════════════════════
+        # PANEL D'OBSERVABILITÉ RAG
+        # ════════════════════════════════════════════════
+        rag_obs_title = QLabel("📊 OBSERVABILITÉ RAG")
+        rag_obs_title.setStyleSheet(
+            "color: #00A3FF; font-size: 10px; font-weight: bold; letter-spacing: 2px;"
+        )
+        layout.addWidget(rag_obs_title)
+
+        # Carte : Recall@5
+        self.rag_recall_card = self._make_metric_card("RECALL@5", "--", "#39FF14")
+        layout.addWidget(self.rag_recall_card)
+
+        # Carte : Score RAG moyen de la session
+        self.rag_avg_score_card = self._make_metric_card("SCORE MOYEN", "--", "#00A3FF")
+        layout.addWidget(self.rag_avg_score_card)
+
+        # Carte : Documents trouvés par requête
+        self.rag_docs_card = self._make_metric_card("DOCUMENTS/REQ", "--", "#FFB000")
+        layout.addWidget(self.rag_docs_card)
+
+        # Carte : Taux de refus (StrictRAG)
+        self.rag_rejection_card = self._make_metric_card("TAUX REFUS", "--", "#ef4444")
+        layout.addWidget(self.rag_rejection_card)
+
+        # Détail : dernière requête RAG
+        self.rag_detail_label = QLabel("Aucune requête RAG pour l'instant")
+        self.rag_detail_label.setWordWrap(True)
+        self.rag_detail_label.setStyleSheet("""
+            color: #6B7280; font-size: 10px; line-height: 1.4;
+            background-color: #161B22;
+            border: 1px solid #1F2937;
+            border-radius: 8px; padding: 8px;
+        """)
+        layout.addWidget(self.rag_detail_label)
+
+        # ── SÉPARATEUR ──
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.HLine)
+        sep2.setStyleSheet("color: #1F2937;")
+        layout.addWidget(sep2)
 
         # ── Zone Chain of Thought ──
         cot_label = QLabel("🧠 RAISONNEMENT")
@@ -572,26 +654,15 @@ class CyberDashboard(QMainWindow):
         self.model_info.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.model_info)
 
+        layout.addStretch()
+        scroll_area.setWidget(scroll_content)
+        
+        # Layout principal du panneau droit avec scroll
+        right_layout = QVBoxLayout(self.right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.addWidget(scroll_area)
+        
         self.main_layout.addWidget(self.right_panel)
-
-    def _make_metric_card(self, title: str, value: str, color: str) -> QFrame:
-        """Crée une carte métrique compacte."""
-        card = QFrame()
-        card.setStyleSheet(f"""
-            background-color: #161B22;
-            border: 1px solid #1F2937;
-            border-radius: 8px; padding: 10px;
-        """)
-        inner = QVBoxLayout(card)
-        inner.setSpacing(4)
-        lbl = QLabel(title)
-        lbl.setStyleSheet(f"color: {color}; font-size: 9px; font-weight: bold;")
-        val = QLabel(value)
-        val.setStyleSheet(f"color: #E5E7EB; font-size: 16px; font-weight: bold;")
-        val.setAlignment(Qt.AlignLeft)
-        inner.addWidget(lbl)
-        inner.addWidget(val)
-        return card
 
     def set_cot(self, text: str):
         """V6 : Met à jour la zone Chain of Thought."""
@@ -599,6 +670,113 @@ class CyberDashboard(QMainWindow):
 
     def clear_cot(self):
         self.cot_text.setText("En attente d'une requête...")
+
+    def _update_rag_observability(self):
+        """Met à jour toutes les cartes du dashboard d'observabilité RAG."""
+        total = self._rag_queries_total
+        
+        if total == 0:
+            return
+        
+        # Recall@5 : estimé depuis le nombre de requêtes avec documents trouvés
+        recalls = [1 if d > 0 else 0 for d in self._rag_docs_found]
+        recall_at_5 = (sum(recalls) / len(recalls) * 100) if recalls else 0.0
+        
+        # Score RAG moyen de la session
+        avg_rag_score = (sum(self._rag_scores_session) / len(self._rag_scores_session)) if self._rag_scores_session else 0.0
+        
+        # Documents trouvés par requête (moyenne)
+        avg_docs = (sum(self._rag_docs_found) / len(self._rag_docs_found)) if self._rag_docs_found else 0.0
+        
+        # Taux de refus
+        rejection_rate = (self._rag_rejections / total * 100) if total > 0 else 0.0
+        
+        # Mettre à jour les cartes
+        self.rag_recall_card.layout().itemAt(1).widget().setText(f"{recall_at_5:.1f}%")
+        self.rag_avg_score_card.layout().itemAt(1).widget().setText(f"{avg_rag_score:.2f}")
+        self.rag_docs_card.layout().itemAt(1).widget().setText(f"{avg_docs:.1f}")
+        self.rag_rejection_card.layout().itemAt(1).widget().setText(f"{rejection_rate:.1f}%")
+        
+        # Colorer le taux de refus
+        rejection_val = self.rag_rejection_card.layout().itemAt(1).widget()
+        if rejection_rate > 20:
+            rejection_val.setStyleSheet("color: #ef4444; font-size: 16px; font-weight: bold;")
+        elif rejection_rate > 5:
+            rejection_val.setStyleSheet("color: #FFB000; font-size: 16px; font-weight: bold;")
+        else:
+            rejection_val.setStyleSheet("color: #39FF14; font-size: 16px; font-weight: bold;")
+        
+        # Détail de la dernière requête
+        if self._rag_scores_session:
+            last_score = self._rag_scores_session[-1]
+            last_docs = self._rag_docs_found[-1] if self._rag_docs_found else 0
+            self.rag_detail_label.setText(
+                f"Dernière requête :\n"
+                f"  Score : {last_score:.2f}\n"
+                f"  Documents : {last_docs}\n"
+                f"  Total requêtes : {total}"
+            )
+
+    def _on_rag_event_safe(self, event_data: dict):
+        """Callback EventBus sécurisé (thread-safe) — logs seulement, pas de UI.
+        
+        La mise à jour réelle de l'UI se fait via le signal rag_data 
+        de InferenceWorker (thread-safe car c'est un signal Qt).
+        """
+        if isinstance(event_data, dict):
+            rag_score = event_data.get("rag_score", 0.0)
+            rag_result = event_data.get("rag_result", {})
+            if rag_result:
+                docs_found = rag_result.get("documents_found", 0)
+                logger.debug(
+                    f"📊 RAG EventBus: score={rag_score:.2f}, docs={docs_found}"
+                )
+
+    def _on_rag_generation_complete(self, event_data: dict):
+        """Callback EventBus : met à jour les métriques RAG après chaque génération."""
+        try:
+            # Si le callback a été appelé avec un argument direct (emit synchrone)
+            # ou s'il vient du EventBus avec data
+            if isinstance(event_data, dict):
+                rag_score = event_data.get("rag_score", 0.0)
+                rag_result = event_data.get("rag_result", {})
+                
+                if rag_result:
+                    docs_found = rag_result.get("documents_found", 0)
+                    rejected = rag_result.get("rejected_chunks", 0)
+                    rejection_reason = rag_result.get("rejection_reason", "")
+                    
+                    self._rag_queries_total += 1
+                    self._rag_scores_session.append(rag_score)
+                    self._rag_docs_found.append(docs_found)
+                    
+                    # Compter les refus (rejected_chunks > 0 ou top_score trop bas)
+                    if rejected > 0 or (rag_score < 0.3 and rejection_reason):
+                        self._rag_rejections += 1
+                    
+                    # Mettre à jour le badge RAG dans la dernière bulle assistant
+                    self.console_page.update_last_assistant_rag(rag_score)
+                    
+                    # Mettre à jour la carte RAG du panneau système
+                    try:
+                        self.rag_card.layout().itemAt(1).widget().setText(f"{rag_score:.2f}")
+                    except Exception:
+                        pass
+                    
+                    # Mettre à jour le dashboard d'observabilité
+                    self._update_rag_observability()
+                    
+                    # Mettre à jour les sources dans la barre du console
+                    sources = rag_result.get("sources", [])
+                    if sources:
+                        self.console_page.set_sources(sources)
+                    
+                    logger.debug(
+                        f"📊 RAG Observabilité: score={rag_score:.2f}, docs={docs_found}, "
+                        f"rejet={rejected}, total_requetes={self._rag_queries_total}"
+                    )
+        except Exception as e:
+            logger.debug(f"RAG observability update error: {e}")
 
     def _on_menu_clicked(self, item):
         idx = self.main_menu.row(item)
@@ -684,8 +862,46 @@ class CyberDashboard(QMainWindow):
         worker = InferenceWorker(self.core, query)
         worker.signals.token_received.connect(self.current_bubble.append_text)
         worker.signals.finished.connect(self._on_generation_finished)
+        worker.signals.rag_data.connect(self._on_rag_data_from_worker)
         worker.signals.error.connect(self._on_generation_error)
         QThreadPool.globalInstance().start(worker)
+
+    def _on_rag_data_from_worker(self, rag_data: dict):
+        """Reçoit les données RAG directement depuis l'InferenceWorker."""
+        try:
+            if not rag_data:
+                return
+            
+            top_score = rag_data.get("top_score", 0.0)
+            docs_found = rag_data.get("documents_found", 0)
+            sources = rag_data.get("sources", [])
+            
+            if top_score > 0:
+                self._rag_queries_total += 1
+                self._rag_scores_session.append(top_score)
+                self._rag_docs_found.append(docs_found)
+                
+                # Badge sur la bulle
+                self.console_page.update_last_assistant_rag(top_score)
+                
+                # Carte RAG
+                try:
+                    self.rag_card.layout().itemAt(1).widget().setText(f"{top_score:.2f}")
+                except Exception:
+                    pass
+                
+                # Sources
+                if sources:
+                    self.console_page.set_sources(sources)
+                
+                # Rejections
+                rejected = rag_data.get("rejected_chunks", 0)
+                if rejected > 0 or (top_score < 0.3 and rag_data.get("rejection_reason", "")):
+                    self._rag_rejections += 1
+                
+                self._update_rag_observability()
+        except Exception as e:
+            logger.debug(f"RAG data from worker: {e}")
 
     def _on_generation_finished(self, full_text):
         logger.info("✅ Génération terminée")
@@ -696,6 +912,19 @@ class CyberDashboard(QMainWindow):
     def _on_console_clear(self):
         self.console_page.clear_chat()
         self.console_page.add_message("NURU", "Bonjour, comment puis-je vous aider en cette journée ?", is_user=False)
+        
+        # Réinitialiser les métriques RAG
+        self._rag_scores_session = []
+        self._rag_docs_found = []
+        self._rag_rejections = 0
+        self._rag_queries_total = 0
+        
+        # Réinitialiser l'affichage
+        self.rag_recall_card.layout().itemAt(1).widget().setText("--")
+        self.rag_avg_score_card.layout().itemAt(1).widget().setText("--")
+        self.rag_docs_card.layout().itemAt(1).widget().setText("--")
+        self.rag_rejection_card.layout().itemAt(1).widget().setText("--")
+        self.rag_detail_label.setText("Aucune requête RAG pour l'instant")
 
 
 if __name__ == "__main__":

@@ -43,6 +43,27 @@ class MemoryStore:
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Faits utilisateur structurés (Long-Term Memory — NURU V4.5)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_facts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fact_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                source TEXT DEFAULT 'conversation',
+                confidence REAL DEFAULT 0.8,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT 1
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_facts_type
+            ON user_facts (fact_type)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_facts_active
+            ON user_facts (is_active)
+        """)
         # Historique (Episodic Memory)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS history (
@@ -431,5 +452,90 @@ class MemoryStore:
             "INSERT INTO reflection (query, feedback, quality_score) VALUES (?, ?, ?)",
             (query, feedback, score)
         )
+        conn.commit()
+        conn.close()
+
+    # ═══════════════════════════════════════════════
+    # Long-Term Memory : user_facts CRUD
+    # ═══════════════════════════════════════════════
+
+    def store_user_fact(self, fact_type: str, content: str,
+                        source: str = "conversation",
+                        confidence: float = 0.8) -> int:
+        """Insère un fait utilisateur dans user_facts. Retourne l'id."""
+        conn = self._get_conn()
+        existing = conn.execute(
+            "SELECT id FROM user_facts WHERE content = ? AND is_active = 1",
+            (content,)
+        ).fetchone()
+        if existing:
+            conn.execute("""
+                UPDATE user_facts
+                SET updated_at = CURRENT_TIMESTAMP, confidence = MAX(confidence, ?)
+                WHERE id = ?
+            """, (confidence, existing[0]))
+            conn.commit()
+            conn.close()
+            return existing[0]
+        conn.execute("""
+            INSERT INTO user_facts (fact_type, content, source, confidence)
+            VALUES (?, ?, ?, ?)
+        """, (fact_type, content, source, confidence))
+        new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+        conn.close()
+        logger.info(f"🧠 Nouveau fait utilisateur mémorisé [{fact_type}]: {content[:60]}")
+        return new_id
+
+    def get_user_facts(self, fact_type: Optional[str] = None,
+                       limit: int = 50) -> list[dict]:
+        """Récupère les faits utilisateur actifs, filtrés par type optionnel."""
+        conn = self._get_conn()
+        if fact_type:
+            rows = conn.execute("""
+                SELECT id, fact_type, content, source, confidence, created_at, updated_at
+                FROM user_facts
+                WHERE is_active = 1 AND fact_type = ?
+                ORDER BY updated_at DESC LIMIT ?
+            """, (fact_type, limit)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT id, fact_type, content, source, confidence, created_at, updated_at
+                FROM user_facts
+                WHERE is_active = 1
+                ORDER BY updated_at DESC LIMIT ?
+            """, (limit,)).fetchall()
+        conn.close()
+        return [
+            {"id": r[0], "fact_type": r[1], "content": r[2],
+             "source": r[3], "confidence": r[4],
+             "created_at": r[5], "updated_at": r[6]}
+            for r in rows
+        ]
+
+    def search_user_facts(self, keywords: list[str],
+                          limit: int = 10) -> list[dict]:
+        """Recherche textuelle simple dans les faits utilisateur actifs."""
+        conn = self._get_conn()
+        conditions = " AND ".join(["content LIKE ?" for _ in keywords])
+        params = [f"%{kw}%" for kw in keywords]
+        rows = conn.execute(f"""
+            SELECT id, fact_type, content, source, confidence, created_at, updated_at
+            FROM user_facts
+            WHERE is_active = 1 AND {conditions}
+            ORDER BY confidence DESC, updated_at DESC LIMIT ?
+        """, (*params, limit)).fetchall()
+        conn.close()
+        return [
+            {"id": r[0], "fact_type": r[1], "content": r[2],
+             "source": r[3], "confidence": r[4],
+             "created_at": r[5], "updated_at": r[6]}
+            for r in rows
+        ]
+
+    def deactivate_user_fact(self, fact_id: int):
+        """Désactive (soft-delete) un fait utilisateur."""
+        conn = self._get_conn()
+        conn.execute("UPDATE user_facts SET is_active = 0 WHERE id = ?", (fact_id,))
         conn.commit()
         conn.close()

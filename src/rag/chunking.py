@@ -48,6 +48,22 @@ class SemanticChunker:
         self.max_chars = max_chars
         self.overlap_chars = overlap_chars
 
+    def _apply_overlap(self, texts: list[str], prev_tail: str) -> list[str]:
+        """Applique un overlap entre chunks consécutifs.
+
+        Chaque chunk reçoit les derniers ``overlap_chars`` du chunk précédent
+        en préfixe, garantissant la continuité sémantique aux frontières.
+        """
+        if self.overlap_chars <= 0 or len(texts) <= 1:
+            return texts
+
+        result = [texts[0]]
+        for i in range(1, len(texts)):
+            prev = texts[i - 1]
+            overlap = prev[-self.overlap_chars:] if len(prev) > self.overlap_chars else prev
+            result.append(overlap + texts[i])
+        return result
+
     def chunk(self, text: str, source: str = "",
               doc_id: str = "", metadata: dict = None) -> list[SemanticChunk]:
         """Point d'entrée : découpe un texte en chunks contextuels."""
@@ -80,6 +96,8 @@ class SemanticChunker:
 
             # Paragraphes (pour sections longues ou multi-paragraphes)
             paragraphs = self._split_paragraphs(section_body)
+            # Appliquer l'overlap entre paragraphes consécutifs
+            paragraphs = self._apply_overlap(paragraphs, prev_tail="")
             for para in paragraphs:
                 if len(para.strip()) < 20:
                     continue

@@ -16,10 +16,10 @@ STOP_WORDS = {
 
 class QueryRewriter:
     """Réécriture de requête pour améliorer le recall RAG.
-    Gère l'expansion sémantique et la normalisation.
+    Gère l'expansion sémantique, la normalisation et l'expansion LLM via Groq.
     """
     
-    def __init__(self):
+    def __init__(self, cloud_llm=None):
         # Dictionnaire d'expansion sémantique orienté Agronomie/ONG & Informatique
         self.synonyms = {
             "leblanc": ["Leblanc Bahiga Mudarhi"],
@@ -46,6 +46,7 @@ class QueryRewriter:
             "cv": ["curriculum vitae", "resume"],
             "compétence": ["skill", "savoir-faire", "expertise", "qualification"],
         }
+        self.cloud = cloud_llm  # Instance optionnelle de CloudLLM pour l'expansion LLM
 
     def rewrite(self, query: str) -> str:
         """Transforme une requête utilisateur en requête optimisée pour le RAG."""
@@ -67,6 +68,63 @@ class QueryRewriter:
             logger.info(f"Query Rewriting: '{original_query}' -> '{rewritten_query}'")
             
         return rewritten_query
+
+    def expand_with_llm(self, query: str) -> str:
+        """Utilise Groq (llama-3.3-70b-versatile) pour générer des termes de recherche
+        supplémentaires et les ajouter à la requête, améliorant le recall RAG.
+
+        Fonctionnement :
+        - 1 appel LLM cloud non-streaming avec timeout 5s
+        - Prompt simple demandant 3-5 synonymes/termes liés
+        - En cas d'échec (timeout, erreur, pas de cloud), retourne la requête inchangée
+          (fallback silencieux sur le rewritter basique existant)
+        - Les synonymes statiques du rewritter sont TOUJOURS actifs (méthode rewrite())
+        """
+        if self.cloud is None:
+            logger.debug("expand_with_llm: pas de cloud LLM configuré, skip")
+            return query
+
+        prompt = (
+            "Génère 3 à 5 termes de recherche ou synonymes pertinents "
+            f"pour cette question : {query}. "
+            "Réponds uniquement avec les termes séparés par des virgules, sans numérotation."
+        )
+
+        try:
+            response = self.cloud.generate(prompt, timeout=5.0)
+            if not response or not response.strip():
+                logger.debug("expand_with_llm: réponse vide du LLM, fallback")
+                return query
+
+            # Extraire les termes : on nettoie les tirets, astérisques, chiffres
+            import re
+            terms = re.split(r'[,;\n]+', response)
+            clean_terms = []
+            for term in terms:
+                t = re.sub(r'^[\s*#\-\d\.\)]+', '', term).strip().lower()
+                if t and len(t) > 2:  # Ignorer les fragments trop courts
+                    clean_terms.append(t)
+
+            if not clean_terms:
+                logger.debug("expand_with_llm: aucun terme extrait, fallback")
+                return query
+
+            # Ajouter les termes LLM à la requête (après les synonymes)
+            llm_terms_text = " ".join(clean_terms)
+            expanded = f"{query} {llm_terms_text}"
+
+            logger.info(
+                f"LLM Query Expansion: '{query}' -> '{expanded}' "
+                f"(termes ajoutés: {clean_terms})"
+            )
+            return expanded
+
+        except Exception as e:
+            logger.warning(
+                f"expand_with_llm: échec ({type(e).__name__}: {e}), "
+                "fallback sur requête inchangée"
+            )
+            return query
 
     def normalize_for_fts(self, query: str) -> str:
         """Prépare la requête pour FTS5 (Full Text Search) en éliminant les stop words."""

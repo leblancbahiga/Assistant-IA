@@ -329,7 +329,7 @@ async def extract_cv_cloud(text: str, filename: str = "") -> Optional[CVStructur
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "mixtral-8x7b-32768",
+            "model": "llama-3.1-8b-instant",
             "messages": [
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
                 {"role": "user", "content": f"Texte du CV :\n{text}"},
@@ -339,7 +339,7 @@ async def extract_cv_cloud(text: str, filename: str = "") -> Optional[CVStructur
             "response_format": {"type": "json_object"},
         }
 
-        logger.info("Extraction CV via Groq (mixtral-8x7b-32768)...")
+        logger.info("Extraction CV via Groq (llama-3.1-8b-instant)...")
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()

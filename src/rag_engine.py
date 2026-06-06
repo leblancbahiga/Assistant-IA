@@ -7,6 +7,8 @@ import json
 import time
 import logging
 import re
+import json
+from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,6 +16,7 @@ from src.config import config
 from src.embedder import Embedder
 from src.query_rewriter import QueryRewriter
 from src.reranker import CrossEncoderReranker
+from src.llm_cloud import CloudLLM
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +45,8 @@ class RAGEngine:
         self.db_path = config.index_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.embedder = Embedder()
-        self.rewriter = QueryRewriter()
+        self.cloud = CloudLLM()  # Cloud LLM pour l'expansion de requête
+        self.rewriter = QueryRewriter(cloud_llm=self.cloud)
         self.reranker = CrossEncoderReranker()  # V4 : Reranker sémantique
         self.reranker.set_embedder(self.embedder)  # Connecte l'embedder
         self.last_top_score = 0.0
@@ -53,15 +57,14 @@ class RAGEngine:
         self._rerank_min_ram_mb = 1500  # RAM minimale pour activer le cross-encoder
 
     def _should_use_reranker(self, top1_score: float) -> bool:
-        """V4.5 Phase 0 : Détermine si le reranker cross-encoder est nécessaire.
+        """V6.1 : Reranking SYSTÉMATIQUE — toujours actif si RAM suffisante.
 
-        Le reranker est coûteux (~500 MB RAM, ~18s). On ne l'active QUE si :
-        1. Le score vectoriel est dans la zone grise (0.40 < score < 0.75)
-        2. La RAM disponible est suffisante (> 1.5 Go)
-        Sinon, BM25 fait le travail.
+        Le reranker cross-encoder améliore la pertinence de tous les résultats,
+        pas seulement ceux de la zone grise. Seules restrictions :
+        1. Score minimum 0.15 (pas la peine de reranker du bruit)
+        2. RAM disponible > 1.5 Go (évite le swap)
         """
-        in_gray_zone = self._rerank_min_score < top1_score < self._rerank_max_score
-        if not in_gray_zone:
+        if top1_score < 0.15:
             return False
 
         # Vérification RAM
@@ -323,18 +326,40 @@ class RAGEngine:
 
         result = RAGResult(top_k_configured=k, query_rewritten="")
 
-        # 1. Optimisation de la requête
+        # 1. Optimisation de la requête (synonymes) + Expansion LLM
         optimized_query = self.rewriter.rewrite(query)
         fts_query = self.rewriter.normalize_for_fts(query)
-        result.query_rewritten = optimized_query
+        # L'expansion LLM ajoute des termes supplémentaires sur la requête déjà
+        # enrichie par les synonymes, améliorant le recall pour les sujets rares
+        llm_expanded = self.rewriter.expand_with_llm(optimized_query)
+        result.query_rewritten = llm_expanded
 
-        # 2. Embedding
-        embeddings = await self.embedder.embed(optimized_query, is_query=True)
-        qvec = sqlite_vec.serialize_float32(embeddings[0])
-
-        vec_results, fts_results = await asyncio.to_thread(
-            self._search_db, qvec, fts_query
+        # 2. Dual-Query Retrieval V6.1 + LLM Expansion : embedder la requête
+        # originale ET la requête LLM-expandée pour capter ce que l'une ou l'autre
+        # rate (+15-25% recall vs synonymes seuls).
+        embeds = await asyncio.gather(
+            self.embedder.embed(query, is_query=True),
+            self.embedder.embed(llm_expanded, is_query=True),
         )
+        qvec_orig = sqlite_vec.serialize_float32(embeds[0][0])
+        qvec_opti = sqlite_vec.serialize_float32(embeds[1][0])
+
+        # Recherche avec les deux vecteurs
+        vec_orig, fts_results = await asyncio.to_thread(
+            self._search_db, qvec_orig, fts_query
+        )
+        vec_opti, _ = await asyncio.to_thread(
+            self._search_db, qvec_opti, ""
+        )
+
+        # Fusion des résultats vectoriels : déduplication par contenu
+        seen = set()
+        vec_results = []
+        for results in (vec_orig, vec_opti):
+            for content, source, dist, chunk_date in results:
+                if content not in seen:
+                    seen.add(content)
+                    vec_results.append((content, source, dist, chunk_date))
 
         result.chunks_retrieved = len(vec_results) + len(fts_results)
 
@@ -348,14 +373,24 @@ class RAGEngine:
 
         self.last_top_score = top1_score
         result.top_score = top1_score
-        result.all_scores = [1 - d for _, _, d in vec_results] if vec_results else []
+        result.all_scores = [1 - d for _, _, d, _ in vec_results] if vec_results else []
 
-        # NURU V5 : Seuil depuis config.settings.yaml
+        # V4.5 Phase 0 : Seuil depuis config.settings.yaml
         # V6 : seuils alignés sur les nouvelles valeurs de settings.yaml
         MIN_ABSOLUTE_SCORE = config.rag_score_threshold
         FALLBACK_THRESHOLD = config.rag_score_fallback
 
-        is_reliable = top1_score >= MIN_ABSOLUTE_SCORE or (len(fts_results) > 0 and top1_score >= FALLBACK_THRESHOLD)
+        # V6.1 : Stocker les dates d'indexation pour le freshness bonus
+        date_map = {}
+        for content, source, dist, chunk_date in vec_results + fts_results:
+            if content not in date_map:
+                date_map[content] = chunk_date
+
+        # Nettoyer les tuples pour compatibilité RRF (3 éléments)
+        vec_results_clean = [(c, s, d) for c, s, d, _ in vec_results] if vec_results else []
+        fts_results_clean = [(c, s, d) for c, s, d, _ in fts_results] if fts_results else []
+
+        is_reliable = top1_score >= MIN_ABSOLUTE_SCORE or (len(fts_results_clean) > 0 and top1_score >= FALLBACK_THRESHOLD)
 
         if not is_reliable:
             result.rejection_reason = f"top_score={top1_score:.2f} < {MIN_ABSOLUTE_SCORE}"
@@ -369,18 +404,34 @@ class RAGEngine:
         combined_results = []
         source_list = []
 
-        # V4.5 Phase 2 : Fusion RRF des résultats vectoriels et FTS
+        # Fusion RRF
         from src.rag.retrieval import reciprocal_rank_fusion
-        fused = reciprocal_rank_fusion(vec_results, fts_results, top_k=k)
+        fused = reciprocal_rank_fusion(vec_results_clean, fts_results_clean, top_k=k)
 
-        # NURU V6 : Profile Boost — multiplier le score des documents de Leblanc
+        # V6.1 : Score de Fraîcheur — bonus pour les documents récents
+        _FRESHNESS_CUTOFF = datetime.now() - timedelta(days=30)
+        _FRESHNESS_BOOST = 0.10
+
+        def _freshness_bonus(content: str) -> float:
+            """Donne un bonus aux chunks indexés récemment."""
+            chunk_date_str = date_map.get(content, "")
+            if not chunk_date_str:
+                return 0.0
+            try:
+                chunk_date = datetime.strptime(chunk_date_str[:10], "%Y-%m-%d")
+                if chunk_date >= _FRESHNESS_CUTOFF:
+                    return _FRESHNESS_BOOST
+            except (ValueError, TypeError):
+                pass
+            return 0.0
+
+        # Profile Boost + Freshness Bonus
         try:
             from src.profile_boost import get_boost_score
             fused = [
-                (content, source, score * get_boost_score(source))
+                (content, source, score * get_boost_score(source) + _freshness_bonus(content))
                 for content, source, score in fused
             ]
-            # Re-trier par score boosté
             fused.sort(key=lambda x: x[2], reverse=True)
         except Exception:
             pass
@@ -501,8 +552,9 @@ class RAGEngine:
         conn = self._get_conn()
         
         # V4.5 Phase 0 : top_k réduit de 30 à 15 (moins de bruit, plus rapide)
+        # V6.1 : on récupère aussi chunk_date pour le freshness bonus
         vec_results = conn.execute("""
-            SELECT content, source, distance
+            SELECT content, source, distance, chunk_date
             FROM chunks
             WHERE embedding MATCH ?
             ORDER BY distance
@@ -513,7 +565,7 @@ class RAGEngine:
         if fts_query:
             try:
                 fts_results = conn.execute("""
-                    SELECT content, source, 1.0 as distance
+                    SELECT content, source, 1.0 as distance, '' as chunk_date
                     FROM chunks_fts
                     WHERE content MATCH ?
                     LIMIT 15
@@ -579,10 +631,12 @@ class RAGEngine:
         """Ajoute des chunks à l'index vectoriel et FTS."""
         conn = self._get_conn()
         for chunk in chunks:
+            # V6.1 : date par défaut = aujourd'hui
+            chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
             # Insertion Vectorielle
             conn.execute(
                 "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
-                [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk.get("date", "")]
+                [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
             )
             # Insertion FTS
             conn.execute(
@@ -624,10 +678,12 @@ class RAGEngine:
             if level in ("document", "section") and not chunk.get("parent_id"):
                 chunk["chunk_hierarchy_id"] = chunk_id
             
+            # V6.1 : date par défaut = aujourd'hui
+            chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
             # Insertion Vectorielle
             conn.execute(
                 "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
-                [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk.get("date", "")]
+                [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
             )
             # Insertion FTS
             conn.execute(

@@ -1,0 +1,128 @@
+# Dataset d'évaluation RAG — NURU V6
+# Domaine : Agronomie, CV, lettres de motivation, documents terrain
+# 25 questions basées sur les documents réellement indexés
+
+- question: "Quel est le diplôme de Toussaint Omombo ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["Master", "Environnement", "Gestion des Ressources"]
+  doc_type: cv
+
+- question: "Quelle est l'annee du diplome de Master de Toussaint Omombo ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["2023", "Diplome", "Etudes Specialisees"]
+  doc_type: cv
+
+- question: "Ou est base Leblanc BAHIGA ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["Kalemie", "DRCongo"]
+  doc_type: cv
+
+- question: "Quelle est l adresse email de Leblanc BAHIGA ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["leblancbahiga@gmail.com"]
+  doc_type: cv
+
+- question: "Quel est le titre du document BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["PROPOSITION TECHNIQUE", "BEACCOM", "VULNERABILITE", "CHANGEMENT", "CLIM"]
+  doc_type: technique
+
+- question: "Quel est le formulaire TECH-1 dans la proposition BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["Formulaire", "soumission", "proposition technique"]
+  doc_type: technique
+
+- question: "Quel est le destinataire du formulaire TECH-1 ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["BUREAU DU PROJET", "APPUI AU SECTEUR"]
+  doc_type: technique
+
+- question: "Quel est le code de la consultation BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["COD1658", "0158", "CS", "LCS"]
+  doc_type: technique
+
+- question: "Quelles sont les competences de Leblanc BAHIGA ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["Agronomist", "Value chain"]
+  doc_type: cv
+
+- question: "Qui est l auteur du curriculum vitae avec Master en Environnement ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["Omombo", "Toussaint", "Josaphat"]
+  doc_type: cv
+
+- question: "Quelle est la profession de Leblanc BAHIGA ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["Agronomist", "Value chain expert"]
+  doc_type: cv
+
+- question: "Quel est le numero de telephone ou le lien LinkedIn de Leblanc ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["linkedin", "leblanc-bahiga"]
+  doc_type: cv
+
+- question: "Quel est l objet de la proposition BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["ANALYSE", "VULNERABILITE", "CHANGEMENT", "CLIMATIQUE"]
+  doc_type: technique
+
+- question: "Combien de pages fait le CV de Toussaint Omombo ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["Page", "7"]
+  doc_type: cv
+
+- question: "De quel type de document s agit il pour le fichier BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["Proposition technique", "BEACCOM"]
+  doc_type: technique
+
+- question: "Quel est le format de la proposition BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["TECH", "Formulaire", "soumission"]
+  doc_type: technique
+
+- question: "Quels sont les documents disponibles sur Leblanc BAHIGA ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["Leblanc", "BAHIGA"]
+  doc_type: cv
+
+- question: "Quel type de ressource naturelle est mentionne dans le Master de Toussaint ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["Ressources", "Naturelles"]
+  doc_type: cv
+
+- question: "Quelle est la structure des formulaires TECH dans la proposition ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["TECH-1", "TECH-2", "Structure"]
+  doc_type: technique
+
+- question: "Y a t il des attestations de service pour Leblanc ?"
+  expected_source: "ATTESTATION DE SERVICE RENDU LEBLANC.pdf"
+  expected_keywords: ["ATTESTATION", "SERVICE", "RENDU", "LEBLANC"]
+  doc_type: administrative
+
+- question: "Y a t il une lettre de motivation pour Enabel ?"
+  expected_source: "lettre de motivation Enabel.pdf"
+  expected_keywords: ["Enabel"]
+  doc_type: lettre
+
+- question: "Y a t il des lettres de motivation pour IITA ?"
+  expected_source: "lettre de motivation IITa.docx"
+  expected_keywords: ["IITA"]
+  doc_type: lettre
+
+- question: "Quel est le nom complet de Toussaint dans son CV ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["Omombo", "Mulamba", "Toussaint", "Josaphat"]
+  doc_type: cv
+
+- question: "Quelle est la date du CV de Leblanc BAHIGA ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["20240417"]
+  doc_type: cv
+
+- question: "Quelle est la specialite du Master de Toussaint Omombo ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["Environnement", "Gestion", "Ressources", "Naturelles"]
+  doc_type: cv
