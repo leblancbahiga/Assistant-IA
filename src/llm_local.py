@@ -4,6 +4,7 @@ from mlx_lm.sample_utils import make_sampler, make_repetition_penalty, make_logi
 import psutil
 import logging
 import gc
+import asyncio
 from typing import AsyncGenerator, Optional
 from src.config import config
 from src.core.model_manager import ModelManager  # V4.5 : Gestion RAM centralisée

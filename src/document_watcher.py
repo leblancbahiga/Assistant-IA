@@ -68,6 +68,7 @@ class DocumentWatcher:
     """
 
     def __init__(self, index_callback: Callable, watch_dirs: list[Path] = None):
+        logger.setLevel(logging.INFO)  # V6.2 : réduit le bruit DEBUG des événements fichier
         self.index_callback = index_callback
         self.watch_dirs = watch_dirs or [
             Path.home() / "Documents",
