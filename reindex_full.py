@@ -175,30 +175,79 @@ async def index_all(only_personal: bool = True):
     
     for idx, fpath in enumerate(all_files, 1):
         fname = fpath.name
-        
-        # Vérifier si déjà indexé avec le même hash
+
+        # V6 : Vérifier séparément l'index vectoriel ET les métadonnées structurées
         file_hash = hashlib.sha256(fpath.read_bytes()).hexdigest()
-        if rag.is_file_up_to_date(str(fpath), 0, file_hash):
+        is_vector_indexed = rag.is_file_up_to_date(str(fpath), 0, file_hash)
+        is_meta_indexed = rag.is_doc_indexed(fname, file_hash)
+
+        if is_vector_indexed and is_meta_indexed:
             total_skipped += 1
             if idx % 10 == 0:
                 print(f"  [{idx}/{len(all_files)}] {total_chunks} chunks, {total_skipped} déjà indexés")
             continue
-        
+
         print(f"\n[{idx}/{len(all_files)}] 📄 {fname}", end="")
         sys.stdout.flush()
-        
+
+        # Si seul le vectoriel manque → parsing complet
+        # Si seul les métadonnées manquent → extraction sans re-parsing/embedding
+        needs_full_processing = not is_vector_indexed
+
         try:
-            # 1. Parser le fichier (pas de timeout)
-            text = parse_file(fpath)
-            if not text or len(text) < 50:
-                print(" ⏭️ vide")
-                total_skipped += 1
+            if needs_full_processing:
+                # 1. Parser le fichier (pas de timeout)
+                text = parse_file(fpath)
+                if not text or len(text) < 50:
+                    print(" ⏭️ vide")
+                    total_skipped += 1
+                    continue
+
+                # 2. Supprimer l'ancien index si existant
+                rag.remove_file_index(fname)
+            else:
+                # Métadonnées seules : re-parser juste pour l'extraction
+                text = parse_file(fpath)
+                if not text or len(text) < 50:
+                    # Marquer comme traité pour ne plus retenter
+                    rag.mark_file_indexed(str(fpath), 0, file_hash)
+                    total_skipped += 1
+                    continue
+
+            # Supprimer aussi les anciennes métadonnées
+            rag.remove_doc_meta(fname)
+            rag.remove_cv(fname)
+
+            # V6 : Extraction structurée LLM pour TOUS les documents
+            # Produit une fiche (type, résumé, sujets, entités) stockée dans doc_structured
+            # Pour les CV, fait aussi une extraction CV détaillée dans cv_structured
+            print("\n   📋 Extraction métadonnées LLM...", end="")
+            sys.stdout.flush()
+            try:
+                from src.document_extractor import extract_document
+                meta = await extract_document(text, fname, prefer_cloud=True)
+                if meta:
+                    rag.save_doc_meta(fname, file_hash, meta.doc_type, meta.structured_json)
+                    # Pour les CV, sauvegarder aussi dans cv_structured (extraction détaillée)
+                    if meta.doc_type == "CV" and meta.structured_json:
+                        from src.cv_extractor import CVStructure
+                        cv = CVStructure.from_json(meta.structured_json, fname)
+                        if cv:
+                            rag.save_cv(fname, file_hash, cv.model_dump_json())
+                    print(f" ✅ {meta.doc_type} ({meta.title[:50]})")
+                else:
+                    print(" ⚠️ fallback extractif")
+            except Exception as e:
+                print(f" ⚠️ extraction ignorée ({e})")
+
+            if not needs_full_processing:
+                # Métadonnées uniquement — pas de re-chunking/embedding
+                rag.mark_file_indexed(str(fpath), 0, file_hash)
+                total_files += 1
+                print(f"   ✅ métadonnées seules (déjà vectorisé)")
                 continue
-            
-            # 2. Supprimer l'ancien index si existant
-            rag.remove_file_index(fname)
-            
-            # 3. Résumé du document
+
+            # 3. Résumé du document (extractif simple pour les chunks)
             summary = await summarize_document(text, fname)
             
             # 4. Chunking V2 avec profil adapté au type de document

@@ -344,7 +344,7 @@ class CyberDashboard(QMainWindow):
             btn = QPushButton(f"{icon}  {text}")
             btn.setObjectName("ShortcutBtn")
             btn.setFixedHeight(34)
-            btn.clicked.connect(lambda ch, i=idx: self.stacked.setCurrentIndex(i))
+            btn.clicked.connect(lambda ch, i=idx: self.switch_page(i))
             layout.addWidget(btn)
             
         layout.addStretch()
@@ -617,15 +617,23 @@ class CyberDashboard(QMainWindow):
                     break
 
     def switch_page(self, index: int):
-        """V6 : Transition animée entre les pages du dashboard."""
-        self.fade_anim = QPropertyAnimation(self.stacked, b"windowOpacity")
-        self.fade_anim.setDuration(250)
-        self.fade_anim.setStartValue(0.5)
-        self.fade_anim.setEndValue(1.0)
-        self.fade_anim.setEasingCurve(QEasingCurve.InOutQuad)
+        """V6 : Transition animée entre les pages du dashboard — fondu 350ms."""
+        from PySide6.QtWidgets import QGraphicsOpacityEffect
 
-        self.stacked.setCurrentIndex(index)
-        self.fade_anim.start()
+        current = self.stacked.currentWidget()
+        if current:
+            # Appliquer un effet d'opacité pour le fondu entrant
+            opacity_effect = QGraphicsOpacityEffect()
+            self.stacked.setGraphicsEffect(opacity_effect)
+
+            self.fade_anim = QPropertyAnimation(opacity_effect, b"opacity")
+            self.fade_anim.setDuration(350)
+            self.fade_anim.setStartValue(0.0)
+            self.fade_anim.setEndValue(1.0)
+            self.fade_anim.setEasingCurve(QEasingCurve.OutCubic)
+
+            self.stacked.setCurrentIndex(index)
+            self.fade_anim.start()
 
     def _wire_signals(self):
         self._bus = EventBus()

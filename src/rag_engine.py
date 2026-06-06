@@ -3,8 +3,10 @@ import pysqlite3 as sqlite3
 import sqlite_vec
 import asyncio
 import os
+import json
 import time
 import logging
+import re
 from typing import List, Tuple, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -122,6 +124,25 @@ class RAGEngine:
                 FOREIGN KEY (parent_id) REFERENCES chunk_hierarchy(chunk_id)
             )
         """)
+        # V6 : Table CV structuré (extraction LLM, pas de chunking vectoriel)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cv_structured (
+                source TEXT PRIMARY KEY,
+                file_hash TEXT,
+                json_data TEXT,
+                extracted_at TEXT
+            )
+        """)
+        # V6 : Table métadonnées structurées pour TOUS les documents
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS doc_structured (
+                source TEXT PRIMARY KEY,
+                file_hash TEXT,
+                doc_type TEXT,
+                json_data TEXT,
+                extracted_at TEXT
+            )
+        """)
         conn.commit()
         conn.close()
 
@@ -160,6 +181,138 @@ class RAGEngine:
         except Exception as e:
             logger.warning(f"Impossible de supprimer l'ancien index pour {source_name}: {e}")
         conn.close()
+
+    # ════════════════════════════════════════════
+    # V6 : CV Structuré (extraction LLM directe)
+    # ════════════════════════════════════════════
+
+    def save_cv(self, source: str, file_hash: str, json_data: str):
+        """Enregistre un CV structuré dans la table dédiée."""
+        from datetime import datetime
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR REPLACE INTO cv_structured (source, file_hash, json_data, extracted_at) VALUES (?, ?, ?, ?)",
+            (source, file_hash, json_data, datetime.now().isoformat())
+        )
+        conn.commit()
+        conn.close()
+        logger.info(f"✅ CV structuré sauvegardé : {source}")
+
+    def get_cv(self, source: str) -> Optional[str]:
+        """Retourne le JSON d'un CV structuré par nom de source."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT json_data FROM cv_structured WHERE source = ?", (source,)
+        ).fetchone()
+        conn.close()
+        return row[0] if row else None
+
+    def is_cv_indexed(self, source: str, file_hash: str = "") -> bool:
+        """Vérifie si un CV est déjà indexé avec le même hash."""
+        conn = self._get_conn()
+        if file_hash:
+            row = conn.execute(
+                "SELECT 1 FROM cv_structured WHERE source = ? AND file_hash = ?",
+                (source, file_hash)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT 1 FROM cv_structured WHERE source = ?", (source,)
+            ).fetchone()
+        conn.close()
+        return row is not None
+
+    def remove_cv(self, source: str):
+        """Supprime un CV structuré de la table dédiée."""
+        conn = self._get_conn()
+        conn.execute("DELETE FROM cv_structured WHERE source = ?", (source,))
+        conn.commit()
+        conn.close()
+        logger.info(f"🗑️ CV supprimé : {source}")
+
+    def get_all_cv_data(self) -> list[dict]:
+        """Retourne tous les CVs structurés (source + json_data)."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT source, json_data FROM cv_structured ORDER BY source"
+        ).fetchall()
+        conn.close()
+        return [{"source": r[0], "json_data": r[1]} for r in rows]
+
+    # ════════════════════════════════════════════
+    # V6 : Métadonnées structurées (tous documents)
+    # ════════════════════════════════════════════
+
+    def save_doc_meta(self, source: str, file_hash: str, doc_type: str, json_data: str):
+        """Enregistre les métadonnées structurées d'un document."""
+        from datetime import datetime
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR REPLACE INTO doc_structured (source, file_hash, doc_type, json_data, extracted_at) VALUES (?, ?, ?, ?, ?)",
+            (source, file_hash, doc_type, json_data, datetime.now().isoformat())
+        )
+        conn.commit()
+        conn.close()
+        logger.info(f"📄 Métadonnées sauvegardées : {source} ({doc_type})")
+
+    def get_doc_meta(self, source: str) -> Optional[str]:
+        """Retourne le JSON des métadonnées d'un document."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT json_data FROM doc_structured WHERE source = ?", (source,)
+        ).fetchone()
+        conn.close()
+        return row[0] if row else None
+
+    def is_doc_indexed(self, source: str, file_hash: str = "") -> bool:
+        """Vérifie si un document a déjà ses métadonnées structurées."""
+        conn = self._get_conn()
+        if file_hash:
+            row = conn.execute(
+                "SELECT 1 FROM doc_structured WHERE source = ? AND file_hash = ?",
+                (source, file_hash)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT 1 FROM doc_structured WHERE source = ?", (source,)
+            ).fetchone()
+        conn.close()
+        return row is not None
+
+    def get_all_doc_meta(self, doc_type: str = "") -> list[dict]:
+        """Retourne toutes les métadonnées structurées, filtrées par type si demandé."""
+        conn = self._get_conn()
+        if doc_type:
+            rows = conn.execute(
+                "SELECT source, doc_type, json_data FROM doc_structured WHERE doc_type = ? ORDER BY source",
+                (doc_type,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT source, doc_type, json_data FROM doc_structured ORDER BY source"
+            ).fetchall()
+        conn.close()
+        return [{"source": r[0], "doc_type": r[1], "json_data": r[2]} for r in rows]
+
+    def search_doc_meta(self, keyword: str) -> list[dict]:
+        """Recherche textuelle dans les métadonnées structurées (FTS-like simple)."""
+        conn = self._get_conn()
+        like = f"%{keyword}%"
+        rows = conn.execute(
+            "SELECT source, doc_type, json_data FROM doc_structured "
+            "WHERE source LIKE ? OR json_data LIKE ? ORDER BY source",
+            (like, like)
+        ).fetchall()
+        conn.close()
+        return [{"source": r[0], "doc_type": r[1], "json_data": r[2]} for r in rows]
+
+    def remove_doc_meta(self, source: str):
+        """Supprime les métadonnées structurées d'un document."""
+        conn = self._get_conn()
+        conn.execute("DELETE FROM doc_structured WHERE source = ?", (source,))
+        conn.commit()
+        conn.close()
+        logger.info(f"🗑️ Métadonnées supprimées : {source}")
 
     async def retrieve(self, query: str, k: int = None) -> Tuple[str, RAGResult]:
         """Recherche hybride avec confidence gate dynamique V4.
@@ -293,6 +446,53 @@ class RAGEngine:
         context = self._format_context(reranked)
         result.tokens_injected = len(context) // 4
         result.retrieval_time_ms = (time.time() - t_start) * 1000
+
+        # V6 : Injection des métadonnées structurées dans le contexte
+        # Tous les documents avec des métadonnées (summary, sujets) sont injectés
+        try:
+            from src.document_extractor import DocumentMetadata, format_doc_for_context
+
+            # Récupérer TOUTES les métadonnées structurées disponibles
+            all_meta = self.get_all_doc_meta()
+            if all_meta:
+                injected = 0
+                meta_sections = []
+
+                for entry in all_meta:
+                    try:
+                        data = json.loads(entry["json_data"])
+                        meta = DocumentMetadata(
+                            source_file=entry["source"],
+                            doc_type=entry.get("doc_type", "document"),
+                            title=data.get("title", ""),
+                            summary=data.get("summary", ""),
+                            key_topics=data.get("key_topics", []),
+                            entities=data.get("entities", []),
+                            dates_mentioned=data.get("dates_mentioned", []),
+                            language=data.get("language", ""),
+                            word_count=data.get("word_count", 0),
+                        )
+                        meta.structured_json = entry["json_data"]
+                        meta_sections.append(format_doc_for_context(meta))
+                        injected += 1
+                    except Exception:
+                        pass
+
+                if meta_sections:
+                    meta_context = "\n\n===\n".join(meta_sections)
+                    # Ajouter un marqueur clair pour le LLM
+                    meta_block = "\n\n=== FICHES STRUCTURÉES DES DOCUMENTS ===\n" + meta_context
+                    context += meta_block
+                    result.tokens_injected += len(meta_block) // 4
+                    result.sources.append({
+                        "name": "METADATA",
+                        "score": 1.0,
+                        "ext": "STRUCTURED",
+                        "preview": f"{injected} fiche(s) structurée(s)",
+                    })
+                    logger.info(f"📋 {injected} fiche(s) structurée(s) injectée(s)")
+        except Exception as e:
+            logger.debug(f"Injection métadonnées ignorée (première fois ou vide) : {e}")
 
         return context, result
 

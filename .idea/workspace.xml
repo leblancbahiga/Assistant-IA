@@ -4,15 +4,7 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3593a8dd-1a26-409b-af6b-c7b826474b13" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/settings.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/config/settings.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/indexes/nuru.db" beforeDir="false" afterPath="$PROJECT_DIR$/indexes/nuru.db" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/nuru.log" beforeDir="false" afterPath="$PROJECT_DIR$/logs/nuru.log" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nuru_dashboard.py" beforeDir="false" afterPath="$PROJECT_DIR$/nuru_dashboard.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/orchestrator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/dashboard.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/dashboard.py" afterDir="false" />
-    </list>
+    <list default="true" id="3593a8dd-1a26-409b-af6b-c7b826474b13" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
