@@ -59,112 +59,129 @@ class ApiDocsPage(QWidget):
 
         # ── 1. Architecture du système ──
         self._add_section(
-            "🏗  Architecture du système",
+            "🏗  Architecture NURU V6.2",
             (
-                "NURU est un assistant IA hybride local/cloud combinant un "
-                "moteur RAG vectoriel, un pipeline de génération multi-modèle, "
-                "des modules vocaux et une base documentaire persistante — le "
-                "tout orchestré par un routeur sémantique intelligent.\n\n"
-                "┌─────────────────────────────────────────────┐\n"
-                "│            CONSOLE NURU (Interface)          │\n"
-                "├───────┬─────────────┬──────────┬────────────┤\n"
-                "│  RAG  │ Pipeline IA │   Voix   │  Documents │\n"
-                "│ Engine│  (LLM Local │  STT/TTS │    Store   │\n"
-                "│       │   / Cloud)  │          │            │\n"
-                "└───────┴─────────────┴──────────┴────────────┘\n"
-                "         ↕                    ↕\n"
-                "   ┌──────────┐      ┌──────────────┐\n"
-                "   │ Mémoire  │      │   Routeur    │\n"
-                "   │  Longue   │      │  Sémantique  │\n"
-                "   └──────────┘      └──────────────┘"
+                "NURU est un assistant IA hybride local/cloud optimisé pour Apple Silicon M1 (8 Go RAM).\n"
+                "Il combine un moteur RAG vectoriel (sqlite-vec + FTS5 BM25), un LLM local Phi-4-mini\n"
+                "(via MLX Metal), un fallback cloud Groq/OpenRouter, et une mémoire persistante structurée.\n\n"
+                "┌────────────────────────────────────────────────────┐\n"
+                "│               AETHER DASHBOARD (PySide6)           │\n"
+                "├──────────┬───────────────────────┬─────────────────┤\n"
+                "│ Sidebar  │   Console centrale    │   Télémétrie    │\n"
+                "│ Icônes   │   Chat + streaming    │ RAM, LLM, RAG  │\n"
+                "│ Nav.     │   Bulles avec confiance│ Notifications   │\n"
+                "└──────────┴───────────────────────┴─────────────────┘\n"
+                "       ↕                        ↕\n"
+                "┌──────────────┐      ┌──────────────────────┐\n"
+                "│  RAG Engine  │      │  Orchestrateur V4.5  │\n"
+                "│ sqlite-vec   │      │  Routeur → RAG → Gen  │\n"
+                "│ + BM25 FTS5  │      │  → Vérification → UI  │\n"
+                "│ RRF Fusion   │      │  Dual-Query Retrieval │\n"
+                "└──────────────┘      └──────────────────────┘"
             ),
             extra_content=(
-                "Composants principaux :\n"
-                "  • Console — Interface de chat principale\n"
-                "  • Moteur RAG — Recherche vectorielle et contextuelle\n"
-                "  • Pipeline IA — Génération locale (Ollama) et cloud (OpenAI, Anthropic)\n"
-                "  • Modules Voix — Synthèse et reconnaissance vocale\n"
-                "  • Base documentaire — Indexation et ingestion de fichiers\n"
-                "  • Routeur sémantique — Aiguillage intelligent des requêtes"
+                "Composants principaux V6.2 :\n"
+                "  • Console — Interface de chat avec bulles, score confiance, actions 👍👎📋\n"
+                "  • Moteur RAG — sqlite-vec (768d) + FTS5 BM25 + RRF Fusion + Profile Boost\n"
+                "  • LLM Local — Phi-4-mini-instruct-4bit via MLX (~12 tok/s sur M1)\n"
+                "  • LLM Cloud — Groq (llama-3.3-70b) / fallback OpenRouter (DeepSeek V4 Flash)\n"
+                "  • TokenJuice — Compression 40-60% avant envoi au LLM\n"
+                "  • Nuru_Brain — Dual-Write Markdown dans ~/Nuru_Brain/ (compatible Obsidian)\n"
+                "  • LongTermMemory — Extraction de faits et stockage structuré (table user_facts)\n"
+                "  • Learning Loop — TraceCollector + MiningWorker (analyse patterns d'échec)\n"
+                "  • OCR Tesseract — Fallback pour PDF scannés"
             ),
         )
 
         # ── 2. API de Chat ──
         self._add_section(
-            "💬 API de Chat",
+            "💬 Pipeline de Chat",
             (
-                "Endpoint : POST /api/chat\n\n"
-                "Paramètres :\n"
-                "  • query (string, requis) — Message utilisateur\n"
-                "  • model (string, optionnel) — Modèle à utiliser (défaut: qwen-3b)\n"
-                "  • temperature (float, optionnel) — Créativité (0.0 – 2.0, défaut: 0.7)\n"
-                "  • stream (bool, optionnel) — Réponse en streaming (défaut: true)\n\n"
-                "Exemple de requête :"
+                "Le chat suit un pipeline asynchrone en 7 étapes :\n\n"
+                "1. TokenJuice — Compression de la requête utilisateur\n"
+                "2. SemanticRouter — Détection d'intention (RAG / COMPLEX / TRIVIAL / WEB)\n"
+                "3. RAG Engine — Dual-Query Retrieval (requête originale + réécrite)\n"
+                "4. Profile Boost — x2.5 pour les documents personnels de Leblanc\n"
+                "5. StrictRAGGuard — Mode HYBRID : RAG d'abord, connaissances générales si pas trouvé\n"
+                "6. Génération — Phi-4-mini (local) ou Groq (cloud) selon stratégie\n"
+                "7. EvidenceVerifier — Vérification des citations [Source: fichier]"
             ),
-            code_block='{\n  "query": "Bonjour",\n  "model": "qwen-3b",\n  "temperature": 0.7\n}',
+            code_block='# Exemple d\'utilisation directe\nimport asyncio\nfrom src.rag_engine import RAGEngine\n\nasync def query():\n    engine = RAGEngine()\n    context, result = await engine.retrieve(\n        "rapport Palabek 2024", k=5\n    )\n    print(f"Score: {result.top_score}")\n    print(f"Documents: {result.documents_found}")\n    for s in result.sources:\n        print(f"  [{s[\'score\']:.2f}] {s[\'name\']}")\n\nasyncio.run(query())',
             extra_content=(
-                "Réponse : Streaming de tokens via Server-Sent Events (SSE).\n"
-                "Chaque token est encapsulé dans un chunk JSON au format :\n"
-                '{"token": "...", "done": false, "model": "qwen-3b"}'
+                "Le streaming se fait via InferenceWorker (QThreadPool) qui émet\n"
+                "des signaux Qt thread-safe : token_received, rag_data, finished, error.\n"
+                "Le score de confiance RAG est affiché dans chaque bulle assistant."
             ),
         )
 
         # ── 3. API RAG ──
         self._add_section(
-            "📚 API RAG",
+            "📚 Moteur RAG — Caractéristiques",
             (
-                "Endpoint : POST /api/rag/retrieve\n\n"
-                "Paramètres :\n"
-                "  • query (string, requis) — Requête de recherche\n"
-                "  • k (int, optionnel) — Nombre de chunks à retourner (défaut: 5, max: 20)\n"
-                "  • threshold (float, optionnel) — Seuil de similarité minimale (0.0 – 1.0, défaut: 0.65)\n\n"
-                "Exemple de réponse :"
+                "Le RAG utilise une combinaison de 4 techniques pour un Recall@5 de 92% :\n\n"
+                "1. Dual-Query Retrieval : Embedding de la requête ORIGINALE + RÉÉCRITE,\n"
+                "   fusion des résultats avec déduplication par contenu\n\n"
+                "2. RRF Fusion : Reciprocal Rank Fusion entre recherche vectorielle\n"
+                "   (sqlite-vec, 768d) et recherche lexicale (FTS5 BM25 Porter)\n\n"
+                "3. Reranking Systématique : Cross-encoder MiniLM L6 activé dès que\n"
+                "   le score > 0.15 (si RAM > 1.5 Go disponible)\n\n"
+                "4. Score de Fraîcheur : Bonus de +0.10 pour les chunks indexés\n"
+                "   il y a moins de 30 jours\n\n"
+                "Paramètres actuels :\n"
+                "  • rag_score_threshold: 0.50\n"
+                "  • rag_k: 5\n"
+                "  • chunk_size: 1200 chars\n"
+                "  • overlap_chars: 30-200 selon chunker\n"
+                "  • SHORT_DOC_THRESHOLD: 2000 chars"
             ),
-            code_block='{\n  "query": "Qui est YARID ?",\n  "results": [\n    {\n      "chunk_id": "c7f3a1b2",\n      "source": "yarid_report_2025.pdf",\n      "score": 0.923,\n      "text": "YARID (Youth Alliance for Refugee...)",\n      "page": 12\n    },\n    {\n      "chunk_id": "d4e8f9c1",\n      "source": "yarid_overview.md",\n      "score": 0.871,\n      "text": "YARID est une organisation...",\n      "page": 3\n    }\n  ],\n  "total_chunks": 2,\n  "latency_ms": 145\n}',
+            code_block='{\n  "query": "Qui est YARID ?",\n  "results": [\n    {\n      "chunk_id": "c7f3a1b2",\n      "source": "yarid_report_2025.pdf",\n      "score": 0.923,\n      "text": "YARID (Youth Alliance for Refugee...)"\n    }\n  ],\n  "total_chunks": 2,\n  "latency_ms": 145\n}',
             extra_content=(
-                "Le moteur RAG utilise une base vectorielle ChromaDB / FAISS avec\n"
-                "des embeddings bilingues (anglais/français) pour une recherche\n"
-                "cross-langue performante."
+                "Le stockage vectoriel utilise sqlite-vec (extension SQLite native,\n"
+                "zéro dépendance, zéro serveur). Les embeddings sont générés par\n"
+                "multilingual-e5-base-mlx (768 dimensions, multilingue FR/EN/Swahili)."
             ),
         )
 
         # ── 4. API Système ──
         self._add_section(
-            "⚙  API Système",
+            "⚙  Configuration & Monitoring",
             (
-                "GET /api/system/status\n"
-                "→ Status complet du système (RAM, CPU, modules actifs, temps d'activité)\n\n"
-                "GET /api/system/health\n"
-                "→ Healthcheck simple (uptime, version, état des connecteurs)\n\n"
-                "POST /api/system/shutdown\n"
-                "→ Arrêt gracieux de NURU\n\n"
-                "GET /api/system/config\n"
-                "→ Configuration courante (modèle actif, réglages RAG, préférences)\n\n"
-                "POST /api/system/config\n"
-                "→ Mise à jour de la configuration (partielle ou complète)"
+                "Fichier de configuration : config/settings.yaml\n\n"
+                "Paramètres clés modifiables :\n"
+                "  • response_mode: strict | hybrid | free\n"
+                "  • rag_score_threshold: 0.0 – 1.0 (défaut: 0.50)\n"
+                "  • rag_k: 1 – 20 (défaut: 5)\n"
+                "  • hybrid_mode: local_only | verify | plan | rag\n"
+                "  • cloud_provider: groq | openrouter | deepseek\n"
+                "  • cloud_fallback: openrouter/deepseek/deepseek-v4-flash\n\n"
+                "Clés API stockées dans macOS Keychain (ne jamais les mettre dans YAML) :\n"
+                "  • com.nuru.assistant / groq\n"
+                "  • com.nuru.assistant / openrouter\n"
+                "  • com.nuru.assistant / gemini"
             ),
-            code_block='{\n  "status": "running",\n  "uptime_s": 28453,\n  "version": "4.5.0",\n  "ram": {\n    "used_gb": 1.2,\n    "total_gb": 8.0,\n    "percent": 15\n  },\n  "modules": {\n    "rag": "active",\n    "voice": "idle",\n    "pipeline": "active"\n  },\n  "active_model": "qwen-3b"\n}',
+            code_block='# État dashboard\nRAM:      3.1G / 8.0G  (39%)\nLLM:      87%\nRAG:      0.92\nTokens:   -52% (TokenJuice)\nTraces:   24 (Learning Loop)',
         )
 
-        # ── 5. API Modèles ──
+        # ── 5. Modules & Mémoire ──
         self._add_section(
-            "🧠 API Modèles",
+            "🧠 Modules V6.2",
             (
-                "GET /api/models/list\n"
-                "→ Liste des modèles disponibles localement et via cloud\n\n"
-                "POST /api/models/switch\n"
-                "→ Changement du modèle actif en cours d'exécution\n\n"
-                "GET /api/models/active\n"
-                "→ Modèle actuellement chargé et ses métriques\n"
-                "(taille, contexte max, vitesse d'inférence)\n\n"
-                "POST /api/models/unload\n"
-                "→ Déchargement du modèle courant (libération RAM)"
-            ),
-            code_block='{\n  "models": [\n    {\n      "id": "qwen-3b",\n      "name": "Qwen 3B",\n      "provider": "ollama",\n      "context": 8192,\n      "status": "active"\n    },\n    {\n      "id": "deepseek-r1:7b",\n      "name": "DeepSeek R1 7B",\n      "provider": "ollama",\n      "context": 16384,\n      "status": "available"\n    },\n    {\n      "id": "gpt-4o",\n      "name": "GPT-4o",\n      "provider": "openai",\n      "context": 128000,\n      "status": "available"\n    }\n  ]\n}',
-            extra_content=(
-                "Le switch de modèle est progressif : le modèle sortant reste en mémoire\n"
-                "jusqu'à ce que le nouveau soit complètement chargé, garantissant zéro\n"
-                "temps d'arrêt pour l'utilisateur."
+                "Module TokenJuice — Compression de contexte avant envoi au LLM.\n"
+                "  • HTML → Markdown, troncature URLs, dédup lignes\n"
+                "  • Économie ~0.5 Go RAM, réduction 40-60% des tokens\n\n"
+                "Module Nuru_Brain — Dual-Write Mémoire.\n"
+                "  • Chaque chunk RAG écrit dans ~/Nuru_Brain/sources/\n"
+                "  • Compatible Obsidian, modification manuelle → ré-indexation auto\n\n"
+                "Module Learning Loop — Traces → Mining → Amélioration.\n"
+                "  • TraceCollector : enregistre chaque interaction dans SQLite\n"
+                "  • MiningWorker : analyse les patterns d'échec (daemon 60s)\n\n"
+                "Module LongTermMemory — Mémoire structurée.\n"
+                "  • Table user_facts : fact_type, content, confidence, source\n"
+                "  • Extraction LLM des conversations via Groq\n"
+                "  • Injection automatique dans le contexte avant chaque requête\n\n"
+                "Module OCR Tesseract — Fallback pour PDF scannés.\n"
+                "  • pytesseract + pdf2image, langues fra+eng\n"
+                "  • Activé automatiquement si PyMuPDF extrait < 100 chars"
             ),
         )
 

@@ -1,6 +1,6 @@
 """
 Guides Page — Bibliothèque de guides utilisateur avec recherche et filtrage.
-Design cyberpunk obsidienne avec glassmorphism.
+Design Aether Dashboard, glassmorphism.
 """
 
 from PySide6.QtWidgets import (

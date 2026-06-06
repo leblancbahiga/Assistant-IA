@@ -1,68 +1,25 @@
-# NURU V5 — Configuration Utilisateur
-# Fichier YAML éditable. Redémarrage nécessaire après modification.
-
-# ─── Mode de réponse ───
-# strict   : uniquement documents, refuse si pas de preuves
-# hybrid   : (défaut) RAG d'abord, connaissances générales ensuite
-# free     : pas de grounding, conversation libre
-response_mode: "hybrid"
-
-# ─── RAG ───
-# Seuil de confiance pour accepter un résultat RAG
-rag_score_threshold: 0.50
-# Seuil réduit si la recherche plein texte (FTS) confirme un résultat
-rag_score_fallback: 0.20
-# Nombre de chunks maximum à utiliser
-rag_k: 5
-# Taille max du contexte RAG en tokens
-rag_max_context_tokens: 2000
-
-# ─── LLM Local ───
-local_model: "mlx-community/Phi-4-mini-instruct-4bit"
-local_model_fallback: "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
-
-# ─── Cloud ───
-cloud_model: "llama-3.3-70b-versatile"
-cloud_provider: "groq"
-cloud_fallback: "openrouter/deepseek/deepseek-v4-flash"
-
-# ─── Cache ───
-cache_ttl_seconds: 300
-cache_maxsize: 256
-
-# ─── Mémoire ───
-session_window: 5  # nombre de tours conservés
-
-# ─── Audio ───
-stt_model: "small"
-tts_enabled: true
-tts_engine: "piper"
-
-# ─── TokenJuice (NURU V6) — Middleware de compression de contexte ───
-# Réduit le nombre de tokens avant envoi au LLM (économise ~0.5 Go RAM)
-token_juice_enabled: true
-# Taille max (en chars) d'un chunk RAG individuel avant troncature
-token_juice_max_chunk_chars: 2000
-
-# ─── Learning Loop (NURU V6) — Traces → Mining → Évolution ───
-# Enregistre les interactions et améliore NURU automatiquement
-learning_enabled: true
-
-# ─── Nuru_Brain (NURU V6) — Wiki persistant pour la mémoire ───
-# Chaque chunk RAG est aussi écrit en Markdown dans ~/Nuru_Brain/
-nuru_brain_enabled: true
-# Surveillance des modifications manuelles (nécessite watchdog)
-nuru_brain_watch_enabled: false
-
-# ─── Auto-Fetch (NURU V6) — Ingestion silencieuse périodique ───
-# Scanne workspace/Downloads toutes les 30 min pour indexer les nouveaux fichiers
-auto_fetch_enabled: false
+auto_fetch_enabled: true
 auto_fetch_interval_min: 30
-
-# ─── Stratégies Hybrides (NURU V6) — Local+Cloud fins ───
-# local_only : tout en local (défaut)
-# verify     : Phi-4-mini répond, Groq vérifie
-# plan       : Groq planifie, Phi-4-mini exécute
-# rag        : RAG locale récupère, Groq synthétise (Archon)
-hybrid_mode: "local_only"
+cache_maxsize: 256
+cache_ttl_seconds: 300
+cloud_fallback: openrouter/deepseek/deepseek-v4-flash
+cloud_model: llama-3.3-70b-versatile
+cloud_provider: groq
 hybrid_enabled: true
+hybrid_mode: local_only
+learning_enabled: true
+local_model: mlx-community/Phi-4-mini-instruct-4bit
+local_model_fallback: mlx-community/Qwen2.5-1.5B-Instruct-4bit
+nuru_brain_enabled: true
+nuru_brain_watch_enabled: false
+rag_k: 5
+rag_max_context_tokens: 2000
+rag_score_fallback: 0.2
+rag_score_threshold: 0.5
+response_mode: hybrid
+session_window: 5
+stt_model: small
+token_juice_enabled: true
+token_juice_max_chunk_chars: 2000
+tts_enabled: true
+tts_engine: piper
