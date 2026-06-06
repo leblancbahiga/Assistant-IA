@@ -20,8 +20,17 @@ from pathlib import Path
 
 import psutil
 
-from PySide6.QtCore import Qt, QTimer, Signal, QSize
+from PySide6.QtCore import Qt, QTimer, Signal, QSize, QThreadPool
 from PySide6.QtGui import QFont
+
+# ── InferenceWorker (thread-safe LLM) ──
+try:
+    from src.core.inference_worker import InferenceWorker
+    HAS_WORKER = True
+except ImportError:
+    InferenceWorker = None
+    HAS_WORKER = False
+    logger.warning("InferenceWorker non disponible")
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -174,6 +183,10 @@ class NavSidebar(QWidget):
         self._model_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._model_label)
 
+    def set_model_info(self, model: str, status: str, queries: int = 0) -> None:
+        """Met à jour les infos modèle dans le footer."""
+        self._model_label.setText(f"{model}  •  {status}")
+
     # ── Internes ─────────────────────────────────────────────────────────
 
     def _on_nav_click(self, slug: str) -> None:
@@ -293,6 +306,9 @@ class CyberDashboard(QMainWindow):
         self._rag_rejections: int = 0
         self._rag_queries_total: int = 0
         self._rag_sources_diversity: list[int] = []
+        self._current_bubble = None
+        self._current_query = ""
+        self._current_strict = False
 
         self._build_window()
         self._build_ui()
@@ -302,14 +318,22 @@ class CyberDashboard(QMainWindow):
 
         # Message de bienvenue
         self.console_page.clear_chat()
-        self.console_page.add_message(
-            "NURU",
-            "Bonjour, je suis NURU V7. Comment puis-je vous aider ?",
-            is_user=False,
+        self.console_page.messages.add_message(
+            text="Bonjour, je suis NURU V7. Comment puis-je vous aider ?",
+            role="assistant",
         )
 
         self._pages.setCurrentIndex(0)
         self._sidebar.set_active("console")
+
+        # Initialiser les infos du footer sidebar
+        model_name = "phi-4-mini-4bit"
+        try:
+            from src.config import config
+            model_name = config.local_model.split("/")[-1]
+        except Exception:
+            pass
+        self._sidebar.set_model_info(model_name, "Prêt")
 
         logger.info("CyberDashboard V7 — prêt.")
 
@@ -429,20 +453,84 @@ class CyberDashboard(QMainWindow):
                 self._pages.setCurrentIndex(idx)
 
     def _on_query(self, text: str, strict_mode: bool) -> None:
-        """Traite une requête utilisateur.
+        """Traite une requête utilisateur en temps réel.
 
-        Mode démo : répond directement dans la console.
-        Mode async (via signal) : émet query_submitted pour le parent.
+        Si ``self._core`` est défini, utilise ``InferenceWorker`` (thread pool)
+        pour un streaming non-bloquant. Sinon, émet le signal générique.
         """
         logger.info("Requête reçue : text=%s, strict=%s", text[:60], strict_mode)
 
-        # En mode démo, on simule une réponse
-        if os.environ.get("NURU_DEMO_MODE", "0") == "1":
+        if self._core is not None and HAS_WORKER:
+            # ── Mode réel : InferenceWorker ──
+            self._current_query = text
+            self._current_strict = strict_mode
+
+            # Ajouter le message utilisateur + bulle assistant vide
+            self.console_page.messages.add_message(text=text, role="user")
+            self.console_page.messages.show_typing()
+
+            # Créer et lancer le worker
+            worker = InferenceWorker(self._core, text)
+            worker.signals.token_received.connect(self._on_token)
+            worker.signals.rag_data.connect(self._on_rag_data)
+            worker.signals.finished.connect(self._on_generation_finished)
+            worker.signals.error.connect(self._on_generation_error)
+            QThreadPool.globalInstance().start(worker)
+        else:
+            # ── Mode démo / fallback ──
             self.console_page.messages.show_typing()
             QTimer.singleShot(800, lambda: self._demo_response(text))
-        else:
-            # Forward au parent via signal
-            self.query_submitted.emit(text, strict_mode)
+
+    def _on_token(self, token: str) -> None:
+        """Reçoit un token du stream LLM."""
+        if not hasattr(self, "_current_bubble") or self._current_bubble is None:
+            self.console_page.messages.hide_typing()
+            row = self.console_page.messages.add_message(text="", role="assistant")
+            self._current_bubble = row
+        self._current_bubble.append_text(token)
+
+    def _on_rag_data(self, rag_data: dict) -> None:
+        """Reçoit les métadonnées RAG après génération."""
+        try:
+            if not rag_data:
+                return
+            top_score = rag_data.get("top_score", 0.0)
+            docs_found = rag_data.get("documents_found", 0)
+            sources = rag_data.get("sources", [])
+
+            if top_score > 0:
+                self._rag_queries_total += 1
+                self._rag_scores_session.append(top_score)
+                if docs_found:
+                    self._rag_docs_found.append(docs_found)
+
+                # Mettre à jour la barre de confiance sur la bulle
+                if hasattr(self, "_current_bubble") and self._current_bubble:
+                    self._current_bubble.set_rag_score(top_score)
+
+                # Mettre à jour le header de confiance
+                self.console_page.header.set_confidence(top_score)
+
+                # Stratégie active dans le MetricsPanel
+                if hasattr(self._metrics, "set_strategy"):
+                    strict_label = "STRICT" if getattr(self, "_current_strict", False) else "HYBRID"
+                    self._metrics.set_strategy(strict_label, "phi-4-mini-4bit")
+        except Exception as e:
+            logger.debug("RAG data callback: %s", e)
+
+    def _on_generation_finished(self, full_response: str) -> None:
+        """Fin de génération."""
+        self.console_page.messages.hide_typing()
+        self._current_bubble = None
+        logger.info("Génération terminée (%d chars)", len(full_response))
+
+    def _on_generation_error(self, error_msg: str) -> None:
+        """Erreur de génération."""
+        self.console_page.messages.hide_typing()
+        if hasattr(self, "_current_bubble") and self._current_bubble:
+            self._current_bubble.append_text(f"\n\n[Erreur: {error_msg}]")
+        self._current_bubble = None
+        logger.error("Erreur génération: %s", error_msg)
 
     def _demo_response(self, query: str) -> None:
         """Réponse simulée en mode démo."""
@@ -464,6 +552,9 @@ class CyberDashboard(QMainWindow):
 
     def _on_console_clear(self) -> None:
         """Réinitialise la console après nettoyage."""
+        self._current_bubble = None
+        self._current_query = ""
+        self._current_strict = False
         self._pages.setCurrentIndex(0)
         self._sidebar.set_active("console")
 
@@ -479,30 +570,52 @@ class CyberDashboard(QMainWindow):
     # ══════════════════════════════════════════════════════════════════════
 
     def _update_metrics(self) -> None:
-        """Met à jour les métriques système (RAM, CPU, etc.) toutes les secondes."""
+        """Met à jour les métriques système (RAM, LLM, RAG) toutes les secondes."""
         try:
-            # Métriques RAM via psutil
+            # 1. RAM système
             mem = psutil.virtual_memory()
             total_gb = mem.total / (1024**3)
             used_gb = mem.used / (1024**3)
-            free_gb = mem.available / (1024**3)
             ram_pct = mem.percent
 
             if hasattr(self._metrics, "set_ram"):
                 self._metrics.set_ram(ram_pct, f"{used_gb:.1f}", f"{total_gb:.0f}")
 
-            # Stratégie active
+            # 2. Stratégie active depuis config
+            model_name = "phi-4-mini-4bit"
+            try:
+                from src.config import config
+                model_name = config.local_model.split("/")[-1]
+            except Exception:
+                pass
+            rag_mode = "STRICT" if getattr(self, "_current_strict", False) else "HYBRID"
             if hasattr(self._metrics, "set_strategy"):
-                self._metrics.set_strategy("LOCAL", "phi-4-mini-4bit")
+                self._metrics.set_strategy(rag_mode, model_name)
 
-            # Métriques simulées
-            if hasattr(self._metrics, "set_rag_score"):
-                avg_rag = (
-                    sum(self._rag_scores_session) / len(self._rag_scores_session)
-                    if self._rag_scores_session
-                    else 0.0
-                )
+            # 3. Score RAG moyen
+            if hasattr(self._metrics, "set_rag_score") and self._rag_scores_session:
+                avg_rag = sum(self._rag_scores_session) / len(self._rag_scores_session)
                 self._metrics.set_rag_score(avg_rag)
+
+            # 4. Mise à jour du footer sidebar
+            if hasattr(self._sidebar, "set_model_info"):
+                queries = len(self._rag_scores_session)
+                status = "Actif" if queries > 0 else "En attente"
+                self._sidebar.set_model_info(model_name, status, queries)
+
+            # 5. Métriques LLM depuis le core si disponible
+            if self._core is not None:
+                if hasattr(self._metrics, "set_llm_tokens") and hasattr(self._core, "orchestrator"):
+                    try:
+                        llm = self._core.orchestrator.llm
+                        if hasattr(llm, "get_stats"):
+                            stats = llm.get_stats()
+                            self._metrics.set_llm_tokens(
+                                stats.get("tokens_per_sec", 0),
+                                stats.get("tokens_total", 0),
+                            )
+                    except Exception:
+                        pass
 
         except Exception as e:
             logger.debug("Échec mise à jour métriques : %s", e)
