@@ -1,303 +1,907 @@
 /* ===================================================================
-   NURU V6 — Style épuré (Anthracite / Bleu électrique / Vert acide)
-   
-   Palette : fond #0D1117, cartes #161B22, bordures #1F2937
-             bleu #00A3FF, vert #39FF14, ambre #FFB000
-             texte #E5E7EB, secondaire #6B7280
+   NURU V7 — AETHER DASHBOARD
+   Design : Dark mode premium inspiré de Vercel/Linear
+   Palette : fond #0a0a0f, #1a1a2e
+             cyan #00d4ff, violet #a855f7
+             succès #22c55e, alerte #fbbf24
+             texte #e2e8f0, secondaire #6b7280
+             cartes #16162a, bordure #1e1e3a
+   Glassmorphism : rgba(255,255,255,0.03) + backdrop blur
    =================================================================== */
 
+/* ─── BASE ───────────────────────────────────────────────────────── */
 QWidget {
-    font-family: "SF Mono", "Consolas", "Fira Code", monospace;
+    font-family: "SF Mono", "SF Pro Display", "Inter", "Consolas", "Fira Code", monospace;
     font-size: 13px;
-    color: #E5E7EB;
+    color: #e2e8f0;
 }
 
-/* Panneau central */
+QLabel {
+    color: #6b7280;
+}
+
+QMainWindow {
+    background-color: transparent;
+}
+
+/* ─── CENTRAL CONTAINER (fond principal) ─────────────────────────── */
 #CentralContainer {
-    background-color: #0D1117;
+    background-color: #0a0a0f;
     border-top-right-radius: 0px;
     border-bottom-right-radius: 0px;
 }
 
-/* Sidebar */
+/* ─── SIDEBAR — glassmorphism, icons-mode compact ─────────────────── */
 #Sidebar {
-    background-color: #0D1117;
-    border-right: 1px solid #1F2937;
+    background-color: rgba(26, 26, 46, 0.88);
+    border-right: 1px solid rgba(30, 30, 58, 0.7);
     border-top-left-radius: 16px;
     border-bottom-left-radius: 16px;
 }
 
-#AppName {
-    font-size: 22px;
-    font-weight: 900;
-    color: #00A3FF;
-    letter-spacing: 4px;
+/* Logo centered */
+#Sidebar > QHBoxLayout {
+    alignment: center;
 }
 
-#AppVersion {
-    color: #6B7280;
-    font-weight: bold;
-    font-size: 10px;
-}
-
-/* Bouton Nouveau Chat */
+/* Nouveau Chat — icône ronde gradient cyan/violet + glow */
 #NewChatBtn {
-    background-color: #00A3FF;
-    color: #0D1117;
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                      stop:0 #00d4ff,
+                                      stop:1 #a855f7);
+    color: #ffffff;
     border: none;
-    border-radius: 8px;
-    font-weight: 900;
-    font-size: 13px;
+    border-radius: 20px;
+    font-size: 16px;
+    font-weight: bold;
 }
 #NewChatBtn:hover {
-    background-color: #39FF14;
-    color: #0D1117;
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                      stop:0 #22d3ee,
+                                      stop:1 #c084fc);
 }
 
-/* Menus Sidebar */
+/* Menu sidebar — icônes larges, centrées */
 #SidebarMenu {
     background: transparent;
     border: none;
-    font-size: 13px;
+    font-size: 20px;
+    padding: 0px;
 }
 #SidebarMenu::item {
-    color: #6B7280;
-    border-radius: 6px;
-    padding: 10px;
-    margin: 2px 0;
+    color: #6b7280;
+    border-radius: 12px;
+    padding: 4px;
+    margin: 2px 6px;
+    font-size: 20px;
+    text-align: center;
+    min-height: 44px;
+}
+#SidebarMenu::item:hover {
+    background-color: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
 }
 #SidebarMenu::item:selected {
-    color: #00A3FF;
-    background-color: rgba(0, 163, 255, 0.1);
-    border-left: 3px solid #00A3FF;
+    background-color: rgba(168, 85, 247, 0.22);
+    color: #00d4ff;
+    border-left: 2px solid #a855f7;
 }
 
-/* Raccourcis */
+/* Raccourcis — icônes seulement, carrés */
 #ShortcutBtn {
     background-color: transparent;
-    border: 1px solid #1F2937;
-    border-radius: 6px;
-    color: #6B7280;
-    text-align: left;
-    padding-left: 12px;
-    font-size: 12px;
+    border: 1px solid rgba(30, 30, 58, 0.5);
+    border-radius: 12px;
+    color: #6b7280;
+    font-size: 16px;
 }
 #ShortcutBtn:hover {
-    background-color: rgba(0, 163, 255, 0.08);
-    color: #E5E7EB;
-    border-color: #00A3FF;
+    background-color: rgba(0, 212, 255, 0.12);
+    border-color: #00d4ff;
+    color: #00d4ff;
 }
 
-/* Pro Card */
+/* Pro Card — glassmorphism violet compact */
 #ProCard {
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                                      stop:0 rgba(0, 163, 255, 0.1),
-                                      stop:1 rgba(57, 255, 20, 0.05));
-    border: 1px solid #00A3FF;
-    border-radius: 10px;
-    padding: 12px;
+    background-color: rgba(168, 85, 247, 0.10);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: 12px;
+    padding: 6px;
 }
+
 #ProBtn {
-    background-color: #00A3FF;
-    color: #0D1117;
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                      stop:0 #a855f7,
+                                      stop:1 #7c3aed);
+    color: #ffffff;
     border: none;
-    border-radius: 6px;
-    padding: 6px 12px;
+    border-radius: 8px;
+    padding: 2px 6px;
     font-weight: bold;
-}
-#ProBtn:hover {
-    background-color: #39FF14;
-}
-
-/* HUD Métriques (overlay legacy — caché si non utilisé) */
-#MetricsOverlay { background: transparent; }
-#MetricsContainer {
-    background-color: #161B22;
-    border: 1px solid #1F2937;
-    border-radius: 8px;
-}
-#MetricsText, #MetricsPct { color: #6B7280; font-weight: bold; }
-#MetricsText { font-size: 10px; }
-
-/* Barre RAM */
-QProgressBar#RamBar {
-    background-color: #1F2937;
-    border: none;
-    border-radius: 2px;
-    height: 6px;
-}
-QProgressBar#RamBar::chunk {
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                      stop:0 #39FF14,
-                                      stop:1 #00A3FF);
-    border-radius: 2px;
-}
-
-/* Bulles de chat V6 */
-#ChatBubbleAssistant {
-    background-color: #161B22;
-    border-left: 3px solid #00A3FF;
-    border-radius: 10px;
-    padding: 14px;
-    margin: 4px 0;
-}
-
-#ChatBubbleUser {
-    background-color: #1A1D24;
-    border-left: 3px solid #39FF14;
-    border-radius: 10px;
-    padding: 14px;
-    margin: 4px 0;
-}
-
-/* Bulles legacy V5 */
-#BubbleFrame {
-    background-color: rgba(0, 163, 255, 0.08);
-    border: 1px solid rgba(0, 163, 255, 0.3);
-    border-radius: 10px;
-    border-bottom-right-radius: 0px;
-}
-#AssistantBubbleFrame {
-    background-color: rgba(57, 255, 20, 0.05);
-    border: 1px solid rgba(57, 255, 20, 0.2);
-    border-radius: 10px;
-    border-bottom-left-radius: 0px;
-}
-
-/* Zone de saisie */
-#InputFrame {
-    background-color: #161B22;
-    border: 1px solid #1F2937;
-    border-radius: 16px;
-}
-#InputField {
-    background: transparent;
-    border: none;
-    color: #E5E7EB;
-    font-size: 14px;
-    padding: 8px 4px;
-}
-#InputField:focus {
-    border: none;
-    outline: none;
-}
-
-/* Bouton Envoyer */
-#SendButton {
-    background-color: #00A3FF;
-    color: #0D1117;
-    border: none;
-    border-radius: 16px;
-    font-weight: bold;
-    font-size: 14px;
-}
-#SendButton:hover {
-    background-color: #39FF14;
-}
-
-/* Bouton Web */
-#WebSearchBtn {
-    background-color: transparent;
-    color: #6B7280;
-    border: 1px solid #1F2937;
-    border-radius: 8px;
-    padding: 4px 10px;
-    font-size: 11px;
-}
-#WebSearchBtn:checked {
-    background-color: #00A3FF;
-    color: #0D1117;
-    border: 1px solid #00A3FF;
-}
-
-/* Clear / Feedback */
-#ClearBtn {
-    background-color: transparent;
-    border: 1px solid #1F2937;
-    border-radius: 8px;
-    color: #6B7280;
-    font-size: 10px;
-}
-#ClearBtn:hover {
-    background-color: #00A3FF;
-    color: #0D1117;
-}
-
-/* Feedback buttons */
-#BtnFeedbackUp, #BtnFeedbackDown {
-    background: transparent;
-    border: none;
-    color: #6B7280;
-    font-size: 12px;
-}
-#BtnFeedbackUp:hover, #BtnFeedbackUp:checked { color: #39FF14; }
-#BtnFeedbackDown:hover, #BtnFeedbackDown:checked { color: #ef4444; }
-
-/* Scrollbar */
-QScrollBar:vertical {
-    background: transparent;
-    width: 6px;
-}
-QScrollBar::handle:vertical {
-    background: #1F2937;
-    border-radius: 3px;
+    font-size: 9px;
     min-height: 20px;
 }
-QScrollBar::handle:vertical:hover { background: #00A3FF; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+#ProBtn:hover {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                      stop:0 #c084fc,
+                                      stop:1 #a855f7);
+}
 
-/* Labels */
-#PanelTitle {
-    color: #6B7280;
+/* ─── CHAT HEADER ──────────────────────────────────────────────────── */
+#ChatHeader {
+    background-color: rgba(10, 10, 15, 0.6);
+    border-bottom: 1px solid rgba(30, 30, 58, 0.6);
+}
+
+#ChatTitle {
+    font-size: 18px;
+    font-weight: 800;
+    color: #e2e8f0;
+    letter-spacing: 1px;
+}
+
+#ConsoleStatusFrame {
+    background-color: rgba(30, 30, 58, 0.5);
+    border: 1px solid rgba(30, 30, 58, 0.8);
+    border-radius: 6px;
+    padding: 2px 8px;
+}
+
+#ConsoleStatusLabel {
+    color: #6b7280;
     font-size: 10px;
     font-weight: bold;
     letter-spacing: 1px;
 }
 
-#InputHint { color: #4B5563; font-size: 10px; }
-
-/* Module circles */
-#ModuleCircleActive {
-    background-color: #39FF14;
-    border-radius: 20px;
-}
-#ModuleCircleInactive {
-    background-color: #1F2937;
-    border-radius: 20px;
+#StrategyBadge {
+    background-color: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.4);
+    border-radius: 6px;
+    color: #00d4ff;
+    font-size: 10px;
+    padding: 2px 10px;
+    font-weight: bold;
 }
 
-/* Collapse button */
-#CollapseBtn {
-    background: transparent;
-    color: #6B7280;
-    border: none;
-    font-size: 14px;
+/* ─── CHAT BUBBLES ─────────────────────────────────────────────────── */
+/* Bubble utilisateur (droite) */
+QFrame#BubbleFrame {
+    /* Styled via chat_bubble.py inline styles — override ci-dessous */
 }
 
-/* MetricCard */
-#MetricCard {
-    background-color: #161B22;
-    border: 1px solid #1F2937;
-    border-radius: 8px;
+/* Bulle IA — fond gris foncé, bord violet */
+#BubbleFrame[is_user="false"] {
+    background-color: #16162a;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-left: 3px solid #a855f7;
+    border-radius: 16px;
+    padding: 12px;
+}
+
+/* Bulle user (droite) — bord cyan subtil */
+#BubbleFrame[is_user="true"] {
+    background-color: #1a1a2e;
+    border: 1px solid rgba(0, 212, 255, 0.20);
+    border-left: 3px solid #00d4ff;
+    border-radius: 16px;
+    padding: 12px;
+}
+
+/* CoT Frame — Chain of Thought */
+#CoTFrame {
+    background-color: rgba(168, 85, 247, 0.06);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-left: 3px solid #a855f7;
+    border-radius: 10px;
+    margin: 4px 20px 4px 50px;
     padding: 8px;
 }
-#MetricTitle { color: #6B7280; font-size: 10px; font-weight: bold; }
-#MetricValue {
+
+/* ─── SOURCES BAR ──────────────────────────────────────────────────── */
+#SourcesBar {
+    background-color: rgba(10, 10, 15, 0.7);
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 10px;
+    padding: 4px;
+    margin: 0px 4px;
+}
+
+#SourceBadge {
+    background-color: rgba(6, 78, 59, 0.5);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 8px;
+    padding: 4px 8px;
+}
+
+#ExtBadge {
+    background-color: rgba(0, 212, 255, 0.12);
+    color: #00d4ff;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 9px;
+    font-weight: bold;
+}
+
+/* ─── INPUT AREA ────────────────────────────────────────────────────── */
+#InputFrame {
+    background-color: rgba(22, 22, 42, 0.85);
+    border: 1px solid rgba(30, 30, 58, 0.8);
+    border-radius: 16px;
+    /* backdrop-filter non supporté par PySide6, on utilise un fond semi-transparent */
+}
+
+#ChatInput {
+    background: transparent;
+    border: none;
+    color: #e2e8f0;
+    font-size: 14px;
+    padding: 8px 4px;
+}
+#ChatInput:focus {
+    border: none;
+    outline: none;
+}
+#ChatInput::placeholder {
+    color: #4b5563;
+}
+
+#AttachButton {
+    background-color: transparent;
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 8px;
+    color: #6b7280;
     font-size: 16px;
     font-weight: bold;
-    color: #00A3FF;
 }
-#MetricSparkline { color: rgba(0, 163, 255, 0.3); font-size: 10px; }
+#AttachButton:hover {
+    background-color: rgba(168, 85, 247, 0.15);
+    border-color: #a855f7;
+    color: #a855f7;
+}
 
-/* Minimize btn */
+#VoiceButton {
+    background-color: transparent;
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 8px;
+    color: #6b7280;
+    font-size: 14px;
+}
+#VoiceButton:hover {
+    background-color: rgba(0, 212, 255, 0.10);
+    border-color: #00d4ff;
+    color: #00d4ff;
+}
+#VoiceButton:checked {
+    background-color: rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+#WebSearchBtn {
+    background-color: transparent;
+    color: #6b7280;
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 11px;
+}
+#WebSearchBtn:hover {
+    background-color: rgba(0, 212, 255, 0.08);
+    border-color: #00d4ff;
+    color: #00d4ff;
+}
+#WebSearchBtn:checked {
+    background-color: rgba(0, 212, 255, 0.15);
+    border: 1px solid #00d4ff;
+    color: #00d4ff;
+}
+
+#SendButton {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                      stop:0 #00d4ff,
+                                      stop:1 #a855f7);
+    color: #ffffff;
+    border: none;
+    border-radius: 18px;
+    font-size: 16px;
+    font-weight: bold;
+}
+#SendButton:hover {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                      stop:0 #22d3ee,
+                                      stop:1 #c084fc);
+    /* box-shadow non supporte */
+}
+
+#InputHint {
+    color: #4b5563;
+    font-size: 10px;
+}
+
+#ListeningLabel {
+    background-color: rgba(239, 68, 68, 0.10);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    color: #ef4444;
+    font-size: 11px;
+    padding: 4px;
+}
+
+/* ─── RIGHT PANEL (metrics) ────────────────────────────────────────── */
+#RightPanel {
+    background-color: rgba(10, 10, 15, 0.92);
+    border-left: 1px solid rgba(30, 30, 58, 0.7);
+    border-top-right-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+
+#MetricsOverlay {
+    background: transparent;
+}
+
+#MetricsContainer {
+    background-color: rgba(22, 22, 42, 0.75);
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 10px;
+}
+
+#MetricsText, #MetricsPct {
+    color: #6b7280;
+    font-weight: bold;
+    font-size: 10px;
+}
+
+/* Barre RAM (progressive) */
+QProgressBar#RamBar {
+    background-color: rgba(30, 30, 58, 0.6);
+    border: none;
+    border-radius: 3px;
+    height: 6px;
+}
+QProgressBar#RamBar::chunk {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                      stop:0 #22c55e,
+                                      stop:0.5 #00d4ff,
+                                      stop:1 #a855f7);
+    border-radius: 3px;
+}
+
+/* ─── METRIC CARDS ──────────────────────────────────────────────────── */
+#MetricCard {
+    background-color: rgba(22, 22, 42, 0.7);
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 12px;
+    padding: 10px;
+}
+#MetricCard:hover {
+    border-color: rgba(0, 212, 255, 0.3);
+    background-color: rgba(22, 22, 42, 0.85);
+}
+
+#MetricTitle {
+    color: #6b7280;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+#MetricValue {
+    font-size: 18px;
+    font-weight: bold;
+    color: #00d4ff;
+}
+
+#MetricSparkline {
+    color: rgba(0, 212, 255, 0.25);
+    font-size: 10px;
+}
+
+/* ─── AETHER METRIC CARDS (2×2 grid in right panel) ───────────────── */
+#AetherMetricCard {
+    background-color: #16162a;
+    border: 1px solid #1e1e3a;
+    border-radius: 12px;
+    padding: 10px;
+}
+
+/* ─── NOTIFICATIONS ───────────────────────────────────────────────── */
+#NotificationCard {
+    background-color: #16162a;
+    border: 1px solid #1e1e3a;
+    border-radius: 12px;
+    padding: 8px;
+}
+
+/* ─── MINIMIZE / CLEAR BUTTONS ─────────────────────────────────────── */
 #MinimizeBtn {
     background-color: transparent;
-    color: #6B7280;
-    border: 1px solid #1F2937;
-    border-radius: 4px;
+    color: #6b7280;
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 6px;
     font-size: 12px;
 }
 #MinimizeBtn:hover {
-    background-color: #00A3FF;
-    color: #0D1117;
+    background-color: rgba(0, 212, 255, 0.10);
+    border-color: #00d4ff;
+    color: #00d4ff;
 }
+
+#ClearBtn {
+    background-color: transparent;
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 8px;
+    color: #6b7280;
+    font-size: 10px;
+}
+#ClearBtn:hover {
+    background-color: rgba(239, 68, 68, 0.10);
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+/* ─── FEEDBACK BUTTONS ──────────────────────────────────────────────── */
+#BtnFeedbackUp, #BtnFeedbackDown {
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    font-size: 12px;
+}
+#BtnFeedbackUp:hover, #BtnFeedbackUp:checked { color: #22c55e; }
+#BtnFeedbackDown:hover, #BtnFeedbackDown:checked { color: #ef4444; }
+
+/* ─── SCROLLBAR — vertical fine, cyan ──────────────────────────────── */
+QScrollBar:vertical {
+    background: transparent;
+    width: 4px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical {
+    background: rgba(0, 212, 255, 0.35);
+    border-radius: 2px;
+    min-height: 24px;
+}
+QScrollBar::handle:vertical:hover {
+    background: rgba(0, 212, 255, 0.6);
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+/* Scrollbar horizontale (quand nécessaire) */
+QScrollBar:horizontal {
+    background: transparent;
+    height: 4px;
+}
+QScrollBar::handle:horizontal {
+    background: rgba(0, 212, 255, 0.25);
+    border-radius: 2px;
+    min-width: 24px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: rgba(0, 212, 255, 0.5);
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+
+/* ─── PANEL / SECTION TITLES ───────────────────────────────────────── */
+#PanelTitle {
+    color: #6b7280;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+/* ─── PAGE TITLES ────────────────────────────────────────────────────── */
+#PageTitle {
+    font-size: 22px;
+    font-weight: 800;
+    color: #e2e8f0;
+    letter-spacing: 0px;
+}
+
+/* ─── SETTINGS PAGES ───────────────────────────────────────────────── */
+#SettingsScrollArea, #SettingsContent {
+    background: transparent;
+    border: none;
+}
+
+#SettingsHeader {
+    background-color: rgba(22, 22, 42, 0.5);
+    border-bottom: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 0px;
+    padding: 12px;
+}
+
+#SettingsPageTitle {
+    font-size: 20px;
+    font-weight: 800;
+    color: #e2e8f0;
+}
+
+#SettingsSection {
+    background-color: rgba(22, 22, 42, 0.5);
+    border: 1px solid rgba(30, 30, 58, 0.5);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 8px 0px;
+}
+
+#SectionTitle {
+    color: #00d4ff;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    padding-bottom: 4px;
+}
+
+#SettingRow {
+    background: transparent;
+    border: none;
+    padding: 6px 0px;
+}
+
+#SettingLabel {
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* ─── BUTTONS VARIANTES ────────────────────────────────────────────── */
+#PrimaryBtn, #PrimaryButton {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                      stop:0 #00d4ff,
+                                      stop:1 #a855f7);
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-weight: bold;
+    font-size: 12px;
+}
+#PrimaryBtn:hover, #PrimaryButton:hover {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                      stop:0 #22d3ee,
+                                      stop:1 #c084fc);
+}
+
+#GhostBtn, #GhostButton {
+    background-color: transparent;
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 8px;
+    color: #6b7280;
+    padding: 4px 12px;
+    font-size: 11px;
+}
+#GhostBtn:hover, #GhostButton:hover {
+    background-color: rgba(0, 212, 255, 0.08);
+    border-color: #00d4ff;
+    color: #00d4ff;
+}
+
+#ResetSettingsBtn {
+    background-color: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    color: #ef4444;
+    font-size: 11px;
+    padding: 4px 12px;
+}
+#ResetSettingsBtn:hover {
+    background-color: rgba(239, 68, 68, 0.10);
+    border-color: #ef4444;
+}
+
+/* ─── FORM ELEMENTS ────────────────────────────────────────────────── */
+QLineEdit {
+    background-color: rgba(22, 22, 42, 0.6);
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 8px;
+    color: #e2e8f0;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+QLineEdit:focus {
+    border-color: #00d4ff;
+    background-color: rgba(22, 22, 42, 0.8);
+}
+
+QComboBox {
+    background-color: rgba(22, 22, 42, 0.6);
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 8px;
+    color: #e2e8f0;
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 24px;
+}
+QComboBox:hover {
+    border-color: #a855f7;
+}
+QComboBox:focus {
+    border-color: #00d4ff;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+QComboBox::down-arrow {
+    image: none;
+    border: none;
+}
+QComboBox QAbstractItemView {
+    background-color: rgba(26, 26, 46, 0.95);
+    border: 1px solid rgba(30, 30, 58, 0.8);
+    border-radius: 8px;
+    color: #e2e8f0;
+    selection-background-color: rgba(168, 85, 247, 0.25);
+    selection-color: #ffffff;
+    outline: none;
+}
+
+QSpinBox, QDoubleSpinBox {
+    background-color: rgba(22, 22, 42, 0.6);
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 8px;
+    color: #e2e8f0;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+QSpinBox:focus, QDoubleSpinBox:focus {
+    border-color: #00d4ff;
+}
+
+QCheckBox {
+    color: #6b7280;
+    font-size: 12px;
+    spacing: 8px;
+}
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid rgba(30, 30, 58, 0.8);
+    border-radius: 4px;
+    background-color: rgba(22, 22, 42, 0.5);
+}
+QCheckBox::indicator:checked {
+    background-color: #00d4ff;
+    border-color: #00d4ff;
+}
+QCheckBox::indicator:hover {
+    border-color: #a855f7;
+}
+
+QSlider::groove:horizontal {
+    background: rgba(30, 30, 58, 0.5);
+    border: none;
+    height: 4px;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #00d4ff,
+                                stop:1 #a855f7);
+    border: none;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+}
+QSlider::handle:horizontal:hover {
+    width: 18px;
+    height: 18px;
+    margin: -7px 0;
+    border-radius: 9px;
+}
+QSlider::sub-page:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #00d4ff,
+                                stop:1 #a855f7);
+    border-radius: 2px;
+}
+
+/* ─── TABLES ───────────────────────────────────────────────────────────── */
+QTableWidget, #DataTable {
+    background-color: rgba(22, 22, 42, 0.5);
+    border: 1px solid rgba(30, 30, 58, 0.5);
+    border-radius: 8px;
+    gridline-color: rgba(30, 30, 58, 0.4);
+    color: #e2e8f0;
+    font-size: 12px;
+    selection-background-color: rgba(168, 85, 247, 0.20);
+    selection-color: #ffffff;
+}
+QTableWidget::item, #DataTable::item {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(30, 30, 58, 0.2);
+}
+QTableWidget::item:hover, #DataTable::item:hover {
+    background-color: rgba(0, 212, 255, 0.05);
+}
+QHeaderView::section {
+    background-color: rgba(10, 10, 15, 0.6);
+    border: none;
+    border-bottom: 1px solid rgba(30, 30, 58, 0.6);
+    color: #6b7280;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 8px 10px;
+    text-transform: uppercase;
+}
+
+/* ─── API DOCS ──────────────────────────────────────────────────────── */
+#ApiDocsScrollArea, #ApiDocsContent {
+    background: transparent;
+    border: none;
+}
+
+#DocSection {
+    background-color: rgba(22, 22, 42, 0.5);
+    border: 1px solid rgba(30, 30, 58, 0.5);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 8px 0px;
+}
+#DocSection:hover {
+    border-color: rgba(0, 212, 255, 0.2);
+}
+
+#DocSectionTitle {
+    color: #a855f7;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+#DocSectionContent {
+    color: #9ca3af;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+#CodeBlock {
+    background-color: rgba(10, 10, 15, 0.6);
+    border: 1px solid rgba(30, 30, 58, 0.5);
+    border-radius: 8px;
+    color: #22d3ee;
+    font-family: "SF Mono", "Consolas", monospace;
+    font-size: 12px;
+    padding: 12px;
+}
+
+/* ─── GUIDES ────────────────────────────────────────────────────────── */
+#GuideSearchInput {
+    background-color: rgba(22, 22, 42, 0.6);
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 10px;
+    color: #e2e8f0;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+#GuideSearchInput:focus {
+    border-color: #00d4ff;
+}
+
+#GuideCategoryFilter {
+    background-color: rgba(22, 22, 42, 0.6);
+    border: 1px solid rgba(30, 30, 58, 0.6);
+    border-radius: 8px;
+    color: #e2e8f0;
+    padding: 6px;
+    font-size: 12px;
+}
+
+#GuideGrid {
+    background: transparent;
+    border: none;
+}
+
+#GuideCard {
+    background-color: rgba(22, 22, 42, 0.6);
+    border: 1px solid rgba(30, 30, 58, 0.5);
+    border-radius: 12px;
+    padding: 16px;
+}
+#GuideCard:hover {
+    border-color: rgba(0, 212, 255, 0.35);
+    background-color: rgba(22, 22, 42, 0.8);
+}
+
+#GuideReadLink {
+    color: #00d4ff;
+    font-size: 11px;
+    font-weight: bold;
+}
+#GuideReadLink:hover {
+    color: #22d3ee;
+    text-decoration: underline;
+}
+
+#GuideDetailDialog {
+    background-color: rgba(10, 10, 15, 0.95);
+    border: 1px solid rgba(30, 30, 58, 0.7);
+    border-radius: 16px;
+}
+
+#GuideDetailTitle {
+    font-size: 18px;
+    font-weight: 800;
+    color: #e2e8f0;
+}
+
+#GuideDetailContent {
+    background-color: rgba(22, 22, 42, 0.4);
+    border: 1px solid rgba(30, 30, 58, 0.4);
+    border-radius: 10px;
+    color: #9ca3af;
+    font-size: 13px;
+    padding: 12px;
+}
+
+/* ─── PANEL (generic card) ─────────────────────────────────────────── */
+#Panel {
+    background-color: rgba(22, 22, 42, 0.5);
+    border: 1px solid rgba(30, 30, 58, 0.5);
+    border-radius: 12px;
+    padding: 12px;
+}
+
+/* ─── CONVERSATIONS ────────────────────────────────────────────────── */
+#ConversationCard {
+    background-color: rgba(22, 22, 42, 0.5);
+    border: 1px solid rgba(30, 30, 58, 0.4);
+    border-radius: 10px;
+    padding: 12px;
+    margin: 4px 0px;
+}
+#ConversationCard:hover {
+    border-color: rgba(168, 85, 247, 0.35);
+    background-color: rgba(22, 22, 42, 0.75);
+}
+
+/* ─── PLUGINS ─────────────────────────────────────────────────────── */
+#empty_plugins {
+    color: #6b7280;
+    font-size: 12px;
+    font-style: italic;
+}
+
+/* ─── STYLED COMBO ─────────────────────────────────────────────────── */
+#StyledCombo {
+    /* Voir QComboBox générique ci-dessus */
+}
+
+/* ─── SÉPARATEUR ────────────────────────────────────────────────────── */
+QFrame[frameShape="5"] {  /* HLine */
+    color: rgba(30, 30, 58, 0.5);
+    border: none;
+    max-height: 1px;
+}
+
+/* ─── RESIZE HANDLE ────────────────────────────────────────────────── */
+#ResizeHandle {
+    background: rgba(0, 212, 255, 0.25);
+    border-top-left-radius: 8px;
+}
+#ResizeHandle:hover {
+    background: rgba(0, 212, 255, 0.5);
+}
+
+/* ─── LISTENING LABEL ──────────────────────────────────────────────── */
+#ListeningLabel {
+    background-color: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 8px;
+    color: #f87171;
+    font-size: 11px;
+    padding: 6px;
+}
+
+/* ─── BADGE RAG (inline dans chat bubble) ─────────────────────────── */
+/* Stylé directement dans chat_bubble.py via _make_rag_badge() */

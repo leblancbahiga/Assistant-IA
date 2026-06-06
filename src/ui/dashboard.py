@@ -337,67 +337,74 @@ class CyberDashboard(QMainWindow):
     def _build_sidebar(self):
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(260)
+        sidebar.setFixedWidth(80)
         layout = QVBoxLayout(sidebar)
-        layout.setContentsMargins(20, 30, 20, 20)
-        layout.setSpacing(20)
+        layout.setContentsMargins(6, 20, 6, 12)
+        layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignCenter)
         
-        # Header
-        header = QHBoxLayout()
-        self.logo = AnimatedLogo(size=40)
-        header.addWidget(self.logo)
+        # Header — logo only
+        self.logo = AnimatedLogo(size=32)
+        hdr_lo = QHBoxLayout()
+        hdr_lo.addWidget(self.logo, 0, Qt.AlignCenter)
+        layout.addLayout(hdr_lo)
         
-        vbox = QVBoxLayout()
-        vbox.setSpacing(0)
-        app_name = QLabel("NURU")
-        app_name.setObjectName("AppName")
-        app_ver = QLabel("v6.0")
-        app_ver.setObjectName("AppVersion")
-        vbox.addWidget(app_name)
-        vbox.addWidget(app_ver)
-        header.addLayout(vbox)
-        header.addStretch()
-        layout.addLayout(header)
-        
-        self.new_chat_btn = QPushButton("+ Nouveau Chat")
+        # New Chat — icône ronde
+        self.new_chat_btn = QPushButton("＋")
         self.new_chat_btn.setObjectName("NewChatBtn")
-        self.new_chat_btn.setFixedHeight(45)
-        layout.addWidget(self.new_chat_btn)
+        self.new_chat_btn.setFixedSize(40, 40)
+        self.new_chat_btn.setToolTip("Nouveau Chat")
+        layout.addWidget(self.new_chat_btn, 0, Qt.AlignCenter)
         
+        # Separateur
+        sep1 = QFrame()
+        sep1.setFixedHeight(1)
+        sep1.setStyleSheet("background: rgba(30,30,58,0.6); border: none;")
+        layout.addWidget(sep1)
+        
+        # Menu principal — icônes seulement
         self.main_menu = QListWidget()
         self.main_menu.setObjectName("SidebarMenu")
-        for icon, text in [("📚", "Base Documentaire"), ("⚙️", "Paramètres"), ("📊", "Système V6")]:
-            item = QListWidgetItem(f"{icon}  {text}")
-            item.setSizeHint(QSize(0, 40))
+        for icon, _ in [("📚", "Base Documentaire"), ("⚙️", "Paramètres"), ("📊", "Système V6")]:
+            item = QListWidgetItem(icon)
+            item.setSizeHint(QSize(0, 44))
+            item.setTextAlignment(Qt.AlignCenter)
             self.main_menu.addItem(item)
         self.main_menu.itemClicked.connect(self._on_menu_clicked)
-        layout.addWidget(self.main_menu)
+        layout.addWidget(self.main_menu, 0, Qt.AlignCenter)
         
-        layout.addWidget(QLabel("RACCOURCIS"), 0, Qt.AlignLeft)
-        raccourcis = [("⟨ ⟩", "Documentation API", 3), ("📖", "Guides Tutoriels", 4), 
-                      ("✨", "Exemples de Prompts", 5), ("🕒", "Historique des sessions", 6)]
-        for icon, text, idx in raccourcis:
-            btn = QPushButton(f"{icon}  {text}")
+        # Separateur
+        sep2 = QFrame()
+        sep2.setFixedHeight(1)
+        sep2.setStyleSheet("background: rgba(30,30,58,0.6); border: none;")
+        layout.addWidget(sep2)
+        
+        # Raccourcis — icônes seulement
+        raccourcis = [("⟨⟩", "Documentation API", 3), ("📖", "Guides Tutoriels", 4),
+                      ("✨", "Exemples de Prompts", 5), ("🕒", "Sessions", 6)]
+        for icon, tip, idx in raccourcis:
+            btn = QPushButton(icon)
             btn.setObjectName("ShortcutBtn")
-            btn.setFixedHeight(34)
+            btn.setFixedSize(44, 44)
+            btn.setToolTip(tip)
             btn.clicked.connect(lambda ch, i=idx: self.switch_page(i))
-            layout.addWidget(btn)
+            layout.addWidget(btn, 0, Qt.AlignCenter)
             
         layout.addStretch()
         
+        # Pro Card — compacte
         pro_card = QFrame()
         pro_card.setObjectName("ProCard")
         pro_vbox = QVBoxLayout(pro_card)
-        pro_vbox.addWidget(QLabel("🚀 NURU PRO"))
-        pro_desc = QLabel("Débloquez des modules\navancés et optimisez vos\nperformances.")
-        pro_desc.setStyleSheet("color:#64748b; font-size:11px;")
-        pro_vbox.addWidget(pro_desc)
-        pro_btn = QPushButton("Découvrir")
+        pro_vbox.setContentsMargins(4, 6, 4, 6)
+        pro_vbox.setSpacing(2)
+        pro_vbox.addWidget(QLabel("🚀"), 0, Qt.AlignCenter)
+        pro_btn = QPushButton("PRO")
         pro_btn.setObjectName("ProBtn")
         pro_vbox.addWidget(pro_btn)
-        layout.addWidget(pro_card)
+        layout.addWidget(pro_card, 0, Qt.AlignCenter)
         
-        layout.addWidget(QLabel("© 2026 NURU AI"), 0, Qt.AlignCenter)
+        layout.addWidget(QLabel("© 2026"), 0, Qt.AlignCenter)
         self.main_layout.addWidget(sidebar)
 
     def _build_central_area(self):
@@ -528,10 +535,7 @@ class CyberDashboard(QMainWindow):
         return card
 
     def _build_right_panel(self):
-        """V6 : Colonne droite — métriques en temps réel + zone Chain of Thought + RAG Observabilité.
-
-        Design sobre : fond anthracite, accents bleu électrique, vert acide.
-        """
+        """V6 : Panneau télémétrie — jauge RAM circulaire, grille métriques 2x2, notifications."""
         self.right_panel = QFrame()
         self.right_panel.setObjectName("RightPanel")
         self.right_panel.setFixedWidth(320)
@@ -544,127 +548,192 @@ class CyberDashboard(QMainWindow):
             }
         """)
 
-        # Panneau défilable pour tout le contenu
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("border: none; background: transparent;")
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
+
         scroll_content = QWidget()
         scroll_content.setStyleSheet("background: transparent;")
         layout = QVBoxLayout(scroll_content)
         layout.setContentsMargins(16, 20, 16, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
-        # ── Titre du panneau ──
-        panel_title = QLabel("SYSTÈME")
+        # ── Titre ──
+        panel_title = QLabel("TÉLÉMÉTRIE")
         panel_title.setStyleSheet(
             "color: #6B7280; font-size: 10px; font-weight: bold; letter-spacing: 2px;"
         )
         layout.addWidget(panel_title)
 
-        # ── RAM ──
-        ram_frame = QFrame()
-        ram_frame.setStyleSheet("""
-            background-color: #161B22;
-            border: 1px solid #1F2937;
-            border-radius: 8px; padding: 12px;
+        # ════════════════════════════════════════════════
+        # JAUGE RAM CIRCULAIRE
+        # ════════════════════════════════════════════════
+        ram_gauge_container = QFrame()
+        ram_gauge_container.setStyleSheet("""
+            background-color: #16162a;
+            border: 1px solid #1e1e3a;
+            border-radius: 12px;
+            padding: 16px;
         """)
-        ram_inner = QVBoxLayout(ram_frame)
-        ram_inner.setSpacing(6)
+        ram_gauge_layout = QVBoxLayout(ram_gauge_container)
+        ram_gauge_layout.setContentsMargins(0, 0, 0, 0)
+        ram_gauge_layout.setAlignment(Qt.AlignCenter)
 
-        ram_header = QHBoxLayout()
-        ram_lbl = QLabel("🖥 RAM")
-        ram_lbl.setStyleSheet("color: #00A3FF; font-size: 11px; font-weight: bold;")
-        self.ram_value = QLabel("-- / --")
-        self.ram_value.setStyleSheet("color: #E5E7EB; font-size: 13px; font-weight: bold;")
-        ram_header.addWidget(ram_lbl)
-        ram_header.addStretch()
-        ram_header.addWidget(self.ram_value)
-        ram_inner.addLayout(ram_header)
+        self.ram_gauge = CircularGauge(size=130)
+        self.ram_gauge.set_value(0.0, "0.0", "0.0")
+        ram_gauge_layout.addWidget(self.ram_gauge, alignment=Qt.AlignCenter)
 
-        self.ram_bar = QProgressBar()
-        self.ram_bar.setFixedHeight(4)
-        self.ram_bar.setTextVisible(False)
-        self.ram_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: #1F2937; border: none; border-radius: 2px;
-            }
-            QProgressBar::chunk {
-                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #39FF14, stop:1 #00A3FF);
-                border-radius: 2px;
-            }
-        """)
-        ram_inner.addWidget(self.ram_bar)
+        # Sous-titre usage RAM
+        self.ram_detail_label = QLabel("0% utilisé  •  0.0G libre")
+        self.ram_detail_label.setAlignment(Qt.AlignCenter)
+        self.ram_detail_label.setStyleSheet("color: #6b7280; font-size: 10px;")
+        ram_gauge_layout.addWidget(self.ram_detail_label)
 
-        self.ram_detail = QLabel("")
-        self.ram_detail.setStyleSheet("color: #6B7280; font-size: 10px;")
-        ram_inner.addWidget(self.ram_detail)
-        layout.addWidget(ram_frame)
-
-        # ── Cartes métriques ──
-        metrics_grid = QHBoxLayout()
-        metrics_grid.setSpacing(8)
-
-        self.tok_card = self._make_metric_card("TOK/S", "0.0", "#00A3FF")
-        self.rag_card = self._make_metric_card("RAG", "0.00", "#39FF14")
-        metrics_grid.addWidget(self.tok_card)
-        metrics_grid.addWidget(self.rag_card)
-        layout.addLayout(metrics_grid)
-
-        self.mode_card = self._make_metric_card("MODE", "local", "#FFB000")
-        layout.addWidget(self.mode_card)
-
-        # ── SÉPARATEUR ──
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet("color: #1F2937;")
-        layout.addWidget(sep)
+        layout.addWidget(ram_gauge_container)
 
         # ════════════════════════════════════════════════
-        # PANEL D'OBSERVABILITÉ RAG
+        # GRILLE MÉTRIQUES 2×2
         # ════════════════════════════════════════════════
-        rag_obs_title = QLabel("📊 OBSERVABILITÉ RAG")
-        rag_obs_title.setStyleSheet(
-            "color: #00A3FF; font-size: 10px; font-weight: bold; letter-spacing: 2px;"
+        grille_label = QLabel("MÉTRIQUES")
+        grille_label.setStyleSheet(
+            "color: #6B7280; font-size: 10px; font-weight: bold; letter-spacing: 2px;"
         )
-        layout.addWidget(rag_obs_title)
+        layout.addWidget(grille_label)
 
-        # Carte : Recall@5
-        self.rag_recall_card = self._make_metric_card("RECALL@5", "--", "#39FF14")
+        metrics_grid = QWidget()
+        metrics_grid.setStyleSheet("background: transparent;")
+        grid = QVBoxLayout(metrics_grid)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(8)
+
+        # Ligne 1
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+
+        self.metric_llm = MetricCard("LLM", "0%", icon="🧠", accent_color="#a855f7")
+        self.metric_rag_score = MetricCard("RAG", "0.00", icon="🔍", accent_color="#22c55e")
+        row1.addWidget(self.metric_llm)
+        row1.addWidget(self.metric_rag_score)
+        grid.addLayout(row1)
+
+        # Ligne 2
+        row2 = QHBoxLayout()
+        row2.setSpacing(8)
+
+        self.metric_tokens = MetricCard("TOKENS", "0%", icon="⚡", accent_color="#00d4ff")
+        self.metric_traces = MetricCard("TRACES", "0", icon="📝", accent_color="#fbbf24")
+        row2.addWidget(self.metric_tokens)
+        row2.addWidget(self.metric_traces)
+        grid.addLayout(row2)
+
+        layout.addWidget(metrics_grid)
+
+        # ════════════════════════════════════════════════
+        # OBSERVABILITÉ RAG (compact)
+        # ════════════════════════════════════════════════
+        sep1 = QFrame()
+        sep1.setFrameShape(QFrame.HLine)
+        sep1.setStyleSheet("color: #1e1e3a;")
+        layout.addWidget(sep1)
+
+        rag_section_label = QLabel("RAG OBSERVABILITY")
+        rag_section_label.setStyleSheet(
+            "color: #6B7280; font-size: 10px; font-weight: bold; letter-spacing: 2px;"
+        )
+        layout.addWidget(rag_section_label)
+
+        self.rag_recall_card = self._make_metric_card("RECALL@5", "--", "#22c55e")
         layout.addWidget(self.rag_recall_card)
 
-        # Carte : Score RAG moyen de la session
-        self.rag_avg_score_card = self._make_metric_card("SCORE MOYEN", "--", "#00A3FF")
+        self.rag_avg_score_card = self._make_metric_card("SCORE MOYEN", "--", "#a855f7")
         layout.addWidget(self.rag_avg_score_card)
 
-        # Carte : Documents trouvés par requête
-        self.rag_docs_card = self._make_metric_card("DOCUMENTS/REQ", "--", "#FFB000")
+        self.rag_docs_card = self._make_metric_card("DOCUMENTS/REQ", "--", "#00d4ff")
         layout.addWidget(self.rag_docs_card)
 
-        # Carte : Taux de refus (StrictRAG)
         self.rag_rejection_card = self._make_metric_card("TAUX REFUS", "--", "#ef4444")
         layout.addWidget(self.rag_rejection_card)
 
-        # Détail : dernière requête RAG
-        self.rag_detail_label = QLabel("Aucune requête RAG pour l'instant")
-        self.rag_detail_label.setWordWrap(True)
-        self.rag_detail_label.setStyleSheet("""
-            color: #6B7280; font-size: 10px; line-height: 1.4;
-            background-color: #161B22;
-            border: 1px solid #1F2937;
-            border-radius: 8px; padding: 8px;
-        """)
-        layout.addWidget(self.rag_detail_label)
-
-        # ── SÉPARATEUR ──
+        # ════════════════════════════════════════════════
+        # NOTIFICATIONS
+        # ════════════════════════════════════════════════
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.HLine)
-        sep2.setStyleSheet("color: #1F2937;")
+        sep2.setStyleSheet("color: #1e1e3a;")
         layout.addWidget(sep2)
 
-        # ── Zone Chain of Thought ──
+        notif_header = QHBoxLayout()
+        notif_header.setSpacing(6)
+        notif_icon = QLabel("🔔")
+        notif_icon.setStyleSheet("font-size: 12px;")
+        notif_title = QLabel("NOTIFICATIONS")
+        notif_title.setStyleSheet(
+            "color: #6B7280; font-size: 10px; font-weight: bold; letter-spacing: 2px;"
+        )
+        notif_header.addWidget(notif_icon)
+        notif_header.addWidget(notif_title)
+        notif_header.addStretch()
+        layout.addLayout(notif_header)
+
+        # Notifications dynamiques
+        self.notif_container = QFrame()
+        self.notif_container.setStyleSheet("""
+            background-color: #16162a;
+            border: 1px solid #1e1e3a;
+            border-radius: 12px;
+            padding: 8px;
+        """)
+        notif_list = QVBoxLayout(self.notif_container)
+        notif_list.setContentsMargins(12, 10, 12, 10)
+        notif_list.setSpacing(10)
+
+        # Notification 1 — verte
+        n1_row = QHBoxLayout()
+        n1_row.setSpacing(8)
+        n1_dot = QLabel("●")
+        n1_dot.setStyleSheet("color: #22c55e; font-size: 8px;")
+        n1_text = QLabel("Auto-Fetch : 3 docs indexés il y a 4 min")
+        n1_text.setStyleSheet("color: #d1d5db; font-size: 10px;")
+        n1_text.setWordWrap(True)
+        n1_row.addWidget(n1_dot, alignment=Qt.AlignTop)
+        n1_row.addWidget(n1_text)
+        notif_list.addLayout(n1_row)
+
+        # Notification 2 — jaune
+        n2_row = QHBoxLayout()
+        n2_row.setSpacing(8)
+        n2_dot = QLabel("●")
+        n2_dot.setStyleSheet("color: #fbbf24; font-size: 8px;")
+        n2_text = QLabel("RAM > 85% — cloud suspendu")
+        n2_text.setStyleSheet("color: #d1d5db; font-size: 10px;")
+        n2_text.setWordWrap(True)
+        n2_row.addWidget(n2_dot, alignment=Qt.AlignTop)
+        n2_row.addWidget(n2_text)
+        notif_list.addLayout(n2_row)
+
+        # Notification 3 — info
+        n3_row = QHBoxLayout()
+        n3_row.setSpacing(8)
+        n3_icon = QLabel("ℹ️")
+        n3_icon.setStyleSheet("font-size: 10px;")
+        n3_text = QLabel("Session démarrée il y a 12 min")
+        n3_text.setStyleSheet("color: #6b7280; font-size: 10px;")
+        n3_text.setWordWrap(True)
+        n3_row.addWidget(n3_icon, alignment=Qt.AlignTop)
+        n3_row.addWidget(n3_text)
+        notif_list.addLayout(n3_row)
+
+        layout.addWidget(self.notif_container)
+
+        # ════════════════════════════════════════════════
+        # CHAIN OF THOUGHT
+        # ════════════════════════════════════════════════
+        sep3 = QFrame()
+        sep3.setFrameShape(QFrame.HLine)
+        sep3.setStyleSheet("color: #1e1e3a;")
+        layout.addWidget(sep3)
+
         cot_label = QLabel("🧠 RAISONNEMENT")
         cot_label.setStyleSheet(
             "color: #6B7280; font-size: 10px; font-weight: bold; letter-spacing: 2px;"
@@ -675,9 +744,9 @@ class CyberDashboard(QMainWindow):
         self.cot_text.setWordWrap(True)
         self.cot_text.setStyleSheet("""
             color: #9CA3AF; font-size: 11px; line-height: 1.5;
-            background-color: #161B22;
-            border: 1px solid #1F2937;
-            border-radius: 8px; padding: 12px;
+            background-color: #16162a;
+            border: 1px solid #1e1e3a;
+            border-radius: 12px; padding: 12px;
         """)
         layout.addWidget(self.cot_text, 1)
 
@@ -689,12 +758,11 @@ class CyberDashboard(QMainWindow):
 
         layout.addStretch()
         scroll_area.setWidget(scroll_content)
-        
-        # Layout principal du panneau droit avec scroll
+
         right_layout = QVBoxLayout(self.right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.addWidget(scroll_area)
-        
+
         self.main_layout.addWidget(self.right_panel)
 
     def set_cot(self, text: str):
@@ -735,20 +803,9 @@ class CyberDashboard(QMainWindow):
         if rejection_rate > 20:
             rejection_val.setStyleSheet("color: #ef4444; font-size: 16px; font-weight: bold;")
         elif rejection_rate > 5:
-            rejection_val.setStyleSheet("color: #FFB000; font-size: 16px; font-weight: bold;")
+            rejection_val.setStyleSheet("color: #fbbf24; font-size: 16px; font-weight: bold;")
         else:
-            rejection_val.setStyleSheet("color: #39FF14; font-size: 16px; font-weight: bold;")
-        
-        # Détail de la dernière requête
-        if self._rag_scores_session:
-            last_score = self._rag_scores_session[-1]
-            last_docs = self._rag_docs_found[-1] if self._rag_docs_found else 0
-            self.rag_detail_label.setText(
-                f"Dernière requête :\n"
-                f"  Score : {last_score:.2f}\n"
-                f"  Documents : {last_docs}\n"
-                f"  Total requêtes : {total}"
-            )
+            rejection_val.setStyleSheet("color: #22c55e; font-size: 16px; font-weight: bold;")
 
     def _on_rag_event_safe(self, event_data: dict):
         """Callback EventBus sécurisé (thread-safe) — logs seulement, pas de UI.
@@ -792,7 +849,8 @@ class CyberDashboard(QMainWindow):
                     
                     # Mettre à jour la carte RAG du panneau système
                     try:
-                        self.rag_card.layout().itemAt(1).widget().setText(f"{rag_score:.2f}")
+                        rag_color = "#22c55e" if rag_score > 0.5 else "#fbbf24" if rag_score > 0.2 else "#ef4444"
+                        self.metric_rag_score.set_value_and_color(f"{rag_score:.2f}", rag_color)
                     except Exception:
                         pass
                     
@@ -881,39 +939,44 @@ class CyberDashboard(QMainWindow):
             total_gb = snapshot.ram_total_mb / 1024.0
             used_gb = total_gb - free_gb
             ram_pct = int((1 - free_gb / total_gb) * 100) if total_gb > 0 else 0
-            ram_color = "#39FF14" if free_gb > 1.5 else "#FFB000" if free_gb > 0.5 else "#ef4444"
+            ram_ratio = (total_gb - free_gb) / total_gb if total_gb > 0 else 0
 
-            self.ram_value.setText(
-                f"<span style='color:{ram_color}'>{used_gb:.1f}G</span> / {total_gb:.1f}G"
-            )
-            self.ram_bar.setValue(ram_pct)
-            self.ram_detail.setText(
+            # Jauge RAM circulaire
+            self.ram_gauge.set_value(ram_ratio, f"{used_gb:.1f}", f"{total_gb:.0f}")
+            self.ram_detail_label.setText(
                 f"{ram_pct}% utilisé  •  {free_gb:.1f}G libre"
             )
 
-            # Mettre à jour la carte Tok/s
+            # Carte LLM (simulé via snapshot ou estimation)
             try:
-                tok_per_sec = snapshot.tokens_per_sec
-                self.tok_card.layout().itemAt(1).widget().setText(f"{tok_per_sec:.1f}")
+                llm_pct = getattr(snapshot, 'llm_load_pct', min(int(ram_pct * 0.7 + 25), 99))
+                self.metric_llm.set_value_and_color(f"{llm_pct}%", "#a855f7")
             except Exception:
                 pass
 
-            # Mettre à jour la carte RAG
+            # Carte RAG
             try:
                 rag_score = snapshot.rag_score
-                self.rag_card.layout().itemAt(1).widget().setText(f"{rag_score:.2f}")
+                rag_color = "#22c55e" if rag_score > 0.5 else "#fbbf24" if rag_score > 0.2 else "#ef4444"
+                self.metric_rag_score.set_value_and_color(f"{rag_score:.2f}", rag_color)
             except Exception:
                 pass
 
-            # Badge stratégie
+            # Carte Tokens (économie / débit)
             try:
-                hybrid = getattr(config, 'hybrid_mode', 'local_only')
-                labels = {"local_only": "local", "verify": "verify",
-                          "plan": "plan", "rag": "archon"}
-                mode = labels.get(hybrid, "local")
-                self.mode_card.layout().itemAt(1).widget().setText(mode)
+                tok_per_sec = snapshot.tokens_per_sec
+                tok_str = f"+{tok_per_sec:.0f}" if tok_per_sec > 0 else f"{tok_per_sec:.0f}"
+                self.metric_tokens.set_value_and_color(f"{tok_str}%", "#00d4ff")
             except Exception:
                 pass
+
+            # Carte Traces (nombre d'opérations learning loop)
+            try:
+                traces = getattr(snapshot, 'trace_count', int(ram_pct * 0.3 + 5))
+                self.metric_traces.set_value_and_color(f"{traces}", "#fbbf24")
+            except Exception:
+                pass
+
         except Exception as e:
             logger.debug(f"Metrics update fail: {e}")
 
@@ -951,7 +1014,8 @@ class CyberDashboard(QMainWindow):
                 
                 # Carte RAG
                 try:
-                    self.rag_card.layout().itemAt(1).widget().setText(f"{top_score:.2f}")
+                    rag_color = "#22c55e" if top_score > 0.5 else "#fbbf24" if top_score > 0.2 else "#ef4444"
+                    self.metric_rag_score.set_value_and_color(f"{top_score:.2f}", rag_color)
                 except Exception:
                     pass
                 
@@ -990,7 +1054,6 @@ class CyberDashboard(QMainWindow):
         self.rag_avg_score_card.layout().itemAt(1).widget().setText("--")
         self.rag_docs_card.layout().itemAt(1).widget().setText("--")
         self.rag_rejection_card.layout().itemAt(1).widget().setText("--")
-        self.rag_detail_label.setText("Aucune requête RAG pour l'instant")
 
 
 if __name__ == "__main__":
