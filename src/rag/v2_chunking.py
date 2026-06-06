@@ -172,15 +172,20 @@ class HierarchicalChunkerV2:
         return all_chunks
 
     def _make_summary(self, text: str, source: str, doc_title: str) -> Optional[ChunkV2]:
-        """Résumé structuré — extrait les infos clés de tout le document."""
+        """Résumé complet — contient le texte intégral du document pour éviter
+        que le résumé (score RRF élevé) concurrence les chunks de contenu réel.
+        V6.2 : inclu le texte complet des sections, pas seulement la première ligne.
+        """
         sections = self._split_sections(text)
         summary_parts = [f"Document: {doc_title}"]
 
-        for title, body in sections[:8]:  # Max 8 sections résumées
+        for title, body in sections[:20]:  # Jusqu'à 20 sections
             if title and body:
-                # Première phrase significative de chaque section
-                first_line = body.strip().split('\n')[0][:300]
-                summary_parts.append(f"• {title}: {first_line}")
+                # Inclure tout le corps de la section (pas juste la première ligne)
+                body_text = body.strip()
+                if len(body_text) > 500:
+                    body_text = body_text[:500] + "..."
+                summary_parts.append(f"• {title}: {body_text}")
 
         summary_text = "\n".join(summary_parts)
 
@@ -188,14 +193,14 @@ class HierarchicalChunkerV2:
             return None
 
         return ChunkV2(
-            content=summary_text[:3000],
+            content=summary_text[:4000],  # 4K chars max pour le résumé
             source=source,
             doc_title=doc_title,
             section_title="Résumé du document",
             level="document",
             importance="high",
-            char_count=len(summary_text[:3000]),
-            word_count=len(summary_text[:3000].split()),
+            char_count=len(summary_text[:4000]),
+            word_count=len(summary_text[:4000].split()),
             chunk_index=0,
         )
 
