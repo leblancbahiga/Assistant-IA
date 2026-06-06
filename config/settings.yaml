@@ -24,7 +24,7 @@ local_model_fallback: "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
 # ─── Cloud ───
 cloud_model: "llama-3.3-70b-versatile"
 cloud_provider: "groq"
-cloud_fallback: "openrouter/google/gemini-2.0-flash-001"
+cloud_fallback: "openrouter/deepseek/deepseek-v4-flash"
 
 # ─── Cache ───
 cache_ttl_seconds: 300
