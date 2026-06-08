@@ -57,9 +57,34 @@ try:
     from src.ui.components.console_page import ConsolePage
 except ImportError as e:
     logger.warning("Import partiel (composants UI) : %s", e)
-    # Définir des stubs pour permettre l'import du module
     ConsolePage = None
     MetricsPanel = None
+
+# ── Page components ─────────────────────────────────────────────────────
+try:
+    from src.ui.components.sessions_page import SessionsPage
+except ImportError:
+    SessionsPage = None
+try:
+    from src.ui.components.documents_page import DocumentsPage
+except ImportError:
+    DocumentsPage = None
+try:
+    from src.ui.components.memory_page import MemoryPage
+except ImportError:
+    MemoryPage = None
+try:
+    from src.ui.components.logs_page import LogsPage
+except ImportError:
+    LogsPage = None
+try:
+    from src.ui.components.settings_page import SettingsPage
+except ImportError:
+    SettingsPage = None
+try:
+    from src.ui.components.v6_system_page import SystemPage
+except ImportError:
+    SystemPage = None
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -375,10 +400,33 @@ class CyberDashboard(QMainWindow):
             self.console_page = PlaceholderPage("Console", "Console non disponible")
         self._pages.addWidget(self.console_page)
 
-        # Placeholder pages (index 1..7)
+        # Pages réelles (index 1..7)
         self._placeholder_map: dict[str, QWidget] = {}
         for slug, (title, desc) in PLACEHOLDER_PAGES.items():
-            page = PlaceholderPage(title, desc)
+            # Mapping slug → classe réelle
+            if slug == "sessions":
+                cls = SessionsPage
+            elif slug == "documents":
+                cls = DocumentsPage
+            elif slug == "memory":
+                cls = MemoryPage
+            elif slug == "logs":
+                cls = LogsPage
+            elif slug == "settings":
+                cls = SettingsPage
+            elif slug == "v6_system":
+                cls = SystemPage
+            else:
+                cls = None  # nuru_brain → placeholder
+
+            if cls is not None:
+                try:
+                    page = cls(parent=self)
+                except Exception as e:
+                    logger.warning("Page %s non disponible: %s — fallback placeholder", slug, e)
+                    page = PlaceholderPage(title, desc)
+            else:
+                page = PlaceholderPage(title, desc)
             self._pages.addWidget(page)
             self._placeholder_map[slug] = page
 
