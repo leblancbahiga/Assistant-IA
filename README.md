@@ -1,15 +1,16 @@
 <div align="center">
-  <img src="https://img.shields.io/badge/NURU-V6.0-00A3FF?style=for-the-badge&logo=python&logoColor=white" alt="NURU V6.0"/>
+  <img src="https://img.shields.io/badge/NURU-V8%2B-00A3FF?style=for-the-badge&logo=python&logoColor=white" alt="NURU V8+"/>
   <img src="https://img.shields.io/badge/Platform-macOS%20M1-39FF14?style=for-the-badge&logo=apple&logoColor=white" alt="macOS M1"/>
   <img src="https://img.shields.io/badge/RAM-8%20Go%20Unified-FFB000?style=for-the-badge" alt="8 Go RAM"/>
-  <img src="https://img.shields.io/badge/Status-Actif-success?style=for-the-badge" alt="Status"/>
+  <img src="https://img.shields.io/badge/Tests-29%2F29-success?style=for-the-badge" alt="29/29 Tests"/>
+  <img src="https://img.shields.io/badge/Status-Final-8A2BE2?style=for-the-badge" alt="Status Final"/>
 </div>
 
 <br/>
 
-<h1 align="center">🌀 NURU — Assistant IA Local V6</h1>
+<h1 align="center">🌀 NURU — Assistant IA Local V8+</h1>
 <p align="center">
-  <i>Personal AI for Apple Silicon — Phi-4-mini + Groq Cloud + RAG hybride + Learning Loop</i>
+  <i>Agentic RAG System for Apple Silicon — Multi-Strategy Search + Cloud Routing + Fact Verification</i>
 </p>
 
 <p align="center">
@@ -20,15 +21,15 @@
 
 ## ✨ Aperçu
 
-**NURU** est un assistant IA personnel qui tourne **100% localement** sur votre Mac Apple Silicon. Il combine un LLM local (Phi-4-mini), un LLM cloud (Groq), un moteur RAG hybride, et un système d'apprentissage continu — le tout dans une interface PySide6 sobre et professionnelle.
+**NURU V8+** est un assistant IA personnel **agentic** qui combine :
+- Un **LLM local** (Phi-4-mini) pour le trivial et l'offline
+- Un **LLM cloud** (OpenCode Zen, OpenRouter, DeepSeek, Groq, Nvidia) pour l'analyse documentaire
+- Un **moteur RAG hybride multi-stratégie** avec RRF, HyDE, Query Rewriting, Décomposition
+- Un **vérificateur de faits** post-génération
+- Un système de **diagnostic temps réel** pour le débogage
+- Le tout dans une **interface PySide6 cyberpunk** (anthracite, bleu, vert)
 
-> Conçu par un ingénieur agronome et informaticien, pour le terrain — des chaînes de valeur agricoles en Afrique centrale et orientale à la recherche sur Apple Silicon.
-
----
-
-## 🚀 Fonctionnalités Clés V6
-
-### 🤖 Modèles & Inférence
+## 🚀 Fonctionnalités Clés V8+
 
 | Composant | Technologie | Détails |
 |-----------|-------------|---------|
