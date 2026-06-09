@@ -337,6 +337,7 @@ class NuruOrchestrator:
                 "sources": getattr(rag_result, "sources", []),
                 "query_rewritten": getattr(rag_result, "query_rewritten", ""),
                 "tokens_injected": getattr(rag_result, "tokens_injected", 0),
+                "diagnostic": getattr(rag_result, "diagnostic", None),
             }
             event_data["rag_score"] = round(getattr(rag_result, "top_score", 0.0), 2)
         await self.event_bus.emit("generation_complete", event_data)
