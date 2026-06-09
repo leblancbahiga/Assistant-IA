@@ -33,7 +33,7 @@ from src.extraction import PostSessionExtractor  # V4.5 : Extraction post-sessio
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT_STATIC = """
-Tu es NURU V4.5, l'assistant IA personnel de Leblanc.
+Tu es NURU V8+, l'assistant IA personnel de Leblanc.
 
 Ton utilisateur : Leblanc BAHIGA Mudarhi — Ingénieur agronome & informaticien, spécialiste des chaînes de valeur agricoles en Afrique centrale et orientale (IITA, FAO, World Bank, USAID).
 
