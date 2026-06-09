@@ -38,6 +38,7 @@ class RAGResult:
     top_k_actual: int = 0
     tokens_injected: int = 0
     diagnostic: Optional[dict] = None  # V8+ : RAGDiagnostic sérialisé
+    confidence_label: str = "HAUTE"  # V8+ : HAUTE | MOYENNE | FAIBLE | ABSENT
 
 class RAGEngine:
     """Moteur RAG Hybride : Recherche sémantique (sqlite-vec) + BM25."""
@@ -461,7 +462,7 @@ class RAGEngine:
             result.retrieval_time_ms = (time.time() - t_start) * 1000
             return "", result
 
-        # === DYNAMIC CONFIDENCE GATE V4.2 ===
+        # === V8+ : SCORE GATE DYNAMIQUE (3 niveaux) ===
         top1_dist = vec_results[0][2] if vec_results else 1.0
         top1_score = 1 - top1_dist
 
@@ -469,10 +470,28 @@ class RAGEngine:
         result.top_score = top1_score
         result.all_scores = [1 - d for _, _, d, _ in vec_results] if vec_results else []
 
-        # V4.5 Phase 0 : Seuil depuis config.settings.yaml
-        # V6 : seuils alignés sur les nouvelles valeurs de settings.yaml
-        MIN_ABSOLUTE_SCORE = config.rag_score_threshold
-        FALLBACK_THRESHOLD = config.rag_score_fallback
+        # V8+ : Seuils assouplis — toujours continuer le pipeline
+        MIN_ABSOLUTE_SCORE = config.rag_score_threshold   # 0.40
+        FALLBACK_THRESHOLD = config.rag_score_fallback     # 0.25
+
+        # V8+ : 3 niveaux de confiance, TOUJOURS exécuter le pipeline
+        if top1_score >= MIN_ABSOLUTE_SCORE:
+            confidence_label = "HAUTE"
+            effective_k = k
+        elif top1_score >= FALLBACK_THRESHOLD:
+            confidence_label = "MOYENNE"
+            effective_k = max(2, k // 2)
+            logger.info(f"RAG V8+ : confiance MOYENNE (score={top1_score:.2f}), top_k réduit à {effective_k}")
+        else:
+            confidence_label = "FAIBLE"
+            effective_k = max(1, k // 3)
+            logger.info(f"RAG V8+ : confiance FAIBLE (score={top1_score:.2f}), top_k réduit à {effective_k}")
+
+        # V8+ : Guard — si absolument rien trouvé, VIDE mais pas de return "" 
+        if not vec_results and not fts_results:
+            diag.set_verdict("VIDE")
+            confidence_label = "ABSENT"
+            effective_k = 0
 
         # V6.1 : Stocker les dates d'indexation pour le freshness bonus
         date_map = {}
@@ -484,23 +503,14 @@ class RAGEngine:
         vec_results_clean = [(c, s, d) for c, s, d, _ in vec_results] if vec_results else []
         fts_results_clean = [(c, s, d) for c, s, d, _ in fts_results] if fts_results else []
 
-        is_reliable = top1_score >= MIN_ABSOLUTE_SCORE or (len(fts_results_clean) > 0 and top1_score >= FALLBACK_THRESHOLD)
-
-        if not is_reliable:
-            result.rejection_reason = f"top_score={top1_score:.2f} < {MIN_ABSOLUTE_SCORE}"
-            result.rejected_chunks = result.chunks_retrieved
-            result.retrieval_time_ms = (time.time() - t_start) * 1000
-            logger.info(f"RAG Confidence Gate V4.2: top1={top1_score:.2f} (requis: >={MIN_ABSOLUTE_SCORE}, FTS fallback: >={FALLBACK_THRESHOLD}) → Rejeté")
-            return "", result
-
         seen_contents = set()
         source_counts = {}
         combined_results = []
         source_list = []
 
-        # Fusion RRF
+        # Fusion RRF (V8+ : utilise effective_k au lieu de k)
         from src.rag.retrieval import reciprocal_rank_fusion
-        fused = reciprocal_rank_fusion(vec_results_clean, fts_results_clean, top_k=k)
+        fused = reciprocal_rank_fusion(vec_results_clean, fts_results_clean, top_k=effective_k)
 
         # V6.1 : Score de Fraîcheur — bonus pour les documents récents
         _FRESHNESS_CUTOFF = datetime.now() - timedelta(days=30)
@@ -553,7 +563,7 @@ class RAGEngine:
             
             try:
                 self.reranker.load_model()
-                reranked = await self.reranker.rerank(query, combined_results, top_k=k) or []
+                reranked = await self.reranker.rerank(query, combined_results, top_k=effective_k) or []
             finally:
                 # IMMÉDIATEMENT après usage, décharger le reranker PyTorch/MPS
                 # pour libérer la mémoire GPU avant que le LLM (MLX) ne charge.
@@ -565,7 +575,7 @@ class RAGEngine:
                 logger.info("↪️ Utilisation BM25 direct (pas de reranker).")
             else:
                 logger.warning("⚠️ Fallback: reranker vide, utilisation BM25 à la place.")
-            reranked = self.bm25_rerank(query, combined_results, top_k=k)
+            reranked = self.bm25_rerank(query, combined_results, top_k=effective_k)
         
         # Seconde confidence gate APRÈS reranking (uniquement si reranker a été utilisé)
         if should_rerank and reranked and reranked[0][2] < 0.10:
@@ -576,6 +586,8 @@ class RAGEngine:
         
         result.chunks_injected = len(reranked)
         result.top_k_actual = len(reranked)
+        # V8+ : Propager le niveau de confiance
+        result.confidence_label = confidence_label
 
         # Build sources list
         for content, source, score in reranked:
@@ -589,6 +601,14 @@ class RAGEngine:
         result.documents_found = len(set(s["name"] for s in source_list))
 
         context = self._format_context(reranked)
+        # V8+ : En-tête de confiance dans le contexte — TOUJOURS présent
+        confidence_header = (
+            f"[CONFIANCE RAG: {confidence_label}] "
+        )
+        if not context.strip() or "[AUCUNE SOURCE]" in context:
+            context = confidence_header + "Aucun document pertinent trouvé dans l'index."
+        else:
+            context = confidence_header + "\n" + context
         result.tokens_injected = len(context) // 4
         result.retrieval_time_ms = (time.time() - t_start) * 1000
 
