@@ -606,17 +606,6 @@ class ConsolePage(QWidget):
         """Défiler vers le bas (callé par dashboard si besoin)."""
         self.messages._scroll_to_bottom()
 
-    # ── V6 : Chain of Thought (compatibilité) ──
-
-    def add_cot(self, title: str = "Analyse du système..."):
-        """V6 compat — ajoute une zone CoT (stub, non implémentée en V7)."""
-        # En V7, le CoT est géré dans le panel de télémétrie
-        pass
-
-    def update_cot(self, text: str):
-        """V6 compat — met à jour le CoT (stub, non implémentée en V7)."""
-        pass
-
     # ── Internes ──
 
     def _on_new_chat(self) -> None:
