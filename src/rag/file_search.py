@@ -15,6 +15,7 @@ Utilisation :
 """
 import os
 import re
+import time
 import logging
 import asyncio
 from pathlib import Path
@@ -40,6 +41,32 @@ SUPPORTED_EXTS = {".txt", ".md", ".py", ".json", ".yaml", ".yml",
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB — sécurité mémoire M1 8Go
 MAX_RESULTS_DEFAULT = 5
 
+# V8+ : Cache TTL pour les résultats grep (60s)
+# Évite de rescanner le disque pour la même requête en peu de temps
+_grep_cache: dict[str, tuple[float, list[dict]]] = {}
+GREP_CACHE_TTL = 60  # secondes
+
+
+def _get_cached(query: str) -> list[dict] | None:
+    """Retourne les résultats en cache si encore valides."""
+    key = query.lower().strip()
+    entry = _grep_cache.get(key)
+    if entry and (time.time() - entry[0]) < GREP_CACHE_TTL:
+        return entry[1]
+    return None
+
+
+def _set_cache(query: str, results: list[dict]):
+    """Stocke les résultats dans le cache."""
+    key = query.lower().strip()
+    _grep_cache[key] = (time.time(), results)
+    # Nettoyer les entrées expirées (max 100)
+    if len(_grep_cache) > 100:
+        now = time.time()
+        expired = [k for k, v in _grep_cache.items() if (now - v[0]) > GREP_CACHE_TTL]
+        for k in expired:
+            del _grep_cache[k]
+
 
 def grep_documents(
     query: str,
@@ -50,6 +77,8 @@ def grep_documents(
     Lecture ligne par ligne via read() avec limite de taille pour éviter
     de charger des fichiers entiers en mémoire sur M1 8Go.
     
+    V8+ : Cache TTL 60s — ne rescanner le disque que si nécessaire.
+    
     Args:
         query: Texte à chercher (mots-clés)
         max_results: Nombre max de résultats (défaut: 5)
@@ -59,6 +88,13 @@ def grep_documents(
     """
     if not query or not query.strip():
         return []
+
+    # V8+ : Vérifier le cache TTL
+    cached = _get_cached(query)
+    if cached is not None:
+        logger.debug(f"🔍 grep_documents cache HIT pour '{query[:30]}'")
+        return cached[:max_results]
+    logger.debug(f"🔍 grep_documents cache MISS pour '{query[:30]}' — scan disque")
 
     query_lower = query.lower().strip()
     words = [w for w in re.findall(r'\w+', query_lower) if len(w) > 2]
@@ -125,6 +161,8 @@ def grep_documents(
 
     # Trier par score décroissant
     results.sort(key=lambda x: x["score"], reverse=True)
+    # V8+ : Mettre en cache pour 60s
+    _set_cache(query, results)
     return results[:max_results]
 
 

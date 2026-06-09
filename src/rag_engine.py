@@ -493,6 +493,29 @@ class RAGEngine:
             confidence_label = "ABSENT"
             effective_k = 0
 
+        # V8+ : Grep fallback si FAIBLE ou ABSENT
+        grep_results = []
+        if confidence_label in ("FAIBLE", "ABSENT") and query.strip():
+            try:
+                from src.rag.file_search import grep_documents
+                loop = asyncio.get_running_loop()
+                grep_results = await loop.run_in_executor(
+                    None, lambda: grep_documents(query, max_results=3)
+                )
+                if grep_results:
+                    logger.info(f"📁 Grep fallback: {len(grep_results)} résultat(s) trouvé(s)")
+                    diag.log_strategy("grep", len(grep_results),
+                                      grep_results[0]["score"], True, 0)
+                    # Remonter la confiance si grep trouve quelque chose
+                    if confidence_label == "ABSENT":
+                        confidence_label = "FAIBLE"
+                        effective_k = max(1, k // 3)
+                else:
+                    diag.log_strategy("grep", 0, 0.0, False, 0)
+            except Exception as e:
+                logger.debug(f"Grep fallback non disponible: {e}")
+                diag.log_strategy("grep", 0, 0.0, False, 0)
+
         # V6.1 : Stocker les dates d'indexation pour le freshness bonus
         date_map = {}
         for content, source, dist, chunk_date in vec_results + fts_results:
@@ -503,14 +526,26 @@ class RAGEngine:
         vec_results_clean = [(c, s, d) for c, s, d, _ in vec_results] if vec_results else []
         fts_results_clean = [(c, s, d) for c, s, d, _ in fts_results] if fts_results else []
 
+        # V8+ : Ajouter les résultats grep à la fusion RRF
+        grep_results_clean = []
+        if grep_results:
+            grep_results_clean = [
+                (r["content"][:2000], r["filename"], r["score"])
+                for r in grep_results
+            ]
+            logger.info(f"📁 {len(grep_results_clean)} résultat(s) grep ajouté(s) à la fusion RRF")
+
         seen_contents = set()
         source_counts = {}
         combined_results = []
         source_list = []
 
-        # Fusion RRF (V8+ : utilise effective_k au lieu de k)
+        # Fusion RRF (V8+ : utilise effective_k + intègre grep)
         from src.rag.retrieval import reciprocal_rank_fusion
-        fused = reciprocal_rank_fusion(vec_results_clean, fts_results_clean, top_k=effective_k)
+        all_results = [vec_results_clean, fts_results_clean]
+        if grep_results_clean:
+            all_results.append(grep_results_clean)
+        fused = reciprocal_rank_fusion(*all_results, top_k=effective_k)
 
         # V6.1 : Score de Fraîcheur — bonus pour les documents récents
         _FRESHNESS_CUTOFF = datetime.now() - timedelta(days=30)
