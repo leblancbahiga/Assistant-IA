@@ -83,10 +83,17 @@ class RAGEngine:
         return True
 
     def _get_conn(self):
-        """Ouvre une nouvelle connexion avec support sqlite-vec (Thread-safe)."""
+        """Ouvre une nouvelle connexion avec support sqlite-vec (Thread-safe).
+        
+        V8+ : Mode WAL activé pour supporter les accès concurrents 
+        (multi-stratégie parallèle sans 'database is locked').
+        """
         conn = sqlite3.connect(str(self.db_path), timeout=20)
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
+        # V8+ : WAL mode + synchronous NORMAL pour lectures concurrentes
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 
     def _init_db(self):
