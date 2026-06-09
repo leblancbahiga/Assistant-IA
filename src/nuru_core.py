@@ -453,7 +453,109 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
                 )):
                     yield t
 
-        # 6. Post-Processing & Mémoire
+        # 6. V8+ Sprint 5 : Détection d'échec + Vérificateur + Reformulation
+        _already_retried = False
+        _already_fact_checked = False
+
+        # 6a. Détection d'échec sur métriques objectives (5.1)
+        if response_content and intent_internal in ('RAG', 'COMPLEX'):
+            rag_conf = rag_result.confidence_label if hasattr(rag_result, 'confidence_label') else 'HAUTE'
+            rag_chunks = rag_result.chunks_injected if hasattr(rag_result, 'chunks_injected') else 0
+            rag_max_score = rag_result.top_score if hasattr(rag_result, 'top_score') else 0.0
+
+            needs_retry = (
+                rag_conf in ('FAIBLE', 'ABSENT')
+                and rag_chunks == 0
+                and rag_max_score < 0.30
+                and not _already_retried
+            )
+
+            # 6b. Reformulation Cloud 2ème passe (5.4)
+            if needs_retry and use_cloud:
+                _already_retried = True
+                logger.info(
+                    f"🔄 Sprint 5 : Échec détecté (conf={rag_conf}, chunks={rag_chunks}, "
+                    f"score={rag_max_score:.2f}) — Reformulation 2ème passe"
+                )
+                yield "\n\n🔄 **Recherche élargie...**\n"
+
+                # Reformuler la requête avec CloudLLM
+                reformulation_prompt = (
+                    "Réécris cette question en utilisant des termes plus précis "
+                    "et spécifiques pour améliorer la recherche documentaire :\n"
+                    f"Question : {query}\n\n"
+                    "Réponse (uniquement la reformulation, sans explication) :"
+                )
+                try:
+                    reformulated = self.cloud_llm.generate(reformulation_prompt, timeout=5.0)
+                    if reformulated and reformulated.strip():
+                        reformulated = reformulated.strip()
+                        logger.info(f"🔄 Reformulation : '{query[:40]}' -> '{reformulated[:60]}'")
+
+                        # Nouvelle recherche RAG avec la requête reformulée
+                        new_context, new_result = await self.rag.retrieve(reformulated)
+
+                        if new_context:
+                            # Nouveau prompt avec le nouveau contexte
+                            new_full_rag = f"[CONFIANCE RAG: {new_result.confidence_label}]\n{new_context}"
+                            new_full_prompt = self.context_budget.allocate(
+                                system=system_msg,
+                                rag=new_full_rag,
+                                facts=facts,
+                                history=history,
+                                include_system=(intent_internal != "COMPLEX"),
+                                model_family=model_family
+                            )
+                            if intent_internal == "COMPLEX":
+                                new_full_prompt += f"\\n## QUESTION À TRAITER :\\n{query}"
+                            elif model_family == "phi":
+                                new_full_prompt += f"{query}<|end|>\\n<|assistant|>\\n"
+                            else:
+                                new_full_prompt += f"{query}\\n<|assistant|>\\n"
+
+                            # Nouvelle génération Cloud
+                            new_response = ""
+                            async for token in run_inference(self.cloud_llm.generate_stream(
+                                prompt=new_full_prompt,
+                                intent=intent,
+                                system_prompt=system_msg
+                            )):
+                                yield token
+                                new_response += token
+
+                            if new_response:
+                                response_content = new_response
+                                # Mettre à jour les métriques
+                                rag_result = new_result
+                                logger.info(f"🔄 2ème passe terminée ({len(new_response)} chars)")
+                except Exception as e:
+                    logger.warning(f"Reformulation échouée: {e}")
+
+            # 6c. Vérificateur de faits Cloud (5.3) — seulement si pas déjà retryé
+            if (not needs_retry or _already_retried) and not _already_fact_checked and use_cloud and response_content:
+                try:
+                    from src.rag.fact_checker import FactChecker
+                    checker = FactChecker(cloud_llm=self.cloud_llm)
+
+                    sources_text = [s.get('preview', '') for s in rag_result.sources if hasattr(rag_result, 'sources')]
+                    if not sources_text:
+                        sources_text = [rag_context[:500]] if rag_context else []
+
+                    if sources_text and len(response_content) > 50:
+                        _already_fact_checked = True
+                        check_result = await checker.verify(response_content, sources_text)
+
+                        if not check_result.verified and check_result.issues:
+                            logger.info(f"🔍 Vérificateur : {len(check_result.issues)} problème(s)")
+
+                            # 6d. Message UI si échec vérification (5.6)
+                            yield "\n\n---\n⚠️ **Avertissement** : Certaines informations n'ont pu être vérifiées contre les sources disponibles."
+                            for issue in check_result.issues[:2]:
+                                yield f"\n- {issue[:120]}"
+                except Exception as e:
+                    logger.debug(f"FactChecker ignoré: {e}")
+
+        # 7. Post-Processing & Mémoire (suite)
         if response_content:
             duration = time.time() - start_gen_time
             tokens_count = len(response_content) // 4

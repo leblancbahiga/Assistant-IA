@@ -13,6 +13,10 @@ class QueryContext:
 
     Figé au début de process_query() pour garantir que les décisions
     (routage, policies) sont basées sur un état cohérent.
+
+    V8+ Sprint 5 :
+    - already_retried : flag anti-boucle de reformulation (max 1 retry)
+    - already_fact_checked : flag anti-boucle du vérificateur
     """
     query: str
     session_id: str
@@ -21,6 +25,9 @@ class QueryContext:
     ram_free_mb: int = 0
     route: str = "unknown"       # Défini après routage
     hybrid_strategy: str = "local_only"  # NURU V6 : stratégie hybride
+    # V8+ Sprint 5 : Guards anti-boucle
+    already_retried: bool = False
+    already_fact_checked: bool = False
 
     @classmethod
     def from_runtime(cls, query: str, session_id: str, is_online: bool = True) -> "QueryContext":
@@ -44,6 +51,36 @@ class QueryContext:
             ram_free_mb=self.ram_free_mb,
             route=route,
             hybrid_strategy=hybrid_strategy,
+            already_retried=self.already_retried,
+            already_fact_checked=self.already_fact_checked,
+        )
+
+    def with_retry(self) -> "QueryContext":
+        """V8+ Sprint 5 : Retourne une copie avec already_retried=True."""
+        return QueryContext(
+            query=self.query,
+            session_id=self.session_id,
+            is_online=self.is_online,
+            mode=self.mode,
+            ram_free_mb=self.ram_free_mb,
+            route=self.route,
+            hybrid_strategy=self.hybrid_strategy,
+            already_retried=True,
+            already_fact_checked=self.already_fact_checked,
+        )
+
+    def with_fact_checked(self) -> "QueryContext":
+        """V8+ Sprint 5 : Retourne une copie avec already_fact_checked=True."""
+        return QueryContext(
+            query=self.query,
+            session_id=self.session_id,
+            is_online=self.is_online,
+            mode=self.mode,
+            ram_free_mb=self.ram_free_mb,
+            route=self.route,
+            hybrid_strategy=self.hybrid_strategy,
+            already_retried=self.already_retried,
+            already_fact_checked=True,
         )
 
 
