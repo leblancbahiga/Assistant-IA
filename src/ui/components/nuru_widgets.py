@@ -1,5 +1,5 @@
 """
-NURU V7 — Composants réutilisables du thème Aether Dashboard.
+NURU V8+ — Composants réutilisables du thème Aether Dashboard.
 
 ConfidenceWidget, ModeBadge, CitationBadge, StrategyBadge,
 MetricMiniBar, CircularGaugeWidget, MetricsPanel, TypingIndicator.

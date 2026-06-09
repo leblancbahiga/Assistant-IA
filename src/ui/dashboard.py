@@ -1,5 +1,5 @@
 """
-NURU V7 — NavSidebar + CyberDashboard V7 (Aether Dashboard).
+NURU V8+ — NavSidebar + CyberDashboard V7 (Aether Dashboard).
 
 Trois colonnes : NavSidebar (200px) | QStackedWidget (pages) | MetricsPanel (280px).
 
@@ -291,7 +291,7 @@ class PlaceholderPage(QWidget):
 
 
 class CyberDashboard(QMainWindow):
-    """Fenêtre principale NURU V7 — three-panel Aether Dashboard.
+    """Fenêtre principale NURU V8+ — three-panel Aether Dashboard.
 
     Architecture
     ------------
@@ -348,7 +348,7 @@ class CyberDashboard(QMainWindow):
         # Message de bienvenue
         self.console_page.clear_chat()
         self.console_page.messages.add_message(
-            text="Bonjour, je suis NURU V7. Comment puis-je vous aider ?",
+            text="Bonjour, je suis NURU V8+. Comment puis-je vous aider ?",
             role="assistant",
         )
 
@@ -372,7 +372,7 @@ class CyberDashboard(QMainWindow):
 
     def _build_window(self) -> None:
         """Configure les propriétés de la fenêtre."""
-        self.setWindowTitle("NURU V7")
+        self.setWindowTitle("NURU V8+")
         self.setMinimumSize(1100, 680)
         self.resize(1400, 860)
 
@@ -634,7 +634,7 @@ class CyberDashboard(QMainWindow):
         """Réponse simulée en mode démo."""
         self.console_page.messages.hide_typing()
         responses = {
-            "bonjour": "Bonjour ! Je suis NURU V7. Comment puis-je vous aider ?",
+            "bonjour": "Bonjour ! Je suis NURU V8+. Comment puis-je vous aider ?",
             "aide": "Je peux vous assister sur vos documents, répondre à vos questions, "
                     "et gérer votre base de connaissances. En mode démo, mes réponses "
                     "sont simulées.",

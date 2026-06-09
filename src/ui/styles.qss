@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════
-   NURU V7 — Thème "Abyssal Flat"
+   NURU V8+ — Thème "Abyssal Flat"
    Palette : fonds sombres, flat design, zéro glow/neon
 ═══════════════════════════════════════════════════════════════════ */
 QMainWindow { background-color: #0a0b0f; }

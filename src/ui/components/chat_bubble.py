@@ -1,5 +1,5 @@
 """
-NURU V7 — ChatBubble, AvatarWidget, MessageRow.
+NURU V8+ — ChatBubble, AvatarWidget, MessageRow.
 
 Design Aether Dashboard / interface de chat minimaliste.
 

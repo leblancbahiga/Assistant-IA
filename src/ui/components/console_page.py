@@ -1,5 +1,5 @@
 """
-NURU V7 — Console Page : ChatHeader, MessagesArea, InputArea, ConsolePage.
+NURU V8+ — Console Page : ChatHeader, MessagesArea, InputArea, ConsolePage.
 
 Design Aether Dashboard V7 :
 - ChatHeader : titre, ModeBadge x2, ConfidenceWidget, bouton Nouveau Chat
