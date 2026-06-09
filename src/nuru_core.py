@@ -138,15 +138,53 @@ class NuruCore:
         self._extractor = PostSessionExtractor()
         
     def _is_online(self) -> bool:
-        """Vérifie rapidement si l'API Groq est accessible (Timeout réduit)."""
+        """Vérifie rapidement si le fournisseur Cloud est accessible.
+        
+        V8+ : Multi-provider — teste Groq, puis OpenRouter, puis DeepSeek.
+        Timeout 0.5s par tentative. Retourne True dès qu'un provider répond.
+        """
         import socket
-        try:
-            # Correction 6 : Timeout abaissé à 0.5s. 2s de blocage synchrone
-            # sont catastrophiques pour une UI asynchrone.
-            socket.create_connection(("api.groq.com", 443), timeout=0.5)
-            return True
-        except (socket.timeout, OSError):
-            return False
+        hosts = [
+            ("api.groq.com", 443),
+            ("openrouter.ai", 443),
+            ("api.deepseek.com", 443),
+        ]
+        for host, port in hosts:
+            try:
+                socket.create_connection((host, port), timeout=0.5)
+                return True
+            except (socket.timeout, OSError):
+                continue
+        return False
+
+    async def _check_cloud_online(self) -> bool:
+        """Version asynchrone de _is_online pour utilisation dans process_query.
+        
+        Teste TOUS les hosts en parallèle avec timeout global de 0.8s.
+        V8+ : Vérifie la connectivité AVANT d'engager le pipeline RAG.
+        """
+        import socket
+        hosts = [
+            "api.groq.com",
+            "openrouter.ai",
+            "api.deepseek.com",
+        ]
+        async def _try_host(host: str) -> bool:
+            try:
+                loop = asyncio.get_running_loop()
+                await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        lambda: socket.create_connection((host, 443), timeout=0.5),
+                    ),
+                    timeout=0.5,
+                )
+                return True
+            except Exception:
+                return False
+        
+        results = await asyncio.gather(*[_try_host(h) for h in hosts])
+        return any(results)
         
     def start_background_tasks(self):
         """Lance les tâches asynchrones et le watcher en arrière-plan.
@@ -240,6 +278,16 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
                 yield cached_resp
                 return
         
+        # 2b. V8+ : Vérification Cloud en tête de pipeline RAG
+        # Si le cloud est indisponible, on bascule sur Phi-4-mini
+        # avec contexte tronqué avant d'engager la recherche.
+        cloud_available = True
+        if intent_internal in ["RAG", "COMPLEX"]:
+            cloud_available = await self._check_cloud_online()
+            if not cloud_available:
+                logger.warning("☁️ Cloud indisponible — bascule en mode dégradé local")
+                yield "⚠️ **Mode hors-ligne** : service cloud indisponible. Analyse documentaire limitée.\n\n"
+
         # 3. Récupération du Contexte (RAG et/ou WEB)
         context_tasks = []
         if intent_internal in ["RAG", "COMPLEX"]:
