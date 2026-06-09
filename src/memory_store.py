@@ -105,8 +105,11 @@ class MemoryStore:
         conn.close()
 
     # --- Semantic Cache (Vector) ---
-    async def get_cache(self, query: str) -> Optional[str]:
-        """Recherche sémantique dans le cache avec un seuil de 0.92."""
+    async def get_cache(self, query: str) -> Optional[tuple[str, Optional[dict]]]:
+        """Recherche sémantique dans le cache avec un seuil de 0.92.
+
+        V8+ Sprint 6.2 : Retourne (response, diagnostic) si trouvé.
+        """
         embeddings = await self.embedder.embed(query, is_query=True)
         qvec = sqlite_vec.serialize_float32(embeddings[0])
         
@@ -123,20 +126,43 @@ class MemoryStore:
         """, [qvec]).fetchone()
         
         if row:
-            response, dist = row
+            raw_response, dist = row
             similarity = 1 - dist
             if similarity > 0.92:
                 logger.info(f"Semantic Cache Hit (Sim={similarity:.2f})")
-                conn.execute("UPDATE semantic_cache SET hit_count = hit_count + 1 WHERE response = ?", [response])
+                conn.execute("UPDATE semantic_cache SET hit_count = hit_count + 1 WHERE response = ?", [raw_response])
                 conn.commit()
                 conn.close()
-                return response
+
+                # V8+ Sprint 6.2 : Tenter de parser le diagnostic embarqué
+                try:
+                    payload = json.loads(raw_response)
+                    if isinstance(payload, dict) and "response" in payload:
+                        return payload["response"], payload.get("diagnostic")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+                return raw_response, None  # Legacy : pas de diagnostic
         
         conn.close()
-        return None
+        return None, None
 
-    async def set_cache(self, query: str, response: str):
-        """Enregistre une réponse dans le cache vectoriel."""
+    async def set_cache(self, query: str, response: str, diagnostic: Optional[dict] = None):
+        """Enregistre une réponse dans le cache vectoriel.
+
+        V8+ Sprint 6.2 : Stocke le diagnostic embarqué dans la réponse
+        pour que le dashboard affiche les infos même sur cache hit.
+        """
+        # V8+ : Embarquer le diagnostic dans la réponse (JSON envelope)
+        if diagnostic is not None:
+            payload = json.dumps({
+                "response": response,
+                "diagnostic": diagnostic,
+                "cached_at": time.time(),
+            })
+        else:
+            payload = response  # Legacy : pas de diagnostic
+
         embeddings = await self.embedder.embed(query, is_query=False)
         qvec = sqlite_vec.serialize_float32(embeddings[0])
         
@@ -147,7 +173,7 @@ class MemoryStore:
         conn.execute("""
             INSERT INTO semantic_cache (embedding, query, response, hit_count)
             VALUES (?, ?, ?, 0)
-        """, [qvec, query, response])
+        """, [qvec, query, payload])
         conn.commit()
         conn.close()
 

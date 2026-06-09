@@ -112,10 +112,31 @@ class LocalLLM:
             sampler = make_sampler(temp=temp, top_p=top_p)
             logits_processors = [make_repetition_penalty(rep_penalty)]
 
+            # V8+ Sprint 6.4 : Utiliser apply_chat_template du tokenizer
+            # pour formater correctement le prompt selon le modèle
+            formatted_prompt = prompt
+            if self._tokenizer is not None and hasattr(self._tokenizer, 'apply_chat_template'):
+                try:
+                    # Construire la structure de chat depuis le prompt brut
+                    # Si le prompt contient déjà les tokens spéciaux, on ne double pas
+                    if '<|assistant|>' not in prompt and '<|im_start|>assistant' not in prompt:
+                        messages = [
+                            {"role": "user", "content": prompt},
+                        ]
+                        formatted_prompt = self._tokenizer.apply_chat_template(
+                            messages,
+                            tokenize=False,
+                            add_generation_prompt=True,
+                        )
+                        logger.debug(f"🧩 apply_chat_template appliqué ({len(formatted_prompt)} chars)")
+                except Exception as e:
+                    logger.debug(f"apply_chat_template ignoré: {e}")
+                    formatted_prompt = prompt
+
             for response in stream_generate(
                 self._model, 
                 self._tokenizer, 
-                prompt, 
+                formatted_prompt, 
                 max_tokens=config.rag_max_context_tokens,
                 sampler=sampler, 
                 logits_processors=logits_processors

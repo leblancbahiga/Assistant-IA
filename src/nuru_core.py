@@ -245,7 +245,15 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
         return "phi"
 
     async def process_query(self, query: str, use_tts: bool = False) -> AsyncGenerator[str, None]:
-        """Traite une requête utilisateur et génère une réponse en streaming (V4)."""
+        """Traite une requête utilisateur et génère une réponse en streaming (V4).
+
+        ⚠️ Pipeline V4 legacy — préférer process_query_v45() pour le pipeline V4.5
+        qui utilise NuruOrchestrator (src/core/orchestrator.py) avec injection
+        de dépendances, policies, et EvidenceVerifier intégré.
+
+        Les deux pipelines coexistent. process_query() est maintenu pour
+        compatibilité avec le dashboard existant.
+        """
         
         # 1. Routage Sémantique V4 (remplace le simple IntentClassifier)
         route_result = await self.router.route(query)
@@ -593,7 +601,8 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
                 )
                 
             if intent != "COMPLEX":
-                await self.memory.set_cache(query, response_content)
+                diag = getattr(rag_result, 'diagnostic', None)
+                await self.memory.set_cache(query, response_content, diagnostic=diag)
             self.memory.add_message("user", query)
             self.memory.add_message("assistant", response_content)
             event_data = {
