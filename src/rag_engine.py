@@ -487,52 +487,27 @@ class RAGEngine:
         diag = RAGDiagnostic(query=query[:200])
         diag.start()
 
-        # 1. Optimisation de la requête (synonymes) + Expansion LLM
+        # 1. Optimisation de la requête (synonymes + LLM Cloud)
         optimized_query = self.rewriter.rewrite(query)
-        fts_query = self.rewriter.normalize_for_fts(query)
-        # L'expansion LLM ajoute des termes supplémentaires sur la requête déjà
-        # enrichie par les synonymes, améliorant le recall pour les sujets rares
-        llm_expanded = self.rewriter.expand_with_llm(optimized_query)
-        result.query_rewritten = llm_expanded
+        result.query_rewritten = optimized_query
 
-        # 2. Dual-Query Retrieval V6.1 + LLM Expansion : embedder la requête
-        # originale ET la requête LLM-expandée pour capter ce que l'une ou l'autre
-        # rate (+15-25% recall vs synonymes seuls).
-        embeds = await asyncio.gather(
-            self.embedder.embed(query, is_query=True),
-            self.embedder.embed(llm_expanded, is_query=True),
-        )
-        qvec_orig = sqlite_vec.serialize_float32(embeds[0][0])
-        qvec_opti = sqlite_vec.serialize_float32(embeds[1][0])
-
-        # Recherche avec les deux vecteurs
-        vec_orig, fts_results = await asyncio.to_thread(
-            self._search_db, qvec_orig, fts_query
-        )
-        vec_opti, _ = await asyncio.to_thread(
-            self._search_db, qvec_opti, ""
+        # 2. V8+ P2 : MultiSearch orchestrateur — source unique de recherche documentaire
+        self._ensure_multi_search()
+        ms_results, ms_diag = await self._multi_search.search(
+            query=query,
+            rewritten_query=optimized_query,
+            confidence_label="HAUTE",  # multi_search décide du early stopping via scores
+            top_k=k * 2,               # surplus pour que le reranker ait de la matière
         )
 
-        # Fusion des résultats vectoriels : déduplication par contenu
-        seen = set()
-        vec_results = []
-        for results in (vec_orig, vec_opti):
-            for content, source, dist, chunk_date in results:
-                if content not in seen:
-                    seen.add(content)
-                    vec_results.append((content, source, dist, chunk_date))
+        result.chunks_retrieved = len(ms_results)
 
-        result.chunks_retrieved = len(vec_results) + len(fts_results)
+        # Log des stratégies multi_search dans le diagnostic RAG
+        for strat in ms_diag.strategies_tried:
+            count = ms_diag.results_per_strategy.get(strat, 0)
+            diag.log_strategy(strat, count, 0.0, count > 0, 0)
 
-        # V8+ : Log des stratégies dans le diagnostic
-        top1_vec = 1 - vec_results[0][2] if vec_results else 0.0
-        diag.log_strategy("vectorielle", len(vec_results), top1_vec,
-                          len(vec_results) > 0, (time.time() - t_start) * 1000)
-        fts_hit = len(fts_results) > 0
-        diag.log_strategy("fts", len(fts_results), 1.0 if fts_hit else 0.0,
-                          fts_hit, (time.time() - t_start) * 1000)
-
-        if not vec_results and not fts_results:
+        if not ms_results:
             diag.set_verdict("VIDE (aucun résultat)")
             diag.stop()
             result.diagnostic = diag.to_dict()
@@ -540,18 +515,14 @@ class RAGEngine:
             return "", result
 
         # === V8+ : SCORE GATE DYNAMIQUE (3 niveaux) ===
-        top1_dist = vec_results[0][2] if vec_results else 1.0
-        top1_score = 1 - top1_dist
-
+        top1_score = ms_results[0].score
         self.last_top_score = top1_score
         result.top_score = top1_score
-        result.all_scores = [1 - d for _, _, d, _ in vec_results] if vec_results else []
+        result.all_scores = [r.score for r in ms_results]
 
-        # V8+ : Seuils assouplis — toujours continuer le pipeline
         MIN_ABSOLUTE_SCORE = config.rag_score_threshold   # 0.40
         FALLBACK_THRESHOLD = config.rag_score_fallback     # 0.25
 
-        # V8+ : 3 niveaux de confiance, TOUJOURS exécuter le pipeline
         if top1_score >= MIN_ABSOLUTE_SCORE:
             confidence_label = "HAUTE"
             effective_k = k
@@ -564,102 +535,34 @@ class RAGEngine:
             effective_k = max(1, k // 3)
             logger.info(f"RAG V8+ : confiance FAIBLE (score={top1_score:.2f}), top_k réduit à {effective_k}")
 
-        # V8+ : Guard — si absolument rien trouvé, VIDE mais pas de return "" 
-        if not vec_results and not fts_results:
-            diag.set_verdict("VIDE")
-            confidence_label = "ABSENT"
-            effective_k = 0
+        # Convertir SearchResult → tuples (content, source, score) pour post-processing
+        combined_results = [(r.content, r.source, r.score) for r in ms_results]
 
-        # V8+ : Grep fallback si FAIBLE ou ABSENT
-        grep_results = []
-        if confidence_label in ("FAIBLE", "ABSENT") and query.strip():
-            try:
-                from src.rag.file_search import grep_documents
-                loop = asyncio.get_running_loop()
-                grep_results = await loop.run_in_executor(
-                    None, lambda: grep_documents(query, max_results=3)
-                )
-                if grep_results:
-                    logger.info(f"📁 Grep fallback: {len(grep_results)} résultat(s) trouvé(s)")
-                    diag.log_strategy("grep", len(grep_results),
-                                      grep_results[0]["score"], True, 0)
-                    # Remonter la confiance si grep trouve quelque chose
-                    if confidence_label == "ABSENT":
-                        confidence_label = "FAIBLE"
-                        effective_k = max(1, k // 3)
-                else:
-                    diag.log_strategy("grep", 0, 0.0, False, 0)
-            except Exception as e:
-                logger.debug(f"Grep fallback non disponible: {e}")
-                diag.log_strategy("grep", 0, 0.0, False, 0)
-
-        # V6.1 : Stocker les dates d'indexation pour le freshness bonus
-        date_map = {}
-        for content, source, dist, chunk_date in vec_results + fts_results:
-            if content not in date_map:
-                date_map[content] = chunk_date
-
-        # Nettoyer les tuples pour compatibilité RRF (3 éléments)
-        vec_results_clean = [(c, s, d) for c, s, d, _ in vec_results] if vec_results else []
-        fts_results_clean = [(c, s, d) for c, s, d, _ in fts_results] if fts_results else []
-
-        # V8+ : Ajouter les résultats grep à la fusion RRF
-        grep_results_clean = []
-        if grep_results:
-            grep_results_clean = [
-                (r["content"][:2000], r["filename"], r["score"])
-                for r in grep_results
-            ]
-            logger.info(f"📁 {len(grep_results_clean)} résultat(s) grep ajouté(s) à la fusion RRF")
-
+        # Profile Boost (V8+ P2 : freshness bonus supprimé — pas de chunk_date depuis multi_search)
         seen_contents = set()
         source_counts = {}
-        combined_results = []
+        deduped_results = []
         source_list = []
 
-        # Fusion RRF (V8+ : utilise effective_k + intègre grep)
-        from src.rag.retrieval import reciprocal_rank_fusion
-        all_results = [vec_results_clean, fts_results_clean]
-        if grep_results_clean:
-            all_results.append(grep_results_clean)
-        fused = reciprocal_rank_fusion(*all_results, top_k=effective_k)
-
-        # V6.1 : Score de Fraîcheur — bonus pour les documents récents
-        _FRESHNESS_CUTOFF = datetime.now() - timedelta(days=30)
-        _FRESHNESS_BOOST = 0.10
-
-        def _freshness_bonus(content: str) -> float:
-            """Donne un bonus aux chunks indexés récemment."""
-            chunk_date_str = date_map.get(content, "")
-            if not chunk_date_str:
-                return 0.0
-            try:
-                chunk_date = datetime.strptime(chunk_date_str[:10], "%Y-%m-%d")
-                if chunk_date >= _FRESHNESS_CUTOFF:
-                    return _FRESHNESS_BOOST
-            except (ValueError, TypeError):
-                pass
-            return 0.0
-
-        # Profile Boost + Freshness Bonus
         try:
             from src.profile_boost import get_boost_score
-            fused = [
-                (content, source, score * get_boost_score(source) + _freshness_bonus(content))
-                for content, source, score in fused
+            boosted = [
+                (content, source, score * get_boost_score(source))
+                for content, source, score in combined_results
             ]
-            fused.sort(key=lambda x: x[2], reverse=True)
+            boosted.sort(key=lambda x: x[2], reverse=True)
         except Exception:
-            pass
+            boosted = combined_results
 
-        # Déduplication par contenu après RRF
-        for content, source, score in fused:
+        for content, source, score in boosted:
             if content not in seen_contents:
                 count = source_counts.get(source, 0)
                 if count < 2:
-                    combined_results.append((content, source, score))
+                    deduped_results.append((content, source, score))
                     source_counts[source] = count + 1
                     seen_contents.add(content)
+
+        combined_results = deduped_results
 
         # V4.5 Phase 0 : Reranker CONDITIONNEL
         # N'active le cross-encoder QUE si le score est dans la zone grise

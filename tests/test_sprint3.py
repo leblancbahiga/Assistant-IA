@@ -107,7 +107,7 @@ def test_score_gate_integration():
         
         # Le diagnostic doit être présent
         assert result.diagnostic is not None
-        assert "vectorielle" in result.diagnostic["strategies_tried"]
+        assert "vectoriel" in result.diagnostic["strategies_tried"]
         
         # Confidence label doit être défini
         assert result.confidence_label in ("HAUTE", "MOYENNE", "FAIBLE", "ABSENT")
