@@ -313,6 +313,14 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
             rag_result = RAGResult()
             web_context = ""
         
+        # V8+ : Fallback offline — troncature agressive pour Phi-4-mini
+        if not cloud_available and rag_context:
+            # Garder seulement les 1000 premiers caractères (~250 tokens)
+            rag_context = rag_context[:1000]
+            if rag_context:
+                rag_context = "[MODE DÉGRADÉ — Contexte fortement condensé]\n" + rag_context
+            logger.warning(f"📉 Mode hors-ligne : contexte tronqué à {len(rag_context)} chars")
+
         # 3b. Fallback Web si RAG vide sur question informative
         if intent_internal == "RAG" and not rag_context and len(query.split()) > 3:
             logger.info("RAG insuffisant, tentative de fallback Web automatique...")

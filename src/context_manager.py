@@ -63,14 +63,13 @@ class ContextBudget:
 
         return "".join(parts)
     
-    def allocate(self, system: str, rag: str, facts: list[str], history: list[dict], user_facts: list[str] = None, include_system: bool = True, model_family: str = "phi") -> str:
+    def allocate(self, system: str, rag: str, facts: list[str], history: list[dict], user_facts: list[str] = None, include_system: bool = True, model_family: str = "phi", rag_priority: bool = False) -> str:
         """Construit le prompt dans le budget tokens.
 
-        Budget alloué :
-        - 80%  → Contexte documentaire (RAG / Web)
-        - 10%  → Informations utilisateur (Long-Term Memory)
-        -  5%  → Faits généraux
-        - 10%  → Historique récent (augmenté si user_facts est vide)
+        Budget alloué (V8+) :
+        - 90%  → Contexte documentaire (RAG / Web) si rag_priority=True
+        - 80%  → sinon
+        - Le reste réparti entre faits, historique, infos utilisateur
         """
         user_facts = user_facts or []
 
@@ -83,8 +82,8 @@ class ContextBudget:
             system = self._truncate_by_chars(system, self.available * 4)
             budget = 0
 
-        # 2. RAG : priorité 80% du budget restant
-        rag_budget = int(budget * 0.8)
+        # 2. RAG : priorité 90% du budget restant (V8+ : plus de contexte pour le cloud)
+        rag_budget = int(budget * 0.9)
         rag_text = "\n".join(rag) if isinstance(rag, list) else rag
         if self._estimate_tokens(rag_text) > rag_budget:
             rag_text = self._truncate_by_chars(rag_text, rag_budget * 4)
