@@ -19,6 +19,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
+from src.rag.types import SearchResult
+
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────
@@ -41,15 +43,6 @@ _last_ram_result: tuple[bool, int] = (True, 9999)
 # ──────────────────────────────────────────
 # Types de données
 # ──────────────────────────────────────────
-
-@dataclass
-class SearchResult:
-    """Résultat d'une stratégie de recherche."""
-    content: str
-    source: str
-    score: float       # Score normalisé [0, 1]
-    strategy: str      # 'vectoriel', 'fts', 'grep', 'hyde', 'metadata'
-    rank: int = 0      # Rang dans sa stratégie (pour RRF)
 
 @dataclass
 class MultiSearchDiagnostic:

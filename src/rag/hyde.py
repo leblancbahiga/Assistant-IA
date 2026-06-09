@@ -52,7 +52,7 @@ async def hyde_search(
     Returns:
         list[SearchResult]: Résultats HyDE (via src.rag.multi_search.SearchResult)
     """
-    from src.rag.multi_search import SearchResult
+    from src.rag.types import SearchResult
 
     t0 = time.time()
 
