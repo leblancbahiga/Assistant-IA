@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/NURU-V8%2B-00A3FF?style=for-the-badge&logo=python&logoColor=white" alt="NURU V8+"/>
   <img src="https://img.shields.io/badge/Platform-macOS%20M1-39FF14?style=for-the-badge&logo=apple&logoColor=white" alt="macOS M1"/>
   <img src="https://img.shields.io/badge/RAM-8%20Go%20Unified-FFB000?style=for-the-badge" alt="8 Go RAM"/>
-  <img src="https://img.shields.io/badge/Tests-29%2F29-success?style=for-the-badge" alt="29/29 Tests"/>
+  <img src="https://img.shields.io/badge/Tests-41%2F41-success?style=for-the-badge" alt="41/41 Tests"/>
   <img src="https://img.shields.io/badge/Status-Final-8A2BE2?style=for-the-badge" alt="Status Final"/>
 </div>
 
