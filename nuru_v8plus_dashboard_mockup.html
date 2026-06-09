@@ -1,0 +1,326 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-mono, 'JetBrains Mono', monospace); }
+.dash { display: grid; grid-template-columns: 220px 1fr 300px; height: 640px; background: #0A0E14; border-radius: var(--border-radius-lg); overflow: hidden; border: 0.5px solid #1A2332; font-size: 12px; }
+
+/* SIDEBAR */
+.sidebar { background: #0D1318; border-right: 0.5px solid #1A2332; display: flex; flex-direction: column; padding: 0; }
+.logo { padding: 16px 14px 12px; border-bottom: 0.5px solid #1A2332; }
+.logo-title { font-size: 15px; font-weight: 500; color: #E8EAF0; letter-spacing: 0.08em; }
+.logo-sub { font-size: 10px; color: #3D5266; margin-top: 2px; letter-spacing: 0.12em; text-transform: uppercase; }
+
+.nav { padding: 10px 8px; flex: 1; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; color: #4A6080; cursor: pointer; margin-bottom: 1px; font-size: 11px; letter-spacing: 0.03em; transition: background 0.15s; }
+.nav-item:hover { background: #131B24; color: #7A9ABF; }
+.nav-item.active { background: #0F2238; color: #3A8FD4; }
+.nav-item i { font-size: 15px; }
+.nav-sep { height: 0.5px; background: #1A2332; margin: 8px 4px; }
+.nav-label { font-size: 9px; color: #2D3F52; letter-spacing: 0.15em; text-transform: uppercase; padding: 8px 10px 4px; }
+
+.doc-list { margin: 0 8px; }
+.doc-item { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 5px; color: #3D5266; font-size: 10px; cursor: pointer; }
+.doc-item:hover { background: #0F1A24; color: #5A7A9A; }
+.doc-item i { font-size: 13px; }
+.doc-dot { width: 5px; height: 5px; border-radius: 50%; margin-left: auto; }
+.doc-dot.indexed { background: #1E6B3A; }
+.doc-dot.partial { background: #6B4E1E; }
+
+.sidebar-footer { padding: 10px 14px; border-top: 0.5px solid #1A2332; }
+.groq-badge { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: #0A1F12; border-radius: 5px; border: 0.5px solid #1A3D24; }
+.groq-dot { width: 6px; height: 6px; border-radius: 50%; background: #2A9A4A; }
+.groq-text { font-size: 10px; color: #2A9A4A; letter-spacing: 0.05em; }
+
+/* CHAT CENTRAL */
+.chat { display: flex; flex-direction: column; background: #0A0E14; }
+.chat-header { padding: 10px 16px; border-bottom: 0.5px solid #1A2332; display: flex; align-items: center; gap: 8px; }
+.chat-title { font-size: 12px; color: #6A8AAA; flex: 1; }
+.mode-pill { display: flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 20px; font-size: 10px; letter-spacing: 0.06em; }
+.mode-groq { background: #0A1F2F; color: #1A8FD4; border: 0.5px solid #1A3F5F; }
+.mode-local { background: #0F1A0A; color: #2A8A3A; border: 0.5px solid #1A3A1A; }
+.mode-dot { width: 5px; height: 5px; border-radius: 50%; }
+.mode-groq .mode-dot { background: #1A8FD4; }
+.mode-local .mode-dot { background: #2A8A3A; }
+
+.messages { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { display: flex; gap: 8px; }
+.msg-user { flex-direction: row-reverse; }
+.avatar { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; margin-top: 2px; }
+.avatar-nuru { background: #0F2238; color: #1A8FD4; border: 0.5px solid #1A4060; }
+.avatar-user { background: #1A1A2E; color: #7A6ABF; border: 0.5px solid #2A2A4A; }
+.bubble { max-width: 82%; padding: 9px 12px; border-radius: 10px; line-height: 1.5; font-size: 11.5px; }
+.bubble-nuru { background: #0D1720; border: 0.5px solid #1A2D40; border-left: 2px solid #1A5F9A; color: #B0C4D8; border-radius: 2px 10px 10px 10px; }
+.bubble-user { background: #0F122A; border: 0.5px solid #1E1E3A; border-right: 2px solid #4A3A9A; color: #9898C8; border-radius: 10px 2px 10px 10px; text-align: right; }
+
+.rag-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; background: #081A0D; border: 0.5px solid #1A3A1F; border-radius: 20px; font-size: 9px; color: #2A8A3A; margin-top: 5px; margin-right: 4px; }
+.rag-badge-warn { background: #1A0F05; border-color: #3A2A0A; color: #9A7A2A; }
+.cite-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; background: #0A1830; border: 0.5px solid #1A3050; border-radius: 4px; font-size: 9px; color: #2A6AAA; margin-top: 4px; margin-right: 3px; }
+
+.typing { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: #0D1720; border: 0.5px solid #1A2D40; border-left: 2px solid #1A5F9A; border-radius: 2px 10px 10px 10px; width: fit-content; }
+.typing-dots { display: flex; gap: 3px; }
+.typing-dot { width: 4px; height: 4px; border-radius: 50%; background: #2A5A8A; animation: blink 1.2s infinite; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
+.typing-label { font-size: 9px; color: #2A5A8A; letter-spacing: 0.06em; }
+
+.input-area { padding: 10px 14px; border-top: 0.5px solid #1A2332; display: flex; gap: 8px; align-items: flex-end; }
+.input-box { flex: 1; background: #0D1520; border: 0.5px solid #1A2D40; border-radius: 8px; padding: 8px 11px; color: #8AAAC8; font-size: 11px; font-family: inherit; resize: none; outline: none; min-height: 36px; max-height: 80px; line-height: 1.4; }
+.send-btn { width: 32px; height: 32px; border-radius: 6px; background: #0F2A44; border: 0.5px solid #1A4A6A; color: #2A8FD4; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+.send-btn i { font-size: 15px; }
+
+/* RIGHT PANEL */
+.right { background: #0C1018; border-left: 0.5px solid #1A2332; display: flex; flex-direction: column; overflow: hidden; }
+.right-header { padding: 10px 12px; border-bottom: 0.5px solid #1A2332; display: flex; align-items: center; gap: 6px; }
+.right-title { font-size: 11px; color: #4A6A8A; letter-spacing: 0.06em; text-transform: uppercase; flex: 1; }
+.tab-row { display: flex; gap: 2px; padding: 6px 10px 0; border-bottom: 0.5px solid #1A2332; }
+.tab { padding: 4px 10px; font-size: 10px; color: #3D5266; cursor: pointer; border-bottom: 1.5px solid transparent; letter-spacing: 0.04em; }
+.tab.active { color: #2A7FBF; border-bottom-color: #2A7FBF; }
+
+.metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px; }
+.metric { background: #0A0E14; border: 0.5px solid #1A2332; border-radius: 6px; padding: 8px 10px; }
+.metric-label { font-size: 9px; color: #2D4052; letter-spacing: 0.10em; text-transform: uppercase; margin-bottom: 4px; }
+.metric-val { font-size: 18px; font-weight: 500; color: #4A8AB0; font-family: var(--font-mono, monospace); }
+.metric-unit { font-size: 10px; color: #2D4052; margin-left: 2px; }
+.metric-sub { font-size: 9px; color: #2A5A3A; margin-top: 2px; }
+
+.ram-bar-wrap { padding: 0 10px 8px; }
+.ram-bar-label { display: flex; justify-content: space-between; font-size: 9px; color: #2D4052; margin-bottom: 4px; letter-spacing: 0.08em; text-transform: uppercase; }
+.ram-bar-track { height: 4px; background: #1A2332; border-radius: 2px; overflow: hidden; }
+.ram-bar-fill { height: 100%; width: 34%; background: #1A7A4A; border-radius: 2px; }
+
+.rag-diag { padding: 8px 10px; flex: 1; overflow-y: auto; }
+.diag-title { font-size: 9px; color: #2D4052; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+.diag-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 5px; margin-bottom: 3px; background: #0A0E14; border: 0.5px solid #1A2332; }
+.diag-icon { font-size: 13px; }
+.diag-name { font-size: 10px; color: #4A6A8A; flex: 1; }
+.diag-score { font-size: 10px; font-family: var(--font-mono, monospace); }
+.diag-time { font-size: 9px; color: #2D4052; }
+.score-high { color: #2A8A4A; }
+.score-med { color: #8A7A2A; }
+.score-low { color: #8A2A2A; }
+
+.confidence-bar { margin: 0 10px 8px; }
+.conf-header { display: flex; justify-content: space-between; font-size: 9px; color: #2D4052; margin-bottom: 4px; letter-spacing: 0.08em; text-transform: uppercase; }
+.conf-track { height: 3px; background: #1A2332; border-radius: 2px; overflow: hidden; }
+.conf-fill { height: 100%; width: 72%; background: linear-gradient(90deg, #1A7A4A 0%, #2A9A5A 100%); border-radius: 2px; }
+
+.index-health { margin: 0 10px 8px; background: #0A0E14; border: 0.5px solid #1A2332; border-radius: 6px; padding: 8px 10px; }
+.health-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.health-label { font-size: 9px; color: #2D4052; letter-spacing: 0.06em; }
+.health-val { font-size: 10px; font-family: var(--font-mono, monospace); color: #4A6A8A; }
+.health-warn { color: #8A5A1A; }
+.health-ok { color: #2A8A4A; }
+
+.retro-banner { margin: 6px 10px; padding: 5px 8px; background: #100A05; border: 0.5px solid #3A1A05; border-left: 2px solid #8A4A1A; border-radius: 0 5px 5px 0; display: flex; align-items: center; gap: 6px; }
+.retro-text { font-size: 9px; color: #8A5A2A; line-height: 1.4; }
+
+.fact-check { margin: 0 10px; padding: 6px 8px; background: #040E08; border: 0.5px solid #1A3A1F; border-left: 2px solid #1A7A3A; border-radius: 0 5px 5px 0; }
+.fact-label { font-size: 9px; color: #1A7A3A; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
+.fact-row { font-size: 9px; color: #2A5A3A; display: flex; align-items: center; gap: 4px; margin-bottom: 1px; }
+</style>
+
+<h2 class="sr-only">NURU V8+ Dashboard Mockup — interface PySide6 trois colonnes avec panneau RAG Diagnostic en temps réel</h2>
+
+<div class="dash">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="logo">
+      <div class="logo-title">NURU</div>
+      <div class="logo-sub">V8+ · Agentic RAG</div>
+    </div>
+
+    <div class="nav">
+      <div class="nav-item active"><i class="ti ti-message-2" aria-hidden="true"></i> Conversation</div>
+      <div class="nav-item"><i class="ti ti-files" aria-hidden="true"></i> Base documentaire</div>
+      <div class="nav-item"><i class="ti ti-activity" aria-hidden="true"></i> Diagnostics</div>
+      <div class="nav-item"><i class="ti ti-brain" aria-hidden="true"></i> Nuru Brain</div>
+      <div class="nav-sep"></div>
+      <div class="nav-item"><i class="ti ti-settings" aria-hidden="true"></i> Paramètres</div>
+      <div class="nav-item"><i class="ti ti-help" aria-hidden="true"></i> Système V6</div>
+    </div>
+
+    <div class="nav-label">Documents récents</div>
+    <div class="doc-list">
+      <div class="doc-item"><i class="ti ti-file-type-pdf" aria-hidden="true"></i> CV_Leblanc_2024.pdf <span class="doc-dot indexed"></span></div>
+      <div class="doc-item"><i class="ti ti-file-type-pdf" aria-hidden="true"></i> Rapport_Lubero.pdf <span class="doc-dot indexed"></span></div>
+      <div class="doc-item"><i class="ti ti-file-description" aria-hidden="true"></i> PUA-CI_Avenant.docx <span class="doc-dot partial"></span></div>
+      <div class="doc-item"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i> Rendements_riz.xlsx <span class="doc-dot indexed"></span></div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="groq-badge">
+        <div class="groq-dot"></div>
+        <div class="groq-text">Groq · llama-3.3-70b</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAT CENTRAL -->
+  <div class="chat">
+    <div class="chat-header">
+      <div class="chat-title">Nouvelle conversation</div>
+      <div class="mode-pill mode-groq"><div class="mode-dot"></div>GROQ-RAG</div>
+    </div>
+
+    <div class="messages">
+      <!-- Message utilisateur -->
+      <div class="msg msg-user">
+        <div class="avatar avatar-user">LB</div>
+        <div class="bubble bubble-user">
+          Quelles sont les compétences en agronomie mentionnées dans mon CV ? Compare avec les compétences requises dans l'offre IITA.
+        </div>
+      </div>
+
+      <!-- Indicateur de recherche -->
+      <div class="msg">
+        <div class="avatar avatar-nuru"><i class="ti ti-cpu" style="font-size:13px" aria-hidden="true"></i></div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <div class="typing">
+            <div class="typing-dots">
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+            </div>
+            <div class="typing-label">RECHERCHE MULTI-STRATÉGIE · 2 sous-requêtes</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Réponse NURU -->
+      <div class="msg">
+        <div class="avatar avatar-nuru"><i class="ti ti-robot" style="font-size:13px" aria-hidden="true"></i></div>
+        <div style="display:flex; flex-direction:column;">
+          <div class="bubble bubble-nuru">
+            Votre CV mentionne 14 compétences agronomiques clés : systèmes semenciers (riz, manioc), chaînes de valeur agricoles, MEAL, SIG, modélisation de rendement, agriculture climato-intelligente, ODK/KoboCollect, gestion de projet USAID/FAO…<br><br>
+            L'offre IITA requiert 8 de ces compétences, dont 6 correspondent directement. Lacunes identifiées : expérience avec CGIAR-SPIA et rapport de performance annuel IRR.
+          </div>
+          <div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:3px;">
+            <span class="rag-badge"><i class="ti ti-check" style="font-size:10px" aria-hidden="true"></i> Confiance HAUTE · 0.81</span>
+            <span class="cite-chip"><i class="ti ti-file" style="font-size:10px" aria-hidden="true"></i> CV_Leblanc_2024.pdf</span>
+            <span class="cite-chip"><i class="ti ti-file" style="font-size:10px" aria-hidden="true"></i> IITA_JD_2024.pdf</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <textarea class="input-box" rows="1" placeholder="Posez votre question…"></textarea>
+      <div class="send-btn"><i class="ti ti-send" aria-hidden="true"></i></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL — RAG Diagnostic -->
+  <div class="right">
+    <div class="right-header">
+      <div class="right-title">Diagnostic RAG</div>
+      <i class="ti ti-refresh" style="font-size:14px; color:#2D4052; cursor:pointer" aria-hidden="true"></i>
+    </div>
+
+    <div class="tab-row">
+      <div class="tab active">Métriques</div>
+      <div class="tab">Index</div>
+      <div class="tab">Traces</div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric">
+        <div class="metric-label">Tokens/s</div>
+        <div class="metric-val">147<span class="metric-unit">t/s</span></div>
+        <div class="metric-sub">↑ Groq actif</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">RAM</div>
+        <div class="metric-val">2.7<span class="metric-unit">Go</span></div>
+        <div class="metric-sub" style="color:#4A5A2A;">/ 8 Go · stable</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Chunks RAG</div>
+        <div class="metric-val">8</div>
+        <div class="metric-sub">5 haute · 3 moy.</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Latence</div>
+        <div class="metric-val">1.2<span class="metric-unit">s</span></div>
+        <div class="metric-sub">Query + gen.</div>
+      </div>
+    </div>
+
+    <div class="ram-bar-wrap">
+      <div class="ram-bar-label"><span>RAM unifiée</span><span style="color:#2A6A3A;">2.7 / 8 Go</span></div>
+      <div class="ram-bar-track"><div class="ram-bar-fill"></div></div>
+    </div>
+
+    <div class="confidence-bar">
+      <div class="conf-header"><span>Score RAG</span><span style="color:#2A7A4A;">0.81 · HAUTE</span></div>
+      <div class="conf-track"><div class="conf-fill"></div></div>
+    </div>
+
+    <div class="rag-diag">
+      <div class="diag-title">Stratégies exécutées</div>
+
+      <div class="diag-row">
+        <i class="ti ti-vector-triangle diag-icon" style="color:#1A6A9A" aria-hidden="true"></i>
+        <div class="diag-name">Vectoriel sqlite-vec</div>
+        <span class="diag-score score-high">0.81</span>
+        <span class="diag-time">48ms</span>
+      </div>
+
+      <div class="diag-row">
+        <i class="ti ti-text-recognition diag-icon" style="color:#1A6A4A" aria-hidden="true"></i>
+        <div class="diag-name">FTS5 BM25</div>
+        <span class="diag-score score-high">0.74</span>
+        <span class="diag-time">12ms</span>
+      </div>
+
+      <div class="diag-row" style="opacity:0.4;">
+        <i class="ti ti-search diag-icon" style="color:#3A4A5A" aria-hidden="true"></i>
+        <div class="diag-name">Grep fichiers</div>
+        <span class="diag-score" style="color:#2D4052;">skip</span>
+        <span class="diag-time">—</span>
+      </div>
+
+      <div class="diag-row" style="opacity:0.4;">
+        <i class="ti ti-sparkles diag-icon" style="color:#3A4A5A" aria-hidden="true"></i>
+        <div class="diag-name">HyDE</div>
+        <span class="diag-score" style="color:#2D4052;">skip</span>
+        <span class="diag-time">—</span>
+      </div>
+
+      <div style="height:6px;"></div>
+
+      <div class="index-health">
+        <div class="health-row">
+          <div class="health-label">Documents indexés</div>
+          <div class="health-val health-ok">446 / 446</div>
+        </div>
+        <div class="health-row">
+          <div class="health-label">Avertissements</div>
+          <div class="health-val health-warn">PUA-CI_Avenant.docx ⚠</div>
+        </div>
+        <div class="health-row">
+          <div class="health-label">Dernier scan</div>
+          <div class="health-val" style="color:#2D4052;">il y a 4 min</div>
+        </div>
+      </div>
+
+      <div style="height:6px;"></div>
+
+      <div class="fact-check">
+        <div class="fact-label">Vérificateur de faits</div>
+        <div class="fact-row"><i class="ti ti-check" style="font-size:11px; color:#1A8A3A" aria-hidden="true"></i> 14 compétences — sources confirmées</div>
+        <div class="fact-row"><i class="ti ti-check" style="font-size:11px; color:#1A8A3A" aria-hidden="true"></i> 6 correspondances IITA — confirmées</div>
+        <div class="fact-row" style="color:#7A5A1A;"><i class="ti ti-alert-triangle" style="font-size:11px; color:#8A6A1A" aria-hidden="true"></i> IRR/SPIA — non trouvé dans les sources</div>
+      </div>
+
+      <div style="height:6px;"></div>
+
+      <div class="retro-banner">
+        <i class="ti ti-info-circle" style="font-size:13px; color:#7A5A2A" aria-hidden="true"></i>
+        <div class="retro-text">Requête décomposée en 2 sous-requêtes · Query rewriting actif · Stratégie finale : vectoriel + FTS5</div>
+      </div>
+    </div>
+  </div>
+
+</div>
