@@ -16,6 +16,7 @@ Utilisation :
 import os
 import re
 import logging
+import asyncio
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ EXCLUDE_DIRS = [
 ]
 
 SUPPORTED_EXTS = {".txt", ".md", ".py", ".json", ".yaml", ".yml",
-                  ".csv", ".xml", ".html"}
+                  ".csv", ".xml", ".html", ".pdf"}  # V8+ : PDF supporté via pypdf
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB — sécurité mémoire M1 8Go
 MAX_RESULTS_DEFAULT = 5
 
@@ -139,6 +140,29 @@ def _is_nuru_brain_path(filepath: str) -> bool:
         return False
 
 
+def _extract_pdf_text(filepath: str, max_chars: int = 5000) -> str:
+    """Extraction de texte d'un PDF via pypdf (mémoire-safe, limité).
+    
+    Retourne jusqu'à max_chars caractères. En cas d'échec, retourne ''.
+    Le fallback silencieux permet de ne pas casser le pipeline grep.
+    """
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(filepath)
+        text = []
+        total = 0
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            text.append(page_text)
+            total += len(page_text)
+            if total >= max_chars:
+                break
+        return "\n".join(text)[:max_chars]
+    except Exception as e:
+        logger.debug(f"Extraction PDF échouée pour {os.path.basename(filepath)}: {e}")
+        return ""
+
+
 def _score_file(filepath: str, fname: str, words: list[str]) -> float:
     """Score de pertinence : match nom fichier + contenu."""
     score = 0.0
@@ -149,13 +173,17 @@ def _score_file(filepath: str, fname: str, words: list[str]) -> float:
     if name_matches > 0:
         score += 0.4 * (name_matches / len(words))
 
-    # 2. Score sur le contenu (premiers 1000 chars seulement)
+    # 2. Score sur le contenu
+    content = ""
+    ext = os.path.splitext(fname)[1].lower()
     try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-            # V8+ : Lecture limitée pour mémoire — pas de f.read() entier
-            content = f.read(4096)  # 4KB max pour le scoring
-    except (IOError, OSError):
-        return score
+        if ext == ".pdf":
+            content = _extract_pdf_text(filepath, max_chars=4096)
+        else:
+            with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read(4096)
+    except Exception:
+        pass
 
     if content:
         content_lower = content.lower()
@@ -168,8 +196,11 @@ def _score_file(filepath: str, fname: str, words: list[str]) -> float:
 
 def _read_preview(filepath: str, max_chars: int = 2000) -> str:
     """Lit un extrait du fichier pour le retour (mémoire-safe)."""
+    ext = os.path.splitext(filepath)[1].lower()
     try:
+        if ext == ".pdf":
+            return _extract_pdf_text(filepath, max_chars=max_chars)
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
             return f.read(max_chars)
-    except (IOError, OSError):
+    except Exception:
         return ""
