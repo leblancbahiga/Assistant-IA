@@ -160,8 +160,47 @@ class NuruOrchestrator:
                 yield cached
                 return
 
-        # ── 4. Récupération contexte ──
-        rag_context, rag_result, web_context = await self._retrieve_context(query, intent)
+        # ── 4. Récupération contexte (avec décomposition si requête complexe) ──
+        if intent in ("RAG", "COMPLEX"):
+            # V8+ P10 : Décomposition des questions complexes en sous-requêtes
+            from src.rag.decomposer import QueryDecomposer, should_decompose
+            
+            sub_queries = [query]
+            if should_decompose(query):
+                try:
+                    decomposer = QueryDecomposer(cloud_llm=self.cloud_llm)
+                    decomposed = await decomposer.decompose(query)
+                    if len(decomposed) > 1:
+                        sub_queries = decomposed
+                        logger.info(
+                            f"🔀 Décomposition: {query[:50]} → {len(sub_queries)} sous-requêtes"
+                        )
+                        await self.event_bus.emit("query.decomposed", {
+                            "original": query,
+                            "sub_queries": sub_queries,
+                        })
+                except Exception as e:
+                    logger.debug(f"Décomposition non disponible: {e}")
+
+            # Contextes fusionnés
+            rag_contexts: list[str] = []
+            merged_result = None
+            web_contexts: list[str] = []
+
+            for i, sq in enumerate(sub_queries):
+                ctx, result, web = await self._retrieve_context(sq, intent)
+                if ctx:
+                    rag_contexts.append(ctx)
+                if result and merged_result is None:
+                    merged_result = result
+                if web:
+                    web_contexts.append(web)
+
+            rag_context = "\n\n---\n\n".join(rag_contexts) if rag_contexts else ""
+            web_context = "\n".join(web_contexts) if web_contexts else ""
+            rag_result = merged_result
+        else:
+            rag_context, rag_result, web_context = await self._retrieve_context(query, intent)
 
         # NURU V6 : TokenJuice — compression du contexte RAG et web avant construction prompt
         if rag_context:
