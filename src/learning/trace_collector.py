@@ -58,6 +58,11 @@ class TraceCollector:
             CREATE INDEX IF NOT EXISTS idx_traces_timestamp
             ON traces(timestamp)
         """)
+        # V8+ : Colonne diagnostic RAG (JSON)
+        try:
+            conn.execute("ALTER TABLE traces ADD COLUMN rag_diagnostic TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # Colonne déjà existante
         conn.commit()
         conn.close()
 
@@ -92,6 +97,7 @@ class TraceCollector:
         latency_ms: int = 0,
         model: str = "",
         error: str = "",
+        rag_diagnostic: str = "",  # V8+ : JSON diagnostic RAG
     ):
         """Enregistre une trace de façon asynchrone."""
         record = {
@@ -105,6 +111,7 @@ class TraceCollector:
             "latency_ms": latency_ms,
             "model": model,
             "error": error[:200] if error else "",
+            "rag_diagnostic": rag_diagnostic[:2000] if rag_diagnostic else "",
         }
         try:
             await asyncio.wait_for(self._queue.put(record), timeout=1.0)
@@ -130,13 +137,15 @@ class TraceCollector:
             conn.execute(
                 """INSERT INTO traces 
                 (query, response, mode, confidence, feedback,
-                 tokens_prompt, tokens_generated, latency_ms, model, error)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 tokens_prompt, tokens_generated, latency_ms, model, error,
+                 rag_diagnostic)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     record["query"], record["response"], record["mode"],
                     record["confidence"], record["feedback"],
                     record["tokens_prompt"], record["tokens_generated"],
                     record["latency_ms"], record["model"], record["error"],
+                    record.get("rag_diagnostic", ""),
                 ),
             )
             conn.commit()
