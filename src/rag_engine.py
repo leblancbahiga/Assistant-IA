@@ -57,6 +57,83 @@ class RAGEngine:
         self._rerank_min_score = 0.40   # En dessous : pas la peine
         self._rerank_max_score = 0.75   # Au dessus : déjà suffisant
         self._rerank_min_ram_mb = 1500  # RAM minimale pour activer le cross-encoder
+        # V8+ Sprint 4 : Orchestrateur multi-stratégie (initialisé paresseusement)
+        self._multi_search = None
+
+    def _ensure_multi_search(self):
+        """V8+ Sprint 4.8 : Initialise paresseusement le MultiSearchOrchestrator."""
+        if self._multi_search is not None:
+            return
+
+        from src.rag.multi_search import MultiSearchOrchestrator
+        from src.rag.file_search import grep_documents
+
+        self._multi_search = MultiSearchOrchestrator(
+            vector_search_fn=self._ms_vector_search,
+            vector_search_vec_fn=self._ms_vector_search_vec,
+            cloud_llm=self.cloud,
+            embedder_fn=self.embedder.embed,
+            grep_fn=grep_documents,
+            get_doc_meta_fn=self.search_doc_meta,
+        )
+
+    def _ms_vector_search(self, query: str, search_type: str = "vector") -> list:
+        """Wrapper sync pour la recherche vectorielle/FTS (appelé par MultiSearchOrchestrator).
+
+        Signature : fn(query, search_type='vector'|'fts') -> [(content, source, score)]
+        """
+        conn = self._get_conn()
+        try:
+            if search_type == "vector":
+                # Embed la requête et chercher par vecteur
+                import sqlite_vec
+                embed = self.embedder.embed(query, is_query=True)
+                if not embed or not embed[0]:
+                    return []
+                qvec = sqlite_vec.serialize_float32(embed[0])
+                rows = conn.execute(
+                    "SELECT content, source, 1 - distance as score FROM chunks "
+                    "WHERE embedding MATCH ? ORDER BY distance LIMIT 15",
+                    [qvec]
+                ).fetchall()
+            else:  # fts
+                from src.query_rewriter import STOP_WORDS
+                import re
+                words = [w for w in re.findall(r'\w{3,}', query.lower()) if w not in STOP_WORDS]
+                if not words:
+                    words = re.findall(r'\w{3,}', query.lower())
+                fts_q = " OR ".join(f'"{w}"' for w in words)
+                rows = conn.execute(
+                    "SELECT content, source, 1.0 as score FROM chunks_fts "
+                    "WHERE content MATCH ? LIMIT 15",
+                    [fts_q]
+                ).fetchall()
+            return [(r[0], r[1], float(r[2])) for r in rows]
+        except Exception:
+            return []
+        finally:
+            conn.close()
+
+    def _ms_vector_search_vec(self, qvec, top_k: int = 5) -> list:
+        """Wrapper sync pour la recherche vectorielle à partir d'un vecteur
+        (utilisé par HyDE dans MultiSearchOrchestrator).
+
+        Signature : fn(qvec, top_k=N) -> [(content, source, score)]
+        """
+        import sqlite_vec
+        conn = self._get_conn()
+        try:
+            serialized = sqlite_vec.serialize_float32(qvec)
+            rows = conn.execute(
+                "SELECT content, source, 1 - distance as score FROM chunks "
+                "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+                [serialized, top_k]
+            ).fetchall()
+            return [(r[0], r[1], float(r[2])) for r in rows if r[0] and r[2] > 0]
+        except Exception:
+            return []
+        finally:
+            conn.close()
 
     def _should_use_reranker(self, top1_score: float) -> bool:
         """V6.1 : Reranking SYSTÉMATIQUE — toujours actif si RAM suffisante.
