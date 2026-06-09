@@ -383,25 +383,25 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
                         task.add_done_callback(background_tts_tasks.discard)
                         sentence_buffer = ""
 
-        # V4.5 Correction : Décision cloud plus intelligente
-        # - COMPLEX → toujours cloud
-        # - RAG avec score < 0.55 ou pas de contexte → cloud (éviter hallucinations locales)
-        # - RAG avec bon score → local (économie de cloud)
-        use_cloud = False
-
-        if intent == "COMPLEX":
-            use_cloud = True
-        elif intent_internal == "RAG" and (not rag_context or route_result.rag_top_score < 0.55):
-            use_cloud = True
-            logger.info(
-                f"☁️ Escalade Cloud : RAG insuffisant "
-                f"(score={route_result.rag_top_score:.2f}, context={bool(rag_context)})"
-            )
+        # ═══════════════════════════════════════════
+        # V8+ : Sélection du Pipeline d'Inférence
+        # Cloud par défaut pour tout travail documentaire
+        # ═══════════════════════════════════════════
+        # cloud_available est défini plus haut (Task 0.5)
+        use_cloud = True
+        
+        if intent_internal == "SIMPLE" or not cloud_available:
+            use_cloud = False
+            if not cloud_available and intent_internal in ("RAG", "COMPLEX"):
+                logger.warning("☁️ Cloud indisponible — bascule locale (contexte tronqué)")
+        
+        logger.info(
+            f"{'☁️' if use_cloud else '💻'} Inférence "
+            f"{'CLOUD' if use_cloud else 'LOCALE'} "
+            f"({intent_internal}, cloud_ok={cloud_available})"
+        )
 
         if use_cloud:
-            logger.info(
-                f"☁️ Inférence CLOUD ({config.cloud_model.split('/')[-1][:25]})"
-            )
             await self.event_bus.emit("generation_started", {
                 "model": config.cloud_model.split("/")[-1][:25],
                 "model_id": config.cloud_model,
