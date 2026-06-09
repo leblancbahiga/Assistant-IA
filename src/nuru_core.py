@@ -278,7 +278,7 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
         
         # 2. Vérification du Cache Sémantique (sauf pour les requêtes complexes)
         if intent_internal != "COMPLEX":
-            cached_resp = await self.memory.get_cache(query)
+            cached_resp, cached_diag = await self.memory.get_cache(query)
             if cached_resp:
                 await self.event_bus.emit("cache_hit", {"query": query})
                 if use_tts:

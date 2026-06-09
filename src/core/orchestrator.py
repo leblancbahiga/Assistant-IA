@@ -152,7 +152,7 @@ class NuruOrchestrator:
 
         # ── 3. Cache sémantique ──
         if intent != "COMPLEX":
-            cached = await self.memory_store.get_cache(query)
+            cached, cached_diag = await self.memory_store.get_cache(query)
             if cached:
                 await self.event_bus.emit("cache_hit", {"query": query})
                 if use_tts and audio_engine:
