@@ -37,6 +37,7 @@ class RAGResult:
     top_k_configured: int = 5
     top_k_actual: int = 0
     tokens_injected: int = 0
+    diagnostic: Optional[dict] = None  # V8+ : RAGDiagnostic sérialisé
 
 class RAGEngine:
     """Moteur RAG Hybride : Recherche sémantique (sqlite-vec) + BM25."""
@@ -403,6 +404,11 @@ class RAGEngine:
 
         result = RAGResult(top_k_configured=k, query_rewritten="")
 
+        # V8+ : Diagnostic RAG temps réel
+        from src.rag.diagnostics import RAGDiagnostic
+        diag = RAGDiagnostic(query=query[:200])
+        diag.start()
+
         # 1. Optimisation de la requête (synonymes) + Expansion LLM
         optimized_query = self.rewriter.rewrite(query)
         fts_query = self.rewriter.normalize_for_fts(query)
@@ -440,7 +446,18 @@ class RAGEngine:
 
         result.chunks_retrieved = len(vec_results) + len(fts_results)
 
+        # V8+ : Log des stratégies dans le diagnostic
+        top1_vec = 1 - vec_results[0][2] if vec_results else 0.0
+        diag.log_strategy("vectorielle", len(vec_results), top1_vec,
+                          len(vec_results) > 0, (time.time() - t_start) * 1000)
+        fts_hit = len(fts_results) > 0
+        diag.log_strategy("fts", len(fts_results), 1.0 if fts_hit else 0.0,
+                          fts_hit, (time.time() - t_start) * 1000)
+
         if not vec_results and not fts_results:
+            diag.set_verdict("VIDE (aucun résultat)")
+            diag.stop()
+            result.diagnostic = diag.to_dict()
             result.retrieval_time_ms = (time.time() - t_start) * 1000
             return "", result
 
@@ -621,6 +638,14 @@ class RAGEngine:
                     logger.info(f"📋 {injected} fiche(s) structurée(s) injectée(s)")
         except Exception as e:
             logger.debug(f"Injection métadonnées ignorée (première fois ou vide) : {e}")
+
+        # V8+ : Finaliser le diagnostic et l'attacher au résultat
+        diag.set_verdict(
+            f"{'✅' if context else '❌'} "
+            f"{'contexte injecté' if context else 'recherche vide'}"
+        )
+        diag.stop()
+        result.diagnostic = diag.to_dict()
 
         return context, result
 
