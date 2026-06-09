@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from src.config import config
 from src.embedder import Embedder
-from src.query_rewriter import QueryRewriter
+from src.rag.query_rewriter import CloudQueryRewriter
 from src.reranker import CrossEncoderReranker
 from src.llm_cloud import CloudLLM
 
@@ -48,7 +48,7 @@ class RAGEngine:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.embedder = Embedder()
         self.cloud = CloudLLM()  # Cloud LLM pour l'expansion de requête
-        self.rewriter = QueryRewriter(cloud_llm=self.cloud)
+        self.rewriter = CloudQueryRewriter(cloud_llm=self.cloud)
         self.reranker = CrossEncoderReranker()  # V4 : Reranker sémantique
         self.reranker.set_embedder(self.embedder)  # Connecte l'embedder
         self.last_top_score = 0.0

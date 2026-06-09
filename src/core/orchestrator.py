@@ -270,6 +270,57 @@ class NuruOrchestrator:
                     "missing": vr.missing_citations,
                 })
 
+        # ── 7.6 V8+ Sprint 5 : Vérificateur de faits Cloud + retry ──
+        if intent == "RAG" and response_content.strip() and ctx.is_online and not ctx.already_fact_checked:
+            try:
+                from src.rag.fact_checker import FactChecker
+                checker = FactChecker(cloud_llm=self.cloud_llm)
+
+                sources_text = []
+                if rag_result and hasattr(rag_result, 'sources'):
+                    sources_text = [s.get('preview', '') for s in rag_result.sources]
+                if not sources_text and rag_context:
+                    sources_text = [rag_context[:500]]
+
+                if sources_text and len(response_content) > 50:
+                    check = await checker.verify(response_content, sources_text)
+
+                    if not check.verified and check.issues:
+                        logger.info(f"🔍 V8+ FactChecker: {len(check.issues)} problème(s)")
+
+                        if check.needs_regenerate and not ctx.already_retried:
+                            ctx = ctx.with_retry().with_fact_checked()
+                            logger.info("🔄 V8+ Retry: régénération avec instruction stricte")
+                            yield "\n\n🔄 **Vérification : régénération en cours...**\n"
+
+                            # Nouvelle génération avec instruction renforcée
+                            strict_instruction = (
+                                "\n\n## INSTRUCTION STRICTE\n"
+                                "La réponse précédente contenait des affirmations non supportées par les sources.\n"
+                                "Cette fois, réponds UNIQUEMENT avec les informations EXACTEMENT présentes dans le contexte ci-dessus.\n"
+                                "Si une information n'est pas dans les sources, dis-le clairement. N'invente RIEN.\n"
+                                "Cite chaque source utilisée.\n"
+                            )
+                            retry_prompt = full_prompt + strict_instruction
+                            new_response = ""
+                            async for token in self._generate(
+                                system_prompt, retry_prompt, query, intent, ctx,
+                                web_context=web_context, rag_context=rag_context
+                            ):
+                                new_response += token
+                                yield token
+
+                            if new_response:
+                                response_content = new_response
+
+                        # Même sans régénération, avertir l'utilisateur
+                        else:
+                            yield "\n\n---\n⚠️ **Avertissement** : Certaines informations n'ont pu être vérifiées contre les sources."
+                            for issue in check.issues[:2]:
+                                yield f"\n- {issue[:120]}"
+            except Exception as e:
+                logger.debug(f"V8+ FactChecker ignoré: {e}")
+
         # ── 8. Finalisation ──
         result = self._finalize(response_content, duration, intent, rag_result)
         event_data = result.to_dict()
@@ -503,8 +554,9 @@ class NuruOrchestrator:
                 yield token
             return
 
-        # NURU V6 : Stratégie Verify (local → cloud vérifie)
-        use_cloud_first = intent == "COMPLEX" or self.policy_engine.should_use_cloud(ctx) or (intent == "RAG" and ctx.is_online and ram_too_low)
+        # V8+ Sprint 5 : Cloud par défaut pour RAG/COMPLEX si online
+        use_cloud_first = (intent in ("RAG", "COMPLEX") and ctx.is_online) or \
+                          self.policy_engine.should_use_cloud(ctx)
 
         if use_cloud_first or hybrid == "verify":
             if not ctx.is_online:

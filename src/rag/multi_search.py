@@ -252,52 +252,35 @@ class MultiSearchOrchestrator:
         is_weak = confidence_label in ("FAIBLE", "ABSENT")
         early_stop = False
 
-        # ── 1. Stratégies toujours actives : Vectoriel + FTS ──
-        strategies: list[asyncio.Task] = []
-        strategy_labels: list[str] = []
+        # ── Round 1 : Stratégies RAPIDES (vectoriel + FTS + métadonnées) ──
+        # Ces stratégies prennent < 50ms. On les attend pour décider
+        # si grep + HyDE sont nécessaires (early stopping).
+        fast_strategies: list[asyncio.Task] = []
+        fast_labels: list[str] = []
 
         if self._vector_search:
-            strategies.append(asyncio.create_task(
+            fast_strategies.append(asyncio.create_task(
                 self._run_vector_search(effective_query)
             ))
-            strategy_labels.append("vectoriel")
+            fast_labels.append("vectoriel")
 
         if self._vector_search:
-            # FTS via la même fonction (elle fait les deux)
-            strategies.append(asyncio.create_task(
+            fast_strategies.append(asyncio.create_task(
                 self._run_fts_search(effective_query)
             ))
-            strategy_labels.append("fts")
+            fast_labels.append("fts")
 
-        # ── 2. Métadonnées structurées ──
         if self._get_doc_meta:
-            strategies.append(asyncio.create_task(
+            fast_strategies.append(asyncio.create_task(
                 self._run_metadata_search(effective_query)
             ))
-            strategy_labels.append("metadata")
+            fast_labels.append("metadata")
 
-        # ── 3. Grep (seulement si FAIBLE/ABSENT + RAM OK) ──
-        if is_weak and ram_ok and self._grep:
-            strategies.append(asyncio.create_task(
-                self._run_grep(query)  # grep avec la requête originale
-            ))
-            strategy_labels.append("grep")
-            diag.grep_called = True
-
-        # ── 4. HyDE (seulement si FAIBLE/ABSENT + RAM OK + CloudLLM dispo) ──
-        if is_weak and ram_ok and self._cloud:
-            strategies.append(asyncio.create_task(
-                self._run_hyde(query)  # HyDE avec la requête originale
-            ))
-            strategy_labels.append("hyde")
-            diag.hyde_called = True
-
-        # ⏱ Exécuter toutes les stratégies en parallèle
+        # Attendre les stratégies rapides
         all_results: list[list[SearchResult]] = []
+        fast_gathered = await asyncio.gather(*fast_strategies, return_exceptions=True)
 
-        # Exécuter toutes les stratégies et collecter résultats + labels
-        gathered = await asyncio.gather(*strategies, return_exceptions=True)
-        for label, result in zip(strategy_labels, gathered):
+        for label, result in zip(fast_labels, fast_gathered):
             if isinstance(result, Exception):
                 logger.warning(f"⚠️ Échec stratégie {label}: {result}")
                 diag.strategies_tried.append(label)
@@ -309,22 +292,55 @@ class MultiSearchOrchestrator:
             diag.strategies_tried.append(label)
             diag.results_per_strategy[label] = len(result)
 
-        # Early stopping : si vectoriel/FTS a un score > 0.75,
-        # marquer dans le diagnostic mais TOUTES les stratégies déjà lancées
-        # sont incluses (gather les a toutes exécutées)
-        for idx, label in enumerate(strategy_labels):
+        # Early stopping : si vectoriel ou FTS a un score > EARLY_STOP_SCORE,
+        # on NE LANCE PAS grep/HyDE
+        max_fast_score = 0.0
+        for idx, label in enumerate(fast_labels):
             if label in ("vectoriel", "fts") and idx < len(all_results):
-                max_score = max((r.score for r in all_results[idx]), default=0.0)
-                if max_score >= EARLY_STOP_SCORE:
-                    early_stop = True
-                    diag.early_stopped = True
-                    diag.early_stop_reason = (
-                        f"Score {label}={max_score:.2f} >= {EARLY_STOP_SCORE}"
-                    )
-                    logger.info(
-                        f"⏭️ Early stopping: {label}={max_score:.2f} >= {EARLY_STOP_SCORE}"
-                    )
-                    break
+                if all_results[idx]:
+                    s = max(r.score for r in all_results[idx])
+                    max_fast_score = max(max_fast_score, s)
+
+        if max_fast_score >= EARLY_STOP_SCORE:
+            early_stop = True
+            diag.early_stopped = True
+            diag.early_stop_reason = (
+                f"Score max={max_fast_score:.2f} >= {EARLY_STOP_SCORE}"
+            )
+            logger.info(f"⏭️ Early stopping: score={max_fast_score:.2f} >= {EARLY_STOP_SCORE}")
+        else:
+            # ── Round 2 : Stratégies LOURDES (grep + HyDE) ──
+            # Lancées SEULEMENT si le score rapide est insuffisant
+            if is_weak and ram_ok and self._grep:
+                grep_task = asyncio.create_task(self._run_grep(query))
+                diag.grep_called = True
+
+            if is_weak and ram_ok and self._cloud:
+                hyde_task = asyncio.create_task(self._run_hyde(query))
+                diag.hyde_called = True
+
+            # Attendre grep et HyDE en parallèle
+            heavy_tasks = []
+            heavy_labels = []
+            if is_weak and ram_ok and self._grep:
+                heavy_tasks.append(grep_task)
+                heavy_labels.append("grep")
+            if is_weak and ram_ok and self._cloud:
+                heavy_tasks.append(hyde_task)
+                heavy_labels.append("hyde")
+
+            if heavy_tasks:
+                heavy_gathered = await asyncio.gather(*heavy_tasks, return_exceptions=True)
+                for label, result in zip(heavy_labels, heavy_gathered):
+                    if isinstance(result, Exception):
+                        logger.warning(f"⚠️ Échec stratégie {label}: {result}")
+                        diag.strategies_tried.append(label)
+                        diag.results_per_strategy[label] = 0
+                        all_results.append([])
+                        continue
+                    all_results.append(result)
+                    diag.strategies_tried.append(label)
+                    diag.results_per_strategy[label] = len(result)
 
         # Compter les résultats
         diag.total_results_before_dedup = sum(len(r) for r in all_results)
