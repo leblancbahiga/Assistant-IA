@@ -55,71 +55,37 @@
 
 ---
 
-## 🎨 Nouveau Design UI — Migration 3 colonnes (en attente)
+## ✅ Migration UI 3 colonnes — Terminée ✅
 
 > Design cible : `/Users/leblancbahiga/Downloads/nuru_v8plus_dashboard_mockup.html`
-> Mockup : sidebar 220px + chat central + panel droit 300px (diagnostic RAG temps réel)
+> Commits : `afdbac9` + `fcb2992`
 
-### Contexte
-Le dashboard actuel a une palette violette avec MetricsPanel à droite.
-Le nouveau design remplace tout par une palette bleu-vert (#0A0E14, #1A6A9A, #2A8A4A)
-avec un panel droit riche affichant le diagnostic RAG en temps réel.
+### Module 1 — RightPanelDiagnostic (panel droit)
+**Fichier :** `src/ui/components/right_panel.py` (1089 lignes)
+✅ `RightPanelDiagnostic` remplace `MetricsPanel` (même API publique)
+✅ RagTabWidget (3 onglets : Métriques, Index, Traces)
+✅ MetricsGrid (2×2 : Tokens/s, RAM, Chunks, Latence)
+✅ RamBar + RagScoreBar + StrategyDiagnostic + IndexHealthWidget
+✅ FactCheckWidget + RetroBanner
+✅ `update_from_events()` — draine l'EventBus vers les widgets
 
-### Plan de migration (5 modules)
+### Module 2 — Sidebar enrichie
+✅ RecentDocuments + CloudStatusBadge dans NavSidebar
+✅ Dots de statut (indexed=#1E6B3A, partial=#6B4E1E)
 
-#### Module 1 — RightPanelDiagnostic (panel droit)
-- [ ] Créer `src/ui/components/right_panel.py` avec :
-  - `RagTabs(QTabWidget)` : onglets Métriques / Index / Traces
-  - `MetricsGrid(QWidget)` : grid 2×2 (tokens/s, RAM, chunks, latence)
-  - `RamBar(QProgressBar)` : barre horizontale RAM unifiée
-  - `RagScoreBar` : barre score RAG avec label HAUTE/MOYENNE/FAIBLE
-  - `StrategyDiagnostic(QWidget)` : liste des stratégies (Vectoriel 0.81/48ms, FTS5…)
-  - `IndexHealthWidget(QWidget)` : documents, warnings, dernier scan
-  - `FactCheckWidget(QWidget)` : vérification par source (✅/⚠️)
-  - `RetroBanner(QWidget)` : info décomposition, query rewriting
-- [ ] Remplacer MetricsPanel par RightPanelDiagnostic dans dashboard.py
-- [ ] Supprimer `nuru_widgets.py` (MetricMiniBar, CircularGauge, StrategyBadge deviennent obsolètes)
+### Module 3 — Connecteur EventBus → UI
+✅ Timer draine les events RAG → widgets diagnostic
+✅ Routes : `rag_score`, `generation_complete`, `verification_warning`, `query.decomposed`
 
-#### Module 2 — Sidebar enrichie
-- [ ] Ajouter `RecentDocuments(QWidget)` : liste des documents récents avec dots de statut
-- [ ] Ajouter `CloudStatusBadge(QWidget)` : badge Groq avec dot vert + modèle
-- [ ] Ajuster la navigation : liste plate (pas 3 groupes)
+### Module 4 — Styles.qss
+✅ Palette violet → bleu-vert (#0A0E14, #1A6A9A, #2A8A4A)
+✅ Bulles chat bordure colorée, badges RAG chips, citations mockup style
 
-#### Module 3 — Connecteur EventBus → UI
-- [ ] Créer timer qui draine les events RAG vers les widgets diagnostic
-- [ ] Connecter `generation_complete` → StrategyDiagnostic
-- [ ] Connecter `query.decomposed` → RetroBanner
-- [ ] Connecter `verification_failed` → FactCheckWidget
+### Module 5 — Composants atomiques
+✅ MetricCard, StrategyRow, FactCheckRow, CitationChip
 
-#### Module 4 — Styles.qss
-- [ ] Palette violette → bleu-vert (#0A0E14 fond, #1A6A9A accent, #2A8A4A succès)
-- [ ] Bulles chat : bordure gauche colorée (bleu NURU, violet user)
-- [ ] Badges RAG : chips avec couleurs de confiance
-- [ ] Citations : chips style mockup
-
-#### Module 5 — Composants atomiques
-- [ ] `MetricCard` : widget métrique réutilisable (label + valeur + sous-titre)
-- [ ] `StrategyRow` : ligne de diagnostic (icône + nom + score + temps)
-- [ ] `FactCheckRow` : ligne de vérification (icône ✅/⚠️ + texte)
-- [ ] `CitationChip` : chip de source cliquable
-
-### Données disponibles
-Les données RAG arrivent via l'EventBus (déjà émis par orchestrator.py) :
-- `generation_complete` → `rag_result.diagnostic` (strategies_tried, scores, timing)
-- `rag_score`, `sources`, `tokens_injected`, `retrieval_time_ms`
-- `query.decomposed` → sub_queries
-- `verification_failed` → matched/missing citations
-- `route.decided` → decision, confidence
-
-### Fichiers concernés
-- `src/ui/dashboard.py` — point d'entrée (remplacement MetricsPanel)
-- `src/ui/styles.qss` — thème complet
-- `src/ui/components/nuru_widgets.py` — obsolète partiellement
-- `src/ui/components/console_page.py` — ajustements mineurs badge/citations
-- `src/ui/components/chat_bubble.py` — ajout CitationChip si nécessaire
-- Nouveau : `src/ui/components/right_panel.py`
-
-### Estimation : ~2 jours de dev
+### Composants obsolètes
+- `nuru_widgets.py` (MetricsPanel, MetricMiniBar, CircularGaugeWidget) — conservés pour compatibilité mais non utilisés
 
 ---
 
