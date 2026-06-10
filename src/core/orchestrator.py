@@ -621,8 +621,8 @@ class NuruOrchestrator:
                 yield token
             return
 
-        # V8+ Sprint 5 : Cloud par défaut pour RAG/COMPLEX si online
-        use_cloud_first = (intent in ("RAG", "COMPLEX") and ctx.is_online) or \
+        # V8+ Sprint 5 : Cloud par défaut pour tous les intents si online
+        use_cloud_first = ctx.is_online or \
                           self.policy_engine.should_use_cloud(ctx)
 
         if use_cloud_first or hybrid == "verify":

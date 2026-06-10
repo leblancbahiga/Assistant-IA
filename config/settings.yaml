@@ -6,7 +6,7 @@ cloud_fallback: openrouter/deepseek/deepseek-v4-flash
 cloud_model: llama-3.3-70b-versatile
 cloud_provider: groq
 hybrid_enabled: true
-hybrid_mode: local_only
+hybrid_mode: cloud_first
 learning_enabled: true
 local_model: mlx-community/Phi-4-mini-instruct-4bit
 local_model_fallback: mlx-community/Qwen2.5-1.5B-Instruct-4bit
