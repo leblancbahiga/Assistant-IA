@@ -91,6 +91,10 @@ try:
     from src.ui.components.v6_system_page import SystemPage
 except ImportError:
     SystemPage = None
+try:
+    from src.ui.components.diagnostics_page import DiagnosticsPage
+except ImportError:
+    DiagnosticsPage = None
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -103,6 +107,7 @@ NAV_GROUPS = [
         "items": [
             ("💬 Console", "console"),
             ("🕒 Sessions", "sessions"),
+            ("📊 Diagnostics", "diagnostics"),
         ],
     },
     {
@@ -131,6 +136,7 @@ PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
     "v6_system":  ("📊 V6 System",      "Panneau de contrôle des modules V6 hérités."),
     "settings":   ("⚙️ Paramètres",     "Configuration de l'application NURU."),
     "logs":       ("📋 Logs",           "Journaux système et traces de débogage."),
+    "diagnostics":("📊 Diagnostics",    "Analyse des performances RAG et diagnostic des requêtes."),
 }
 
 
@@ -536,6 +542,8 @@ class CyberDashboard(QMainWindow):
                 cls = SettingsPage
             elif slug == "v6_system":
                 cls = SystemPage
+            elif slug == "diagnostics":
+                cls = DiagnosticsPage
             else:
                 cls = None  # nuru_brain → placeholder
 
