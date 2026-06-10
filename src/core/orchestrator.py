@@ -188,9 +188,9 @@ class NuruOrchestrator:
             web_contexts: list[str] = []
 
             for i, sq in enumerate(sub_queries):
-                ctx, result, web = await self._retrieve_context(sq, intent)
-                if ctx:
-                    rag_contexts.append(ctx)
+                rag_ctx, result, web = await self._retrieve_context(sq, intent)
+                if rag_ctx:
+                    rag_contexts.append(rag_ctx)
                 if result and merged_result is None:
                     merged_result = result
                 if web:
