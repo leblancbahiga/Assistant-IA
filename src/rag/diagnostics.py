@@ -13,6 +13,26 @@ Utilisation :
 """
 import json
 import time
+from dataclasses import dataclass, field
+from typing import Optional
+
+
+@dataclass
+class StrategyInfo:
+    """Informations détaillées sur une stratégie de recherche exécutée.
+
+    Attributes:
+        name: Nom de la stratégie (vectorielle, fts, grep, hyde...)
+        found: Nombre de résultats trouvés
+        top_score: Meilleur score de la stratégie
+        hit: True si la stratégie a produit des résultats exploitables
+        timing_ms: Temps d'exécution en ms
+    """
+    name: str
+    found: int = 0
+    top_score: float = 0.0
+    hit: bool = False
+    timing_ms: float = 0.0
 
 
 class RAGDiagnostic:
@@ -20,7 +40,9 @@ class RAGDiagnostic:
 
     Champs principaux :
     - strategies_tried : liste ordonnée des noms de stratégies
-    - strategies_results : dict {nom: {found, top_score, hit, timing_ms}}
+    - strategies_results : dict {nom: StrategyInfo}
+    - confidence_label : niveau de confiance (HAUTE/MOYENNE/FAIBLE/ABSENT)
+    - found_chunks : nombre de chunks trouvés après déduplication
     - verdict : résumé textuel du résultat
     - timing_ms : temps total de la recherche
     - index_stats : état de l'index au moment de la requête (optionnel)
@@ -30,6 +52,8 @@ class RAGDiagnostic:
         self.query = query
         self.strategies_tried: list[str] = []
         self.strategies_results: dict[str, dict] = {}
+        self.confidence_label: str = "HAUTE"
+        self.found_chunks: int = 0
         self.verdict: str = ""
         self.timing_ms: float = 0.0
         self.t_start: float = 0.0
@@ -66,6 +90,26 @@ class RAGDiagnostic:
             "timing_ms": round(timing_ms, 1),
         }
 
+    def log_strategy_info(self, info: StrategyInfo):
+        """Enregistre une stratégie à partir d'un objet StrategyInfo."""
+        self.strategies_tried.append(info.name)
+        self.strategies_results[info.name] = {
+            "found": info.found,
+            "top_score": round(info.top_score, 3),
+            "hit": info.hit,
+            "timing_ms": round(info.timing_ms, 1),
+        }
+
+    def set_confidence(self, label: str, found_chunks: int = 0):
+        """Définit le niveau de confiance et le nombre de chunks trouvés.
+
+        Args:
+            label: HAUTE | MOYENNE | FAIBLE | ABSENT
+            found_chunks: Nombre de chunks après déduplication
+        """
+        self.confidence_label = label
+        self.found_chunks = found_chunks
+
     def set_verdict(self, verdict: str):
         """Définit le verdict de la recherche."""
         self.verdict = verdict
@@ -84,6 +128,8 @@ class RAGDiagnostic:
             "query": self.query[:200],  # Limiter la taille
             "strategies_tried": self.strategies_tried,
             "strategies_results": self.strategies_results,
+            "confidence_label": self.confidence_label,
+            "found_chunks": self.found_chunks,
             "verdict": self.verdict,
             "timing_ms": round(self.timing_ms, 1),
             "index_stats": self.index_stats,
@@ -99,5 +145,6 @@ class RAGDiagnostic:
         n_hits = sum(1 for r in self.strategies_results.values() if r.get("hit"))
         return (
             f"[RAG] {n_strategies} stratégies, {n_hits} hits, "
+            f"[{self.confidence_label}] {self.found_chunks} chunks, "
             f"{self.timing_ms:.0f}ms → {self.verdict}"
         )

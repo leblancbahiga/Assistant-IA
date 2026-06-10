@@ -26,8 +26,11 @@ class MemoryStore:
         self._memory_context = {} # Working Memory (RAM)
 
     def _get_conn(self):
-        """Ouvre une nouvelle connexion (Thread-safe)."""
-        return sqlite3.connect(str(self.db_path), timeout=20)
+        """Ouvre une nouvelle connexion (Thread-safe) avec WAL mode."""
+        conn = sqlite3.connect(str(self.db_path), timeout=20)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        return conn
 
     def _init_db(self):
         conn = self._get_conn()

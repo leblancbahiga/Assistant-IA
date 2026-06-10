@@ -32,6 +32,18 @@ from src.extraction import PostSessionExtractor  # V4.5 : Extraction post-sessio
 
 logger = logging.getLogger(__name__)
 
+
+# ── Guard anti-conflit V8+ ──
+# NuruCore (ce module) ET NuruOrchestrator (importé ligne 29) cohabitent
+# pendant la migration V4.5→V8+. Ce guard avertit que les deux pipelines
+# sont chargés simultanément, ce qui consomme de la RAM inutilement.
+# À supprimer quand NuruCore sera entièrement migré vers l'orchestrateur.
+if "NuruOrchestrator" in dir():
+    logger.warning(
+        "⚠️ NuruCore ET NuruOrchestrator chargés — migration V4.5→V8+ en cours. "
+        "Les nouveaux pipelines doivent utiliser NuruOrchestrator directement."
+    )
+
 SYSTEM_PROMPT_STATIC = """
 Tu es NURU V8+, l'assistant IA personnel de Leblanc.
 

@@ -41,7 +41,11 @@ class SemanticCache:
         self._init_db()
 
     def _get_conn(self):
-        return sqlite3.connect(str(self._db_path), timeout=10)
+        """Ouvre une connexion SQLite avec WAL mode pour accès concurrents."""
+        conn = sqlite3.connect(str(self._db_path), timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        return conn
 
     def _init_db(self):
         conn = self._get_conn()
