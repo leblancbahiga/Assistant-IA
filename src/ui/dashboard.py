@@ -23,6 +23,13 @@ import psutil
 from PySide6.QtCore import Qt, QTimer, Signal, QSize, QThreadPool
 from PySide6.QtGui import QFont
 
+# ── Path setup ────────────────────────────────────────────────────────────
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+logger = logging.getLogger(__name__)
+
 # ── InferenceWorker (thread-safe LLM) ──
 try:
     from src.core.inference_worker import InferenceWorker
@@ -43,13 +50,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-# ── Path setup ────────────────────────────────────────────────────────────
-project_root = Path(__file__).parent.parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-logger = logging.getLogger(__name__)
 
 # ── Conditional imports ──────────────────────────────────────────────────
 try:
@@ -961,7 +961,16 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     app = QApplication(sys.argv)
 
-    win = CyberDashboard()
+    # Tentative d'initialisation du backend NuruCore
+    core = None
+    try:
+        from src.nuru_core import NuruCore
+        core = NuruCore()
+        logger.info("✅ NuruCore initialisé — mode réel")
+    except Exception as e:
+        logger.warning(f"NuruCore non disponible: {e} — mode démo")
+
+    win = CyberDashboard(core=core)
     win.show()
 
     sys.exit(app.exec())
