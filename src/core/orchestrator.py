@@ -354,9 +354,26 @@ class NuruOrchestrator:
 
                         # Même sans régénération, avertir l'utilisateur
                         else:
-                            yield "\n\n---\n⚠️ **Avertissement** : Certaines informations n'ont pu être vérifiées contre les sources."
-                            for issue in check.issues[:2]:
-                                yield f"\n- {issue[:120]}"
+                            warning_msg = (
+                                "⚠️ **Avertissement — Vérification des sources**\n\n"
+                                "Certaines informations de cette réponse n'ont **pas pu être vérifiées** "
+                                "contre les sources disponibles.\n\n"
+                                "**Affirmations non vérifiées :**\n"
+                            )
+                            for issue in check.issues[:3]:
+                                warning_msg += f"- {issue[:150]}\n"
+                            warning_msg += (
+                                "\n> *Vérifie ces points dans les documents originaux "
+                                "avant de les utiliser.*\n"
+                            )
+                            yield "\n\n---\n" + warning_msg + "\n---\n"
+
+                            # Émettre un événement pour le dashboard (Sprint 5.6)
+                            self.event_bus.emit_sync("verification_warning", {
+                                "message": warning_msg,
+                                "issues": check.issues[:5],
+                                "query": query,
+                            })
             except Exception as e:
                 logger.debug(f"V8+ FactChecker ignoré: {e}")
 
@@ -380,6 +397,16 @@ class NuruOrchestrator:
             }
             event_data["rag_score"] = round(getattr(rag_result, "top_score", 0.0), 2)
         await self.event_bus.emit("generation_complete", event_data)
+
+        # Émission séparée rag_score pour le dashboard
+        rag_score_val = event_data.get("rag_score", 0.0)
+        sources_list = []
+        if rag_result and hasattr(rag_result, "sources"):
+            sources_list = list(rag_result.sources)
+        self.event_bus.emit_sync("rag_score", {
+            "score": rag_score_val,
+            "sources": sources_list,
+        })
 
         # ── 9. Réflexion ──
         if self.reflection:

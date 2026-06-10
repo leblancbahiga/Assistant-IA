@@ -113,22 +113,57 @@ class LocalLLM:
             logits_processors = [make_repetition_penalty(rep_penalty)]
 
             # V8+ Sprint 6.4 : Utiliser apply_chat_template du tokenizer
-            # pour formater correctement le prompt selon le modèle
+            # pour formater correctement le prompt selon le modèle,
+            # avec support multi-tour (system/user/assistant).
             formatted_prompt = prompt
             if self._tokenizer is not None and hasattr(self._tokenizer, 'apply_chat_template'):
                 try:
-                    # Construire la structure de chat depuis le prompt brut
-                    # Si le prompt contient déjà les tokens spéciaux, on ne double pas
-                    if '<|assistant|>' not in prompt and '<|im_start|>assistant' not in prompt:
-                        messages = [
-                            {"role": "user", "content": prompt},
+                    # Détecter si le prompt contient déjà des tokens spéciaux
+                    # (formaté manuellement par le orchestrateur)
+                    has_special_tokens = any(
+                        marker in prompt
+                        for marker in (
+                            '<|assistant|>',
+                            '<|im_start|>assistant',
+                            '<|im_end|>',
+                            '<|end|>',
+                            '<|user|>',
+                            '<|im_start|>user',
+                            '<|im_start|>system',
+                        )
+                    )
+
+                    if not has_special_tokens:
+                        # Prompt brut sans tokens spéciaux — construire des messages structurés
+                        # Tenter de séparer system prompt et user query
+                        # Si le prompt commence par "Tu es NURU" ou similaire, c'est system + user
+                        system_part = ""
+                        user_part = prompt
+
+                        # Détection naïve : si le prompt contient un bloc système
+                        # (commence par une instruction système)
+                        system_markers = [
+                            "Tu es NURU", "Tu es", "Ta mission",
+                            "# PRIORITÉ", "# MODE RAG", "# MODE HYBRIDE",
+                            "## INSTRUCTION STRICTE",
                         ]
+                        found_system = any(prompt.startswith(m) for m in system_markers)
+
+                        if found_system and len(prompt) > 200:
+                            # Le prompt contient probablement un système + instructions + requête
+                            # On garde le tout comme user content (le système est déjà dans le prompt)
+                            messages = [{"role": "user", "content": prompt}]
+                        else:
+                            messages = [{"role": "user", "content": prompt}]
+
                         formatted_prompt = self._tokenizer.apply_chat_template(
                             messages,
                             tokenize=False,
                             add_generation_prompt=True,
                         )
-                        logger.debug(f"🧩 apply_chat_template appliqué ({len(formatted_prompt)} chars)")
+                        logger.debug(f"🧩 apply_chat_template multi-turn ({len(formatted_prompt)} chars)")
+                    else:
+                        logger.debug("🧩 Prompt déjà formaté — skip apply_chat_template")
                 except Exception as e:
                     logger.debug(f"apply_chat_template ignoré: {e}")
                     formatted_prompt = prompt
