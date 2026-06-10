@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 from src.ui.components.nuru_widgets import CitationBadge
+from src.ui.components.right_panel import CitationChip
 
 # ── Constantes V7 ──────────────────────────────────────────────────────────
 
@@ -154,20 +155,31 @@ class ChatBubble(QFrame):
         self._text_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         layout.addWidget(self._text_label)
 
-        # ── 2b. Barre de confiance (optionnelle, nuru seulement) ──
-        self._confidence_widget: QWidget | None = None
-        if confidence is not None and self._role != "user":
-            self._confidence_widget = self._build_confidence_bar(confidence)
-            layout.addWidget(self._confidence_widget)
+        # ── 2b. Badges inline (confiance + citations) ──
+        self._badges_layout = QHBoxLayout()
+        self._badges_layout.setSpacing(4)
+        self._badges_layout.setContentsMargins(0, 0, 0, 0)
 
-        # ── 2c. Citations ──
+        # Badge de confiance inline
+        self._confidence_badge: QLabel | None = None
+        if confidence is not None and self._role != "user":
+            self._confidence_badge = self._build_confidence_badge(confidence)
+            self._badges_layout.addWidget(self._confidence_badge)
+
+        # Badges de source (CitationChip)
+        for path, page in self._sources:
+            chip = CitationChip(path)
+            chip.mousePressEvent = lambda e, p=path, pg=page: self.citation_clicked.emit(p, pg)
+            chip.setCursor(Qt.PointingHandCursor)
+            self._badges_layout.addWidget(chip)
+
+        self._badges_layout.addStretch()
+        layout.addLayout(self._badges_layout)
+
+        # ── 2c. Ancien layout citations (conservé pour compat) ──
         self._citations_layout = QHBoxLayout()
         self._citations_layout.setSpacing(4)
         self._citations_layout.setContentsMargins(0, 0, 0, 0)
-        for path, page in self._sources:
-            badge = CitationBadge(path, page)
-            badge.clicked.connect(self._on_citation_clicked)
-            self._citations_layout.addWidget(badge)
         self._citations_layout.addStretch()
         layout.addLayout(self._citations_layout)
 
@@ -251,44 +263,39 @@ class ChatBubble(QFrame):
             "}"
         )
 
-    def _build_confidence_bar(self, score: float) -> QWidget:
-        """Construit une mini barre de confiance (label + barre + pourcentage)."""
-        container = QWidget()
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-        label = QLabel("Confiance")
-        label.setObjectName("ConfidenceLabel")
-        label.setFixedHeight(14)
-        layout.addWidget(label)
+    def _build_confidence_badge(self, score: float) -> QLabel:
+        """Construit un badge de confiance inline.
 
-        bar = QFrame()
-        bar.setObjectName("ConfidenceBarBg")
-        bar.setFixedHeight(4)
-        bar.setFixedWidth(64)
+        Style :
+        - high (>=0.5) : fond #081A0D, bordure #1A3A1F, texte #2A8A3A
+        - low (<0.5)   : fond #1A0F05, bordure #3A2A0A, texte #9A7A2A
+        """
+        level = "high" if score >= 0.50 else ("mid" if score >= 0.40 else "low")
         pct = max(0, min(100, int(score * 100)))
-        level = "high" if score >= 0.75 else ("mid" if score >= 0.40 else "low")
-        bar_color = CONFIDENCE_COLORS[level]
-        # Utilise un QFrame fill via un sous-label
-        bar_layout = QHBoxLayout(bar)
-        bar_layout.setContentsMargins(0, 0, 0, 0)
-        fill = QFrame()
-        fill.setObjectName("ConfidenceFill")
-        fill.setFixedHeight(4)
-        fill.setMinimumWidth(0)
-        fill.setMaximumWidth(64)
-        fill.setFixedWidth(max(1, int(pct / 100 * 64)))
-        bar_layout.addWidget(fill)
-        bar_layout.addStretch()
 
-        layout.addWidget(bar)
+        if score >= 0.5:
+            bg = "#081A0D"
+            border = "#1A3A1F"
+            color = "#2A8A3A"
+            level_text = "HAUTE"
+        else:
+            bg = "#1A0F05"
+            border = "#3A2A0A"
+            color = "#9A7A2A"
+            level_text = "FAIBLE"
 
-        value_label = QLabel(f"{pct}%")
-        value_label.setObjectName("ConfidenceValue")
-        layout.addWidget(value_label)
-        layout.addStretch()
-
-        return container
+        display = f"● Confiance {level_text} · {pct}%"
+        badge = QLabel(display)
+        badge.setStyleSheet(
+            f"background-color: {bg};"
+            f" border: 0.5px solid {border};"
+            f" border-radius: 10px;"
+            f" color: {color};"
+            f" font-size: 9px;"
+            f" font-weight: bold;"
+            f" padding: 2px 8px;"
+        )
+        return badge
 
     # ── 2f. Feedback internes ──
 
@@ -349,31 +356,52 @@ class ChatBubble(QFrame):
         self._text_label.setText(html)
 
     def set_sources(self, sources: list[tuple[str, int]]) -> None:
-        """Remplace les citations affichées."""
-        # Vider l'ancien layout
-        while self._citations_layout.count():
-            item = self._citations_layout.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
-        # Remplir avec les nouvelles
-        for path, page in sources:
-            badge = CitationBadge(path, page)
-            badge.clicked.connect(self._on_citation_clicked)
-            self._citations_layout.addWidget(badge)
-        self._citations_layout.addStretch()
+        """Remplace les citations affichées (badges inline)."""
+        # Mettre à jour _sources
         self._sources = list(sources)
 
+        # Nettoyer les anciens badges de source de _badges_layout
+        # (conserver le badge de confiance et le stretch)
+        items_to_remove = []
+        for i in range(self._badges_layout.count()):
+            item = self._badges_layout.itemAt(i)
+            if item and item.widget():
+                w = item.widget()
+                if isinstance(w, CitationChip) or (hasattr(w, '_source_path') and not hasattr(w, '_score')):
+                    items_to_remove.append(w)
+                elif isinstance(w, QLabel) and w != self._confidence_badge:
+                    # Check if it's a source badge (has source_path attr or starts with 📄)
+                    if hasattr(w, 'set_source') or hasattr(w, '_source_path'):
+                        items_to_remove.append(w)
+
+        for w in items_to_remove:
+            self._badges_layout.removeWidget(w)
+            w.deleteLater()
+
+        # Ajouter les nouveaux badges
+        for path, page in self._sources:
+            chip = CitationChip(path)
+            chip.mousePressEvent = lambda e, p=path, pg=page: self.citation_clicked.emit(p, pg)
+            chip.setCursor(Qt.PointingHandCursor)
+            # Insérer avant le stretch (dernier élément)
+            self._badges_layout.insertWidget(self._badges_layout.count() - 1, chip)
+
     def set_confidence(self, score: float) -> None:
-        """Met à jour la barre de confiance (recrée le widget)."""
+        """Met à jour le badge de confiance inline."""
         self._confidence = score
-        if self._confidence_widget is not None:
-            # Remplacer le widget de confiance
-            idx = self.layout().indexOf(self._confidence_widget)
+        if self._confidence_badge is not None:
+            new_badge = self._build_confidence_badge(score)
+            idx = self._badges_layout.indexOf(self._confidence_badge)
             if idx >= 0:
-                new_widget = self._build_confidence_bar(score)
-                self.layout().insertWidget(idx, new_widget)
-                self._confidence_widget.deleteLater()
-                self._confidence_widget = new_widget
+                self._badges_layout.insertWidget(idx, new_badge)
+                self._badges_layout.removeWidget(self._confidence_badge)
+                self._confidence_badge.deleteLater()
+                self._confidence_badge = new_badge
+        else:
+            # Créer le badge s'il n'existe pas encore
+            if self._role != "user":
+                self._confidence_badge = self._build_confidence_badge(score)
+                self._badges_layout.insertWidget(0, self._confidence_badge)
 
     @property
     def role(self) -> str:
