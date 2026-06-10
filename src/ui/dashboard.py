@@ -60,6 +60,12 @@ except ImportError as e:
     ConsolePage = None
     RightPanelDiagnostic = None
 
+# ── ViewModels ──────────────────────────────────────────────────────────
+try:
+    from src.ui.viewmodels.rag_diagnostic_vm import RAGDiagnosticViewModel
+except ImportError:
+    RAGDiagnosticViewModel = None
+
 # ── Page components ─────────────────────────────────────────────────────
 try:
     from src.ui.components.sessions_page import SessionsPage
@@ -557,6 +563,12 @@ class CyberDashboard(QMainWindow):
             layout.addWidget(QLabel("Diagnostic non disponible"))
         self._main_layout.addWidget(self._metrics)
 
+        # ── 4. RAGDiagnosticViewModel ──
+        self._rag_diagnostic_vm: RAGDiagnosticViewModel | None = None
+        if RAGDiagnosticViewModel is not None:
+            self._rag_diagnostic_vm = RAGDiagnosticViewModel()
+            self._rag_diagnostic_vm.updated.connect(self._on_rag_vm_updated)
+
     def _wire_signals(self) -> None:
         """Connecte les signaux entre composants."""
         # Sidebar → page switching
@@ -687,6 +699,14 @@ class CyberDashboard(QMainWindow):
                 self._metrics.set_llm(tok_s, self._total_tokens_received)
             self._last_llm_update = now
 
+    def _on_rag_vm_updated(self) -> None:
+        """Callback quand RAGDiagnosticViewModel est mis à jour.
+
+        Route les données vers RightPanelDiagnostic.
+        """
+        if hasattr(self._metrics, "update_from_diagnostics_viewmodel"):
+            self._metrics.update_from_diagnostics_viewmodel()
+
     def _on_rag_data(self, rag_data: dict) -> None:
         """Reçoit les métadonnées RAG après génération."""
         try:
@@ -713,6 +733,32 @@ class CyberDashboard(QMainWindow):
                 if hasattr(self._metrics, "set_strategy"):
                     strict_label = "STRICT" if getattr(self, "_current_strict", False) else "HYBRID"
                     self._metrics.set_strategy(strict_label, "phi-4-mini-4bit")
+
+                # Feeder le RAGDiagnosticViewModel
+                if self._rag_diagnostic_vm is not None:
+                    try:
+                        from src.rag.diagnostics import RAGDiagnostic
+
+                        diag = RAGDiagnostic(query=getattr(self, "_current_query", ""))
+                        diag.set_confidence(
+                            rag_data.get("confidence_label", "MOYENNE"),
+                            rag_data.get("documents_found", 0),
+                        )
+                        # Ajouter les stratégies depuis le dict
+                        strategies = rag_data.get("strategies", [])
+                        for s in strategies:
+                            if isinstance(s, dict):
+                                diag.log_strategy(
+                                    s.get("name", "?"),
+                                    s.get("found", 0),
+                                    s.get("top_score", 0.0),
+                                    s.get("hit", False),
+                                    s.get("timing_ms", 0.0),
+                                )
+                        diag.set_verdict(rag_data.get("verdict", ""))
+                        self._rag_diagnostic_vm.update_from_diagnostic(diag)
+                    except Exception as e:
+                        logger.debug("RAGDiagnosticViewModel update: %s", e)
         except Exception as e:
             logger.debug("RAG data callback: %s", e)
 

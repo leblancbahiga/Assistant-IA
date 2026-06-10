@@ -977,6 +977,63 @@ class RightPanelDiagnostic(QWidget):
 
     # ── Nouvelle API ──
 
+    def update_from_diagnostics_viewmodel(self) -> None:
+        """Met à jour depuis RAGDiagnosticViewModel (via signal updated).
+
+        Le caller appelle ``viewmodel.updated.connect(self.update_from_diagnostics_viewmodel)``.
+        """
+        try:
+            from src.ui.viewmodels.rag_diagnostic_vm import RAGDiagnosticViewModel
+
+            # On utilise le sender pour récupérer le viewmodel
+            sender = self.sender()
+            if not isinstance(sender, RAGDiagnosticViewModel):
+                logger.debug("update_from_diagnostics_viewmodel: sender not a RAGDiagnosticViewModel")
+                return
+
+            vm = sender
+            score = vm.final_score
+            label = vm.confidence_label
+            strategies = vm.strategies
+            chunks = vm.found_chunks
+            fact_check = vm.fact_check_triggered
+
+            # Score RAG
+            self.set_rag_score(score, label)
+
+            # Chunks
+            self._tab_widget.metrics.metrics_grid.set_chunks(
+                chunks // 2 if chunks > 1 else 0,
+                0,
+                chunks,
+            )
+
+            # Stratégies
+            strategy_tuples = []
+            for s in strategies:
+                icon = "🔺" if "vectoriel" in s['name'].lower() else (
+                    "📝" if "fts" in s['name'].lower() else (
+                        "🔍" if "grep" in s['name'].lower() else (
+                            "✨" if "hyde" in s['name'].lower() else "○"
+                        )
+                    )
+                )
+                score_str = str(s['top_score']) if s['hit'] else "skip"
+                timing = f"{s['timing_ms']:.0f}ms" if s['timing_ms'] > 0 else "—"
+                skipped = not s['hit']
+                strategy_tuples.append((icon, s['name'], score_str, timing, skipped))
+            if strategy_tuples:
+                self._tab_widget.metrics.strategy_diag.set_strategies(strategy_tuples)
+
+            # Verdict / Banner
+            if hasattr(vm, 'verdict') and vm.verdict:
+                self._tab_widget.metrics.retro_banner.set_info(vm.verdict)
+
+        except ImportError as e:
+            logger.debug("RAGDiagnosticViewModel non disponible: %s", e)
+        except Exception as e:
+            logger.debug("Erreur update_from_diagnostics_viewmodel: %s", e)
+
     def update_from_events(self) -> None:
         """Draine l'EventBus et met à jour les widgets du panneau droit."""
         try:
