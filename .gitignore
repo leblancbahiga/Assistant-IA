@@ -22,6 +22,9 @@ data/
 .DS_Store
 Thumbs.db
 
+# Config (contient des noms de providers)
+config/settings.yaml
+
 # Archive
 _archive/
 *.results.json
