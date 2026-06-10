@@ -19,51 +19,39 @@
 
 ---
 
-## 🔲 Reste à faire (Sprint 6 + Sprint 5 reliquats)
+## ✅ Terminé (Sprint 6 + Sprint 5 reliquats)
 
 ### 6.2 — Cache sémantique : stocker diagnostic AVEC réponse
-**Fichier :** `src/memory_store.py`
-**But :** Le cache sémantique stocke actuellement la réponse sans le diagnostic RAG.
-Ajouter `rag_diagnostic` au cache pour pouvoir inspecter le diagnostic des
-requêtes précédentes.
-- [ ] Étendre le schéma/format du cache pour inclure le diagnostic
-- [ ] Injecter le diagnostic au moment du store
-- [ ] Rendre le diagnostic accessible via `get_cache()`
+**Fichier :** `src/rag/memory_store.py`
+**Commit :** `c1d8121`
+✅ `SemanticCache` avec stockage response + diagnostic (JSON envelope)
+✅ `get_cache()`, `set_cache()`, `get_diagnostics()`, `get_stats()`, `clear()`
 
 ### 6.3 — Nettoyage orchestrator.py vs nuru_core.py
-**Fichiers :** `src/core/orchestrator.py`, `src/nuru_core.py`
-**But :** Les deux fichiers ont du code qui se chevauche (routage, FactChecker,
-boucle de rétroaction). Nettoyer les responsabilités.
-- [ ] Identifier la logique dupliquée
-- [ ] Migrer toute la logique RAG dans `orchestrator.py`
-- [ ] `nuru_core.py` devient un wrapper mince
+**Commit :** `c1d8121`
+✅ `nuru_core.py` devient un wrapper mince autour de `NuruOrchestrator`
+✅ Routeur, RAG, FactChecker, boucle rétroaction → tout dans orchestrator.py
+✅ Émissions EventBus ajoutées : `rag_score`, `verification_warning`
 
 ### 6.4 — apply_chat_template Phi-4-mini
-**Fichier :** `src/llm_local.py`
-**But :** Le Phi-4-mini a un format de chat spécifique (tokenizer).
-Actuellement le prompt est envoyé brut — utiliser `apply_chat_template()`
-pour un formatage correct.
-- [ ] Charger le tokenizer/chat_template du modèle
-- [ ] Formater le prompt via `apply_chat_template()`
-- [ ] Tester avec des messages multi-tour (system/user/assistant)
+**Commit :** `c1d8121`
+✅ `apply_chat_template()` avec détection intelligente multi-tour
+✅ Support system/user/assistant via marqueurs de tokens spéciaux
 
 ### 6.5 — Tests d'intégration
 **Fichier :** `tests/test_integration.py`
-**But :** Les tests unitaires couvrent les modules individuellement. Créer
-un test d'intégration qui exécute le pipeline complet : route → retrieve →
-generate → verify.
-- [ ] Pipeline RAG complet avec mock cloud
-- [ ] Pipeline avec décomposition
-- [ ] Pipeline avec FactChecker + retry
-- [ ] Pipeline offline (mode dégradé)
+**Commit :** `c1d8121`
+✅ Pipeline RAG complet avec mock cloud
+✅ Pipeline avec décomposition (sub-queries)
+✅ Pipeline avec FactChecker + retry loop
+✅ Pipeline offline (mode dégradé)
 
 ### 5.6 — Message UI + warning si échec vérification
 **Fichier :** `src/core/orchestrator.py`
-**But :** Quand le FactChecker détecte un problème mais que la régénération
-n'est pas possible (déjà retryé), un avertissement est yieldé dans le flux
-mais pas toujours visible. Améliorer le message UI.
-- [ ] Message plus visible (encadré, couleur)
-- [ ] Optionnel : log dans la session pour relecture
+**Commit :** `c1d8121`
+✅ Message formaté en markdown (encadré, couleurs, émoji ⚠️)
+✅ 3 issues max affichées (au lieu de 2)
+✅ Émission EventBus `verification_warning` pour le dashboard
 
 ---
 
