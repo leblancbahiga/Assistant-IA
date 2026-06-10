@@ -625,41 +625,77 @@ class MetricsPanel(QWidget):
             bar.set_value(display)
 
 
-# ── 8. TypingIndicator ────────────────────────────────────────────────────
+# ── 8. TypingIndicator V8+ — Stratégie active + points animés ──────────────
 
 
 class TypingIndicator(QFrame):
-    """3 points animés indiquant que l'assistant rédige.
+    """Indicateur de frappe V8+ — affiche la stratégie active + 3 points animés.
 
     - QTimer 400ms, phase 0-2
-    - Dessin QPainter avec DOT_SIZE=6, DOT_GAP=5
-    - Point actif se déplace de -3px vers le haut
+    - Dessin QPainter avec DOT_SIZE=4, DOT_GAP=4
+    - Point actif se déplace de -2px vers le haut
+    - Label de stratégie à gauche des points (ex: "RECHERCHE MULTI-STRATÉGIE · 2/3")
+    - Style : fond #0D1720, bordure #1A2D40, bordure gauche #1A5F9A
     """
 
-    DOT_SIZE = 6
-    DOT_GAP = 5
+    DOT_SIZE = 4
+    DOT_GAP = 4
     ANIM_INTERVAL = 400  # ms
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setFixedHeight(24)
-        self.setFixedWidth(48)
+        self.setObjectName("TypingIndicator")
+        self.setFixedHeight(32)
+        self.setMinimumWidth(80)
 
-        self._phase: int = 0  # 0, 1, 2
+        # Layout : label + stretch + dots
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setSpacing(8)
+
+        self._strategy_label = QLabel("RECHERCHE MULTI-STRATÉGIE · 1/3")
+        self._strategy_label.setStyleSheet(
+            "color: #2A5A8A; font-size: 9px; font-weight: bold;"
+            " letter-spacing: 0.06em; background: transparent;"
+        )
+        layout.addWidget(self._strategy_label)
+
+        layout.addStretch()
+
+        # Dots container (painted)
+        self._dots_container = DotsWidget(self)
+        self._dots_container.setFixedSize(44, 16)
+        layout.addWidget(self._dots_container)
+
+        self._phase: int = 0
         self._timer = QTimer(self)
         self._timer.setInterval(self.ANIM_INTERVAL)
         self._timer.timeout.connect(self._advance_phase)
         self._timer.start()
 
+        # Style du frame
+        self.setStyleSheet(
+            "#TypingIndicator {"
+            "  background-color: #0D1720;"
+            "  border: 0.5px solid #1A2D40;"
+            "  border-left: 2px solid #1A5F9A;"
+            "  border-radius: 2px 10px 10px 10px;"
+            "}"
+        )
+
+    def set_strategy_label(self, label: str) -> None:
+        """Met à jour le texte de stratégie affiché."""
+        self._strategy_label.setText(label)
+
     def _advance_phase(self) -> None:
         self._phase = (self._phase + 1) % 3
-        self.update()
+        self._dots_container.update()
 
     def stop(self) -> None:
-        """Arrête l'animation et vide l'affichage."""
+        """Arrête l'animation."""
         self._timer.stop()
         self._phase = -1
-        self.update()
+        self._dots_container.update()
 
     def start(self) -> None:
         """(Re)démarre l'animation."""
@@ -667,23 +703,31 @@ class TypingIndicator(QFrame):
             self._phase = 0
             self._timer.start()
 
+    # Remplacer paintEvent du frame par un paint sur le conteneur de points
     def paintEvent(self, event) -> None:
+        # On délègue le dessin des points au conteneur via son paintEvent
+        # Le QFrame gère déjà le style via QSS
+        super().paintEvent(event)
+
+    # Rendre le dots_container accessible pour le dessin
+    def _dot_paint(self, painter: QPainter) -> None:
         if self._phase < 0:
             return
 
-        painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         dot_color = QColor("#00d4ff")
         dot_color_dim = QColor(0, 212, 255, 60)
 
+        w = self._dots_container.width()
+        h = self._dots_container.height()
         total_w = 3 * self.DOT_SIZE + 2 * self.DOT_GAP
-        start_x = (self.width() - total_w) // 2
-        cy = self.height() // 2
+        start_x = (w - total_w) // 2
+        cy = h // 2
 
         for i in range(3):
             x = start_x + i * (self.DOT_SIZE + self.DOT_GAP)
-            y_offset = -3 if i == self._phase else 0
+            y_offset = -2 if i == self._phase else 0
             y = cy + y_offset - self.DOT_SIZE // 2
 
             if i == self._phase:
@@ -695,4 +739,16 @@ class TypingIndicator(QFrame):
 
             painter.drawEllipse(x, y, self.DOT_SIZE, self.DOT_SIZE)
 
+
+class DotsWidget(QWidget):
+    """Widget conteneur pour les points animés du TypingIndicator."""
+
+    def __init__(self, parent_typing: TypingIndicator, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._parent_typing = parent_typing
+        self.setStyleSheet("background: transparent;")
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        self._parent_typing._dot_paint(painter)
         painter.end()
