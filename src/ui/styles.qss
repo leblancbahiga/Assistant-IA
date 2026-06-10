@@ -1,217 +1,249 @@
 /* ═══════════════════════════════════════════════════════════════════
-   NURU V8+ — Thème "Abyssal Flat"
-   Palette : fonds sombres, flat design, zéro glow/neon
+   NURU V8+ — Thème Bleu-Vert "Deep Ocean"
+   Palette : #0A0E14 fond, #1A6A9A accent, #2A8A4A succès
+   Migration 3 colonnes — remplacement du violet #7f77dd
 ═══════════════════════════════════════════════════════════════════ */
-QMainWindow { background-color: #0a0b0f; }
-QWidget { background-color: transparent; color: #e8eaf0; font-family: "SF Pro Text", "Inter", sans-serif; font-size: 13px; }
+QMainWindow { background-color: #0A0E14; }
+QWidget { background-color: transparent; color: #E8EAF0; font-family: "SF Pro Text", "Inter", sans-serif; font-size: 13px; }
 
 /* ══════════════════════════════════════
    SIDEBAR (NavSidebar)
 ══════════════════════════════════════ */
-#Sidebar { background-color: #111318; border-right: 1px solid #2e3347; min-width: 200px; max-width: 240px; }
-#SidebarHeader { background-color: #111318; border-bottom: 1px solid #2e3347; padding: 12px 14px; }
-#LogoLabel { font-size: 16px; font-weight: 600; color: #e8eaf0; }
-#VersionBadge { background-color: #1e2540; color: #7f77dd; border: 1px solid rgba(127, 119, 221, 0.3); border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600; }
-#NavSectionLabel { color: #555e78; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; padding: 12px 16px 4px; }
-#NavButton { background-color: transparent; color: #9098b0; border: none; border-left: 2px solid transparent; border-radius: 0; padding: 8px 16px; text-align: left; font-size: 12px; font-weight: 400; }
-#NavButton:hover { background-color: #1a1d26; color: #e8eaf0; }
-#NavButton[active="true"] { background-color: #1a1d26; color: #e8eaf0; border-left: 2px solid #7f77dd; font-weight: 500; }
-#SidebarFooter { background-color: #111318; border-top: 1px solid #2e3347; padding: 10px 14px; }
-#ModelNameLabel { font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; color: #9098b0; }
-#ModelStatsLabel { font-size: 10px; color: #555e78; margin-top: 2px; }
+#Sidebar { background-color: #0D1318; border-right: 0.5px solid #1A2332; min-width: 200px; max-width: 220px; }
+#SidebarHeader { background-color: #0D1318; border-bottom: 0.5px solid #1A2332; padding: 16px 14px 12px; }
+#LogoLabel { font-size: 15px; font-weight: 500; color: #E8EAF0; letter-spacing: 0.08em; }
+#VersionBadge { background-color: #0F1A2A; color: #2A7FBF; border: 0.5px solid rgba(42, 127, 191, 0.3); border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600; }
+#NavSectionLabel { color: #2D3F52; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.15em; padding: 8px 10px 4px; }
+#NavButton { background-color: transparent; color: #4A6080; border: none; border-left: 2px solid transparent; border-radius: 0; padding: 7px 10px; text-align: left; font-size: 11px; font-weight: 400; letter-spacing: 0.03em; }
+#NavButton:hover { background-color: #131B24; color: #7A9ABF; }
+#NavButton[active="true"] { background-color: #0F2238; color: #3A8FD4; border-left: 2px solid #3A8FD4; font-weight: 500; }
+
+/* Recent Documents (Module 2) */
+#RecentDocuments { background-color: transparent; margin: 0 8px; }
+#RecentDocItem { background-color: transparent; border: none; border-radius: 5px; padding: 5px 8px; font-size: 10px; color: #3D5266; }
+#RecentDocItem:hover { background-color: #0F1A24; color: #5A7A9A; }
+#DocDot { min-width: 5px; max-width: 5px; min-height: 5px; max-height: 5px; border-radius: 3px; }
+#DocDot[indexed="true"] { background-color: #1E6B3A; }
+#DocDot[partial="true"] { background-color: #6B4E1E; }
+
+/* CloudStatusBadge (Module 2) */
+#CloudStatusBadge { background-color: #0A1F12; border: 0.5px solid #1A3D24; border-radius: 5px; padding: 5px 8px; }
+#CloudStatusDot { min-width: 6px; max-width: 6px; min-height: 6px; max-height: 6px; border-radius: 3px; background-color: #2A9A4A; }
+#CloudStatusText { font-size: 10px; color: #2A9A4A; letter-spacing: 0.05em; }
+
+/* ModelInfoFooter */
+#ModelInfoFooter { background-color: transparent; color: #3D5266; font-size: 10px; padding: 10px 14px; border-top: 0.5px solid #1A2332; }
 
 /* ══════════════════════════════════════
    CHAT ZONE (ConsolePage)
 ══════════════════════════════════════ */
-#ChatZone { background-color: #0a0b0f; }
-#ChatHeader { background-color: #111318; border-bottom: 1px solid #2e3347; padding: 0 14px; min-height: 46px; }
-#ChatHeaderTitle { font-size: 14px; font-weight: 500; color: #e8eaf0; }
+#ChatZone { background-color: #0A0E14; }
+#ChatHeader { background-color: #0D1318; border-bottom: 0.5px solid #1A2332; padding: 0 16px; min-height: 44px; }
+#ChatHeaderTitle { font-size: 12px; font-weight: 400; color: #6A8AAA; }
 
-/* ModeBadge — capsules colorées */
-#ModeBadge { border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; }
-#ModeBadge[mode="RAG"] { background-color: rgba(29, 158, 117, 0.15); color: #1d9e75; border: 1px solid rgba(29, 158, 117, 0.3); }
-#ModeBadge[mode="LOCAL"] { background-color: rgba(144, 152, 176, 0.1); color: #9098b0; border: 1px solid rgba(144, 152, 176, 0.2); }
-#ModeBadge[mode="CLOUD"] { background-color: rgba(55, 138, 221, 0.12); color: #378add; border: 1px solid rgba(55, 138, 221, 0.25); }
-#ModeBadge[mode="VERIFY"] { background-color: rgba(239, 159, 39, 0.12); color: #ef9f27; border: 1px solid rgba(239, 159, 39, 0.25); }
-#ModeBadge[mode="PLAN"] { background-color: rgba(127, 119, 221, 0.12); color: #7f77dd; border: 1px solid rgba(127, 119, 221, 0.25); }
+/* ModeBadge — capsules colorées style mockup */
+#ModeBadge { border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; }
+#ModeBadge[mode="RAG"] { background-color: rgba(26, 143, 212, 0.1); color: #1A8FD4; border: 0.5px solid rgba(26, 63, 95, 0.8); }
+#ModeBadge[mode="LOCAL"] { background-color: rgba(42, 138, 58, 0.1); color: #2A8A3A; border: 0.5px solid rgba(26, 58, 26, 0.8); }
+#ModeBadge[mode="CLOUD"] { background-color: rgba(55, 138, 221, 0.12); color: #378add; border: 0.5px solid rgba(55, 138, 221, 0.25); }
+#ModeBadge[mode="VERIFY"] { background-color: rgba(239, 159, 39, 0.12); color: #ef9f27; border: 0.5px solid rgba(239, 159, 39, 0.25); }
+#ModeBadge[mode="PLAN"] { background-color: rgba(42, 127, 191, 0.12); color: #2A7FBF; border: 0.5px solid rgba(42, 127, 191, 0.25); }
 
 /* ConfidenceWidget */
 #ConfidenceWidget { background-color: transparent; padding: 0; }
-#ConfidenceLabel { font-size: 10px; color: #555e78; margin-right: 4px; }
-#ConfidenceBar { background-color: #2e3347; border-radius: 2px; min-height: 4px; max-height: 4px; min-width: 64px; }
+#ConfidenceLabel { font-size: 10px; color: #3D5266; margin-right: 4px; }
+#ConfidenceBar { background-color: #1A2332; border-radius: 2px; min-height: 4px; max-height: 4px; min-width: 64px; }
 #ConfidenceBar::chunk { border-radius: 2px; }
-#ConfidenceBar[level="high"]::chunk { background-color: #639922; }
-#ConfidenceBar[level="mid"]::chunk { background-color: #ef9f27; }
-#ConfidenceBar[level="low"]::chunk { background-color: #e24b4a; }
+#ConfidenceBar[level="high"]::chunk { background-color: #2A8A4A; }
+#ConfidenceBar[level="mid"]::chunk { background-color: #8A7A2A; }
+#ConfidenceBar[level="low"]::chunk { background-color: #8A2A2A; }
 #ConfidenceValue { font-size: 11px; font-weight: 500; min-width: 32px; }
-#ConfidenceValue[level="high"] { color: #639922; }
-#ConfidenceValue[level="mid"] { color: #ef9f27; }
-#ConfidenceValue[level="low"] { color: #e24b4a; }
+#ConfidenceValue[level="high"] { color: #2A8A4A; }
+#ConfidenceValue[level="mid"] { color: #8A7A2A; }
+#ConfidenceValue[level="low"] { color: #8A2A2A; }
 
 /* Messages Area */
-#MessagesArea { background-color: #0a0b0f; border: none; }
-#MessagesArea > QWidget { background-color: #0a0b0f; }
+#MessagesArea { background-color: #0A0E14; border: none; }
+#MessagesArea > QWidget { background-color: #0A0E14; }
 QScrollBar:vertical { background-color: transparent; width: 6px; border: none; }
-QScrollBar::handle:vertical { background-color: #2e3347; border-radius: 3px; min-height: 24px; }
-QScrollBar::handle:vertical:hover { background-color: #555e78; }
+QScrollBar::handle:vertical { background-color: #1A2332; border-radius: 3px; min-height: 24px; }
+QScrollBar::handle:vertical:hover { background-color: #3D5266; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 
-/* Bulles de chat */
-#BubbleNuru { background-color: #111318; border: 1px solid #2e3347; border-radius: 10px; border-top-left-radius: 3px; padding: 10px 12px; }
-#BubbleUser { background-color: #1a1d26; border: 1px solid #2e3347; border-radius: 10px; border-top-right-radius: 3px; padding: 10px 12px; }
-#BubbleText { color: #e8eaf0; font-size: 13px; line-height: 1.6; background: transparent; }
-#BubbleText[role="user"] { color: #c8cede; }
+/* Bulles de chat — style mockup */
+#BubbleNuru { background-color: #0D1720; border: 0.5px solid #1A2D40; border-left: 2px solid #1A5F9A; border-radius: 2px 10px 10px 10px; padding: 9px 12px; }
+#BubbleUser { background-color: #0F122A; border: 0.5px solid #1E1E3A; border-right: 2px solid #4A3A9A; border-radius: 10px 2px 10px 10px; padding: 9px 12px; }
+#BubbleText { color: #B0C4D8; font-size: 11.5px; line-height: 1.5; background: transparent; }
+#BubbleText[role="user"] { color: #9898C8; }
 
-/* CitationBadge */
-#CitationBadge { background-color: rgba(29, 158, 117, 0.1); color: #1d9e75; border: 1px solid rgba(29, 158, 117, 0.25); border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: 500; }
-#CitationBadge:hover { background-color: rgba(29, 158, 117, 0.2); border-color: rgba(29, 158, 117, 0.5); }
+/* RAG badges — chips style mockup */
+#RagBadge { background-color: #081A0D; border: 0.5px solid #1A3A1F; border-radius: 20px; padding: 2px 7px; font-size: 9px; color: #2A8A3A; margin-top: 5px; }
+#RagBadge[warn="true"] { background-color: #1A0F05; border-color: #3A2A0A; color: #9A7A2A; }
+
+/* CitationBadge — chips style mockup */
+#CitationBadge { background-color: #0A1830; border: 0.5px solid #1A3050; border-radius: 4px; padding: 2px 7px; font-size: 9px; color: #2A6AAA; }
+#CitationBadge:hover { background-color: rgba(42, 106, 170, 0.2); border-color: rgba(42, 106, 170, 0.5); }
 
 /* Bubble action buttons */
-#BubbleAction { background-color: transparent; color: #555e78; border: 1px solid transparent; border-radius: 5px; padding: 0; font-size: 13px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; }
-#BubbleAction:hover { background-color: rgba(127, 119, 221, 0.15); color: #7f77dd; border: 1px solid rgba(127, 119, 221, 0.25); }
-#BubbleAction[feedback="up"] { background-color: rgba(127, 119, 221, 0.2); color: #7f77dd; border: 1px solid rgba(127, 119, 221, 0.4); }
-#BubbleAction[feedback="down"] { background-color: rgba(226, 75, 74, 0.12); color: #e24b4a; border: 1px solid rgba(226, 75, 74, 0.3); }
-#BubbleAction[copied="true"] { background-color: rgba(99, 153, 34, 0.15); color: #639922; border: 1px solid rgba(99, 153, 34, 0.3); }
+#BubbleAction { background-color: transparent; color: #3D5266; border: 1px solid transparent; border-radius: 5px; padding: 0; font-size: 13px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; }
+#BubbleAction:hover { background-color: rgba(26, 106, 154, 0.15); color: #1A6A9A; border: 1px solid rgba(26, 106, 154, 0.25); }
+#BubbleAction[feedback="up"] { background-color: rgba(26, 106, 154, 0.2); color: #1A6A9A; border: 1px solid rgba(26, 106, 154, 0.4); }
+#BubbleAction[feedback="down"] { background-color: rgba(138, 42, 42, 0.12); color: #8A2A2A; border: 1px solid rgba(138, 42, 42, 0.3); }
+#BubbleAction[copied="true"] { background-color: rgba(42, 138, 74, 0.15); color: #2A8A4A; border: 1px solid rgba(42, 138, 74, 0.3); }
 
 /* Confidence mini-bar dans les bulles */
-#ConfidenceLabel { color: #555e78; font-size: 9px; font-weight: 600; background: transparent; }
-#ConfidenceBarBg { background-color: #2e3347; border-radius: 2px; }
-#ConfidenceFill { background-color: #639922; border-radius: 2px; }
-#ConfidenceValue { color: #555e78; font-size: 9px; font-weight: 600; background: transparent; }
-#ConfidenceFill[level="high"] { background-color: #639922; }
-#ConfidenceFill[level="mid"] { background-color: #ef9f27; }
-#ConfidenceFill[level="low"] { background-color: #e24b4a; }
+#ConfidenceLabel { color: #3D5266; font-size: 9px; font-weight: 600; background: transparent; }
+#ConfidenceBarBg { background-color: #1A2332; border-radius: 2px; }
+#ConfidenceFill { background-color: #2A8A4A; border-radius: 2px; }
+#ConfidenceValue { color: #3D5266; font-size: 9px; font-weight: 600; background: transparent; }
+#ConfidenceFill[level="high"] { background-color: #2A8A4A; }
+#ConfidenceFill[level="mid"] { background-color: #8A7A2A; }
+#ConfidenceFill[level="low"] { background-color: #8A2A2A; }
 
-/* TypingIndicator */
-#TypingIndicator { background-color: #111318; border: 1px solid #2e3347; border-radius: 10px; border-top-left-radius: 3px; padding: 8px 14px; }
+/* TypingIndicator — style mockup */
+#TypingIndicator { background-color: #0D1720; border: 0.5px solid #1A2D40; border-left: 2px solid #1A5F9A; border-radius: 2px 10px 10px 10px; padding: 8px 12px; }
 
-/* Input Area — objectNames depuis console_page.py */
-#InputArea { background-color: #111318; border-top: 1px solid #2e3347; padding: 8px 10px 10px; }
-#InputFrameV7 { background-color: #1a1d26; border: 1px solid #2e3347; border-radius: 10px; padding: 4px 6px; }
-#InputFrameV7:focus-within { border-color: rgba(127, 119, 221, 0.4); }
-QTextEdit#SmartTextEdit { background-color: transparent; border: none; color: #e8eaf0; font-size: 13px; selection-background-color: rgba(127, 119, 221, 0.25); padding: 4px 6px; min-height: 28px; max-height: 90px; }
-QTextEdit#SmartTextEdit::placeholder { color: #555e78; }
-#MicButton, #AttachButton, #StrictButton { background-color: transparent; border: 1px solid #2e3347; border-radius: 7px; color: #9098b0; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; font-size: 14px; padding: 0; }
-#MicButton:hover, #AttachButton:hover, #StrictButton:hover { background-color: #242836; border-color: #555e78; color: #e8eaf0; }
-#StrictButton:checked { background-color: rgba(127, 119, 221, 0.15); border-color: rgba(127, 119, 221, 0.4); color: #7f77dd; }
-#SendButtonV7 { background-color: #1e2540; border: 1px solid rgba(127, 119, 221, 0.35); border-radius: 7px; color: #7f77dd; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; font-size: 14px; padding: 0; }
-#SendButtonV7:hover { background-color: rgba(127, 119, 221, 0.2); border-color: rgba(127, 119, 221, 0.6); }
-#SendButtonV7:pressed { background-color: rgba(127, 119, 221, 0.3); }
-#SendButtonV7:disabled { background-color: #1a1d26; border-color: #2e3347; color: #555e78; }
-#NewChatHeaderBtn { background-color: transparent; border: 1px solid #2e3347; border-radius: 7px; color: #9098b0; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; font-size: 14px; padding: 0; }
-#NewChatHeaderBtn:hover { background-color: #242836; border-color: #555e78; color: #e8eaf0; }
-#InputHint { color: #555e78; font-size: 10px; padding: 2px 14px 0; }
+/* Input Area — style mockup */
+#InputArea { background-color: #0D1318; border-top: 0.5px solid #1A2332; padding: 10px 14px; }
+#InputFrameV7 { background-color: #0D1520; border: 0.5px solid #1A2D40; border-radius: 8px; padding: 4px 6px; }
+#InputFrameV7:focus-within { border-color: rgba(26, 106, 154, 0.4); }
+QTextEdit#SmartTextEdit { background-color: transparent; border: none; color: #8AAAC8; font-size: 11px; selection-background-color: rgba(26, 106, 154, 0.25); padding: 4px 6px; min-height: 28px; max-height: 80px; }
+QTextEdit#SmartTextEdit::placeholder { color: #3D5266; }
+#MicButton, #AttachButton, #StrictButton { background-color: transparent; border: 0.5px solid #1A2332; border-radius: 6px; color: #4A6080; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; font-size: 14px; padding: 0; }
+#MicButton:hover, #AttachButton:hover, #StrictButton:hover { background-color: #131B24; border-color: #3D5266; color: #7A9ABF; }
+#StrictButton:checked { background-color: rgba(26, 106, 154, 0.15); border-color: rgba(26, 106, 154, 0.4); color: #1A6A9A; }
+#SendButtonV7 { background-color: #0F2A44; border: 0.5px solid #1A4A6A; border-radius: 6px; color: #2A8FD4; min-width: 32px; max-width: 32px; min-height: 32px; max-height: 32px; font-size: 14px; padding: 0; }
+#SendButtonV7:hover { background-color: rgba(42, 143, 212, 0.2); border-color: rgba(42, 143, 212, 0.5); }
+#SendButtonV7:pressed { background-color: rgba(42, 143, 212, 0.3); }
+#SendButtonV7:disabled { background-color: #0D1520; border-color: #1A2332; color: #3D5266; }
+#NewChatHeaderBtn { background-color: transparent; border: 0.5px solid #1A2332; border-radius: 6px; color: #4A6080; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; font-size: 14px; padding: 0; }
+#NewChatHeaderBtn:hover { background-color: #131B24; border-color: #3D5266; color: #7A9ABF; }
+#InputHint { color: #3D5266; font-size: 10px; padding: 2px 14px 0; }
 
 /* ══════════════════════════════════════
-   METRICS PANEL (MetricsPanel)
+   RIGHT PANEL — RAG Diagnostic (Module 1)
 ══════════════════════════════════════ */
-#MetricsPanel { background-color: #111318; border-left: 1px solid #2e3347; min-width: 200px; max-width: 220px; }
-#MetricsPanelTitle { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: #555e78; text-transform: uppercase; padding: 12px 12px 8px; border-bottom: 1px solid #2e3347; }
+#RightPanelDiagnostic { background-color: #0C1018; border-left: 0.5px solid #1A2332; }
+#RightPanelHeader { background-color: #0C1018; border-bottom: 0.5px solid #1A2332; }
 
-/* StrategyBadge */
-#StrategyBadge { background-color: #1a1d26; border: 1px solid #2e3347; border-radius: 8px; padding: 7px 10px; margin: 8px 10px 4px; }
-#StrategyNameLabel { font-size: 11px; font-weight: 600; color: #e8eaf0; }
-#StrategySubLabel { font-size: 10px; color: #555e78; margin-top: 1px; }
+/* RagTabWidget */
+#RagTabWidget::pane { border: none; background-color: transparent; }
+#RagTabWidget QTabBar::tab { color: #3D5266; font-size: 10px; padding: 4px 10px; border-bottom: 1.5px solid transparent; letter-spacing: 0.04em; background: transparent; }
+#RagTabWidget QTabBar::tab:selected { color: #2A7FBF; border-bottom: 1.5px solid #2A7FBF; }
+#RagTabWidget QTabBar::tab:hover:!selected { color: #5A7A9A; }
 
-/* MetricMiniBar */
-#MetricMiniBar { background-color: transparent; border: none; padding: 4px 12px; }
-#MetricCardLabel { font-size: 10px; color: #9098b0; }
-#MetricCardValue { font-size: 12px; font-weight: 500; color: #e8eaf0; }
-#MetricMiniBar QProgressBar { background-color: #2e3347; border: none; border-radius: 2px; min-height: 3px; max-height: 3px; }
-#MetricMiniBar QProgressBar::chunk { border-radius: 2px; }
-#MetricMiniBar[metric="ram"] QProgressBar::chunk { background-color: #ef9f27; }
-#MetricMiniBar[metric="rag"] QProgressBar::chunk { background-color: #639922; }
-#MetricMiniBar[metric="tokens"] QProgressBar::chunk { background-color: #378add; }
-#MetricMiniBar[metric="traces"] QProgressBar::chunk { background-color: #7f77dd; }
+/* MetricsGrid cards */
+#MetricsGrid { background-color: transparent; }
+#MetricsCard { background-color: #0A0E14; border: 0.5px solid #1A2332; border-radius: 6px; }
+
+/* RamBar progress */
+#RamBarProgress { background-color: #1A2332; border-radius: 2px; border: none; }
+#RamBarProgress::chunk { background-color: #1A7A4A; border-radius: 2px; }
+
+/* RagScoreBar progress */
+#RagScoreBarProgress { background-color: #1A2332; border-radius: 2px; border: none; }
+#RagScoreBarProgress::chunk { background-color: #2A8A4A; border-radius: 2px; }
+
+/* Strategy rows */
+#StrategyRow { background-color: #0A0E14; border: 0.5px solid #1A2332; border-radius: 5px; }
+
+/* Index Health */
+#IndexHealthWidget { background-color: #0A0E14; border: 0.5px solid #1A2332; border-radius: 6px; }
+
+/* Fact Check */
+#FactCheckWidget { background-color: #040E08; border: 0.5px solid #1A3A1F; border-left: 2px solid #1A7A3A; border-radius: 0 5px 5px 0; }
+
+/* Retro Banner */
+#RetroBanner { background-color: #100A05; border: 0.5px solid #3A1A05; border-left: 2px solid #8A4A1A; border-radius: 0 5px 5px 0; }
 
 /* ══════════════════════════════════════
    PAGES SECONDAIRES
 ══════════════════════════════════════ */
-#PageTitle { font-size: 16px; font-weight: 500; color: #e8eaf0; padding: 16px 20px 8px; }
-#PageSubtitle { font-size: 12px; color: #9098b0; padding: 0 20px 16px; }
-#ContentCard { background-color: #111318; border: 1px solid #2e3347; border-radius: 10px; padding: 14px 16px; margin: 4px 0; }
-#ContentCard:hover { border-color: #555e78; }
+#PageTitle { font-size: 16px; font-weight: 500; color: #E8EAF0; padding: 16px 20px 8px; }
+#PageSubtitle { font-size: 12px; color: #4A6080; padding: 0 20px 16px; }
+#ContentCard { background-color: #0D1318; border: 0.5px solid #1A2332; border-radius: 10px; padding: 14px 16px; margin: 4px 0; }
+#ContentCard:hover { border-color: #3D5266; }
 
 /* Document items */
-#DocItem { background-color: #111318; border: 1px solid #2e3347; border-radius: 8px; padding: 10px 12px; }
-#DocItem:hover { background-color: #1a1d26; border-color: rgba(127, 119, 221, 0.3); }
-#DocNameLabel { font-size: 12px; font-weight: 500; color: #e8eaf0; }
-#DocMetaLabel { font-size: 10px; color: #555e78; margin-top: 2px; }
+#DocItem { background-color: #0D1318; border: 0.5px solid #1A2332; border-radius: 8px; padding: 10px 12px; }
+#DocItem:hover { background-color: #131B24; border-color: rgba(26, 106, 154, 0.3); }
+#DocNameLabel { font-size: 12px; font-weight: 500; color: #E8EAF0; }
+#DocMetaLabel { font-size: 10px; color: #3D5266; margin-top: 2px; }
 #DocStatusBadge { border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600; }
-#DocStatusBadge[status="indexed"] { background-color: rgba(29, 158, 117, 0.12); color: #1d9e75; border: 1px solid rgba(29, 158, 117, 0.25); }
-#DocStatusBadge[status="pending"] { background-color: rgba(239, 159, 39, 0.12); color: #ef9f27; border: 1px solid rgba(239, 159, 39, 0.25); }
-#DocStatusBadge[status="error"] { background-color: rgba(226, 75, 74, 0.12); color: #e24b4a; border: 1px solid rgba(226, 75, 74, 0.25); }
+#DocStatusBadge[status="indexed"] { background-color: rgba(42, 138, 74, 0.12); color: #2A8A4A; border: 0.5px solid rgba(42, 138, 74, 0.25); }
+#DocStatusBadge[status="pending"] { background-color: rgba(239, 159, 39, 0.12); color: #ef9f27; border: 0.5px solid rgba(239, 159, 39, 0.25); }
+#DocStatusBadge[status="error"] { background-color: rgba(138, 42, 42, 0.12); color: #8A2A2A; border: 0.5px solid rgba(138, 42, 42, 0.25); }
 
 /* Nuru Brain */
-#BrainFileItem { background-color: #111318; border: 1px solid #2e3347; border-radius: 6px; padding: 8px 12px; }
-#BrainFileItem:hover { background-color: #1a1d26; border-color: rgba(29, 158, 117, 0.3); }
-#BrainFileName { font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; color: #9098b0; }
-#BrainFileDate { font-size: 10px; color: #555e78; }
+#BrainFileItem { background-color: #0D1318; border: 0.5px solid #1A2332; border-radius: 6px; padding: 8px 12px; }
+#BrainFileItem:hover { background-color: #131B24; border-color: rgba(42, 138, 74, 0.3); }
+#BrainFileName { font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; color: #4A6080; }
+#BrainFileDate { font-size: 10px; color: #3D5266; }
 
 /* Settings */
-#SettingLabel { font-size: 12px; color: #e8eaf0; font-weight: 500; }
-#SettingDesc { font-size: 11px; color: #9098b0; margin-top: 2px; }
-#SettingRow { background-color: transparent; border-bottom: 1px solid #2e3347; padding: 12px 0; }
+#SettingLabel { font-size: 12px; color: #E8EAF0; font-weight: 500; }
+#SettingDesc { font-size: 11px; color: #4A6080; margin-top: 2px; }
+#SettingRow { background-color: transparent; border-bottom: 0.5px solid #1A2332; padding: 12px 0; }
 #SettingRow:last-child { border-bottom: none; }
-#LogsView { background-color: #0a0b0f; color: #9098b0; font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; border: none; padding: 12px; }
+#LogsView { background-color: #0A0E14; color: #4A6080; font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; border: none; padding: 12px; }
 
 /* ══════════════════════════════════════
    COMPOSANTS COMMUNS
 ══════════════════════════════════════ */
-QPushButton { background-color: #1a1d26; color: #9098b0; border: 1px solid #2e3347; border-radius: 7px; padding: 6px 14px; font-size: 12px; font-weight: 500; }
-QPushButton:hover { background-color: #242836; color: #e8eaf0; border-color: #555e78; }
-QPushButton:pressed { background-color: #2e3347; }
-QPushButton:disabled { color: #555e78; border-color: #1a1d26; }
-QPushButton#PrimaryBtn { background-color: rgba(127, 119, 221, 0.15); color: #7f77dd; border: 1px solid rgba(127, 119, 221, 0.35); }
-QPushButton#PrimaryBtn:hover { background-color: rgba(127, 119, 221, 0.25); border-color: rgba(127, 119, 221, 0.6); }
-QPushButton#DangerBtn { background-color: rgba(226, 75, 74, 0.1); color: #e24b4a; border: 1px solid rgba(226, 75, 74, 0.25); }
-QPushButton#DangerBtn:hover { background-color: rgba(226, 75, 74, 0.2); }
-QPushButton#GhostBtn { background-color: transparent; color: #9098b0; border: 1px solid transparent; }
-QPushButton#GhostBtn:hover { color: #e8eaf0; }
+QPushButton { background-color: #0D1318; color: #4A6080; border: 0.5px solid #1A2332; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 500; }
+QPushButton:hover { background-color: #131B24; color: #7A9ABF; border-color: #3D5266; }
+QPushButton:pressed { background-color: #1A2332; }
+QPushButton:disabled { color: #3D5266; border-color: #0D1318; }
+QPushButton#PrimaryBtn { background-color: rgba(26, 106, 154, 0.15); color: #1A6A9A; border: 0.5px solid rgba(26, 106, 154, 0.35); }
+QPushButton#PrimaryBtn:hover { background-color: rgba(26, 106, 154, 0.25); border-color: rgba(26, 106, 154, 0.6); }
+QPushButton#DangerBtn { background-color: rgba(138, 42, 42, 0.1); color: #8A2A2A; border: 0.5px solid rgba(138, 42, 42, 0.25); }
+QPushButton#DangerBtn:hover { background-color: rgba(138, 42, 42, 0.2); }
+QPushButton#GhostBtn { background-color: transparent; color: #4A6080; border: 0.5px solid transparent; }
+QPushButton#GhostBtn:hover { color: #E8EAF0; }
 
-QLineEdit, QTextEdit { background-color: #1a1d26; color: #e8eaf0; border: 1px solid #2e3347; border-radius: 7px; padding: 7px 10px; font-size: 13px; selection-background-color: rgba(127, 119, 221, 0.25); }
-QLineEdit:focus, QTextEdit:focus { border-color: rgba(127, 119, 221, 0.4); background-color: #1e2230; }
-QLineEdit::placeholder, QTextEdit::placeholder { color: #555e78; }
+QLineEdit, QTextEdit { background-color: #0D1520; color: #8AAAC8; border: 0.5px solid #1A2D40; border-radius: 7px; padding: 7px 10px; font-size: 13px; selection-background-color: rgba(26, 106, 154, 0.25); }
+QLineEdit:focus, QTextEdit:focus { border-color: rgba(26, 106, 154, 0.4); background-color: #0F1A2A; }
+QLineEdit::placeholder, QTextEdit::placeholder { color: #3D5266; }
 
-QComboBox { background-color: #1a1d26; color: #e8eaf0; border: 1px solid #2e3347; border-radius: 7px; padding: 6px 10px; font-size: 12px; min-width: 120px; }
-QComboBox:hover { border-color: #555e78; }
-QComboBox:focus { border-color: rgba(127, 119, 221, 0.4); }
+QComboBox { background-color: #0D1520; color: #8AAAC8; border: 0.5px solid #1A2D40; border-radius: 7px; padding: 6px 10px; font-size: 12px; min-width: 120px; }
+QComboBox:hover { border-color: #3D5266; }
+QComboBox:focus { border-color: rgba(26, 106, 154, 0.4); }
 QComboBox::drop-down { border: none; padding-right: 8px; }
 QComboBox::down-arrow { width: 10px; height: 10px; }
-QComboBox QAbstractItemView { background-color: #1a1d26; border: 1px solid #2e3347; border-radius: 7px; color: #e8eaf0; selection-background-color: #242836; padding: 4px; }
+QComboBox QAbstractItemView { background-color: #0D1520; border: 0.5px solid #1A2332; border-radius: 6px; color: #8AAAC8; selection-background-color: #131B24; padding: 4px; }
 
-QCheckBox, QRadioButton { color: #9098b0; font-size: 12px; spacing: 8px; }
-QCheckBox:hover, QRadioButton:hover { color: #e8eaf0; }
-QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; border: 1px solid #555e78; border-radius: 4px; background-color: #1a1d26; }
-QCheckBox::indicator:checked, QRadioButton::indicator:checked { background-color: rgba(127, 119, 221, 0.3); border-color: #7f77dd; }
+QCheckBox, QRadioButton { color: #4A6080; font-size: 12px; spacing: 8px; }
+QCheckBox:hover, QRadioButton:hover { color: #E8EAF0; }
+QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; border: 0.5px solid #3D5266; border-radius: 4px; background-color: #0D1520; }
+QCheckBox::indicator:checked, QRadioButton::indicator:checked { background-color: rgba(26, 106, 154, 0.3); border-color: #1A6A9A; }
 QRadioButton::indicator { border-radius: 8px; }
 
-QSlider::groove:horizontal { height: 4px; background-color: #2e3347; border-radius: 2px; }
-QSlider::handle:horizontal { background-color: #7f77dd; width: 14px; height: 14px; border-radius: 7px; margin: -5px 0; }
-QSlider::sub-page:horizontal { background-color: rgba(127, 119, 221, 0.5); border-radius: 2px; }
+QSlider::groove:horizontal { height: 4px; background-color: #1A2332; border-radius: 2px; }
+QSlider::handle:horizontal { background-color: #1A6A9A; width: 14px; height: 14px; border-radius: 7px; margin: -5px 0; }
+QSlider::sub-page:horizontal { background-color: rgba(26, 106, 154, 0.5); border-radius: 2px; }
 
-QToolTip { background-color: #1a1d26; color: #e8eaf0; border: 1px solid #2e3347; border-radius: 6px; padding: 5px 9px; font-size: 11px; }
+QToolTip { background-color: #0D1318; color: #E8EAF0; border: 0.5px solid #1A2332; border-radius: 6px; padding: 5px 9px; font-size: 11px; }
 
-QProgressBar { background-color: #2e3347; border: none; border-radius: 4px; text-align: center; min-height: 6px; max-height: 6px; }
-QProgressBar::chunk { background-color: #7f77dd; border-radius: 4px; }
+QProgressBar { background-color: #1A2332; border: none; border-radius: 2px; text-align: center; min-height: 4px; max-height: 4px; }
+QProgressBar::chunk { background-color: #1A7A4A; border-radius: 2px; }
 
-QTableWidget, QTreeWidget, QListWidget { background-color: #0a0b0f; color: #e8eaf0; border: 1px solid #2e3347; border-radius: 8px; selection-background-color: #1a1d26; outline: none; font-size: 12px; }
-QTableWidget::item, QTreeWidget::item, QListWidget::item { padding: 6px 10px; border-bottom: 1px solid #1a1d26; }
-QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selected { background-color: #242836; }
-QHeaderView::section { background-color: #111318; color: #555e78; border: none; border-bottom: 1px solid #2e3347; padding: 6px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+QTableWidget, QTreeWidget, QListWidget { background-color: #0A0E14; color: #E8EAF0; border: 0.5px solid #1A2332; border-radius: 8px; selection-background-color: #0D1318; outline: none; font-size: 12px; }
+QTableWidget::item, QTreeWidget::item, QListWidget::item { padding: 6px 10px; border-bottom: 0.5px solid #0D1318; }
+QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selected { background-color: #131B24; }
+QHeaderView::section { background-color: #0D1318; color: #3D5266; border: none; border-bottom: 0.5px solid #1A2332; padding: 6px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 
-QTabWidget::pane { border: 1px solid #2e3347; border-radius: 8px; background-color: #111318; }
-QTabBar::tab { background-color: transparent; color: #9098b0; border: none; border-bottom: 2px solid transparent; padding: 8px 16px; font-size: 12px; font-weight: 500; }
-QTabBar::tab:selected { color: #e8eaf0; border-bottom: 2px solid #7f77dd; }
-QTabBar::tab:hover:not(:selected) { color: #c8cede; }
+QTabWidget::pane { border: 0.5px solid #1A2332; border-radius: 6px; background-color: #0C1018; }
+QTabBar::tab { background-color: transparent; color: #4A6080; border: none; border-bottom: 1.5px solid transparent; padding: 8px 16px; font-size: 12px; font-weight: 500; }
+QTabBar::tab:selected { color: #2A7FBF; border-bottom: 1.5px solid #2A7FBF; }
+QTabBar::tab:hover:not(:selected) { color: #6A8AAA; }
 
-QGroupBox { border: 1px solid #2e3347; border-radius: 8px; margin-top: 14px; padding: 12px 12px 14px; font-size: 11px; font-weight: 600; }
-QGroupBox::title { subcontrol-origin: margin; padding: 0 6px; color: #555e78; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+QGroupBox { border: 0.5px solid #1A2332; border-radius: 8px; margin-top: 14px; padding: 12px 12px 14px; font-size: 11px; font-weight: 600; }
+QGroupBox::title { subcontrol-origin: margin; padding: 0 6px; color: #3D5266; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
 
-QMenu { background-color: #1a1d26; border: 1px solid #2e3347; border-radius: 8px; padding: 4px; color: #e8eaf0; font-size: 12px; }
+QMenu { background-color: #0D1318; border: 0.5px solid #1A2332; border-radius: 8px; padding: 4px; color: #E8EAF0; font-size: 12px; }
 QMenu::item { padding: 6px 12px; border-radius: 5px; }
-QMenu::item:selected { background-color: #242836; }
-QMenu::separator { height: 1px; background-color: #2e3347; margin: 4px 0; }
+QMenu::item:selected { background-color: #131B24; }
+QMenu::separator { height: 0.5px; background-color: #1A2332; margin: 4px 0; }
 
-QMessageBox { background-color: #111318; }
-QMessageBox QLabel { color: #e8eaf0; }
+QMessageBox { background-color: #0C1018; }
+QMessageBox QLabel { color: #E8EAF0; }

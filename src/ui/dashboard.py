@@ -53,12 +53,12 @@ logger = logging.getLogger(__name__)
 
 # ── Conditional imports ──────────────────────────────────────────────────
 try:
-    from src.ui.components.nuru_widgets import MetricsPanel
+    from src.ui.components.right_panel import RightPanelDiagnostic
     from src.ui.components.console_page import ConsolePage
 except ImportError as e:
     logger.warning("Import partiel (composants UI) : %s", e)
     ConsolePage = None
-    MetricsPanel = None
+    RightPanelDiagnostic = None
 
 # ── Page components ─────────────────────────────────────────────────────
 try:
@@ -126,6 +126,108 @@ PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
     "settings":   ("⚙️ Paramètres",     "Configuration de l'application NURU."),
     "logs":       ("📋 Logs",           "Journaux système et traces de débogage."),
 }
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  RecentDocuments (Module 2)
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class RecentDocuments(QWidget):
+    """Liste des documents récents dans la sidebar.
+
+    Chaque doc : icône + nom + dot de statut (indexed=#1E6B3A, partial=#6B4E1E).
+    Données mock pour l'instant.
+    """
+
+    DOC_MOCK = [
+        ("📄", "CV_Leblanc_2024.pdf", True),
+        ("📄", "Rapport_Lubero.pdf", True),
+        ("📄", "PUA-CI_Avenant.docx", False),   # partial
+        ("📄", "Rendements_riz.xlsx", True),
+    ]
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setObjectName("RecentDocuments")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(1)
+
+        label = QLabel("Documents récents")
+        label.setObjectName("NavSectionLabel")
+        layout.addWidget(label)
+
+        for icon_char, name, indexed in self.DOC_MOCK:
+            item = QWidget()
+            item.setObjectName("RecentDocItem")
+            item_layout = QHBoxLayout(item)
+            item_layout.setContentsMargins(8, 3, 8, 3)
+            item_layout.setSpacing(6)
+
+            icon = QLabel(icon_char)
+            icon.setStyleSheet("font-size: 13px; background: transparent;")
+            item_layout.addWidget(icon)
+
+            name_label = QLabel(name)
+            name_label.setStyleSheet(
+                "font-size: 10px; color: #3D5266; background: transparent;"
+            )
+            item_layout.addWidget(name_label, stretch=1)
+
+            dot = QLabel()
+            dot.setFixedSize(5, 5)
+            dot.setObjectName("DocDot")
+            if indexed:
+                dot.setProperty("indexed", "true")
+                dot.setProperty("partial", "false")
+            else:
+                dot.setProperty("indexed", "false")
+                dot.setProperty("partial", "true")
+            dot.setStyleSheet(
+                f"background-color: {'#1E6B3A' if indexed else '#6B4E1E'};"
+                " border-radius: 3px; min-width: 5px; max-width: 5px;"
+                " min-height: 5px; max-height: 5px;"
+            )
+            item_layout.addWidget(dot)
+
+            layout.addWidget(item)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  CloudStatusBadge (Module 2)
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class CloudStatusBadge(QWidget):
+    """Badge en bas de la sidebar — dot vert + texte Cloud."""
+
+    def __init__(self, model_name: str = "phi-4-mini-4bit", parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setObjectName("CloudStatusBadge")
+        self.setFixedHeight(32)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(14, 6, 14, 6)
+        layout.setSpacing(6)
+
+        dot = QLabel()
+        dot.setObjectName("CloudStatusDot")
+        dot.setFixedSize(6, 6)
+        dot.setStyleSheet(
+            "min-width: 6px; max-width: 6px; min-height: 6px;"
+            " max-height: 6px; border-radius: 3px; background-color: #2A9A4A;"
+        )
+        layout.addWidget(dot)
+
+        self._text = QLabel(f"Cloud · {model_name}")
+        self._text.setObjectName("CloudStatusText")
+        layout.addWidget(self._text)
+        layout.addStretch()
+
+    def set_model(self, model_name: str) -> None:
+        self._text.setText(f"Cloud · {model_name}")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -202,6 +304,14 @@ class NavSidebar(QWidget):
 
         layout.addStretch()
 
+        # ── Documents récents (Module 2) ──
+        self._recent_docs = RecentDocuments()
+        layout.addWidget(self._recent_docs)
+
+        # ── Cloud Status Badge (Module 2) ──
+        self._cloud_badge = CloudStatusBadge()
+        layout.addWidget(self._cloud_badge)
+
         # ── Footer : Info modèle ──
         self._model_label = QLabel("Modèle: ...  •  En attente")
         self._model_label.setObjectName("ModelInfoFooter")
@@ -211,6 +321,10 @@ class NavSidebar(QWidget):
     def set_model_info(self, model: str, status: str, queries: int = 0) -> None:
         """Met à jour les infos modèle dans le footer."""
         self._model_label.setText(f"{model}  •  {status}")
+
+    def set_cloud_model(self, model_name: str) -> None:
+        """Met à jour le CloudStatusBadge."""
+        self._cloud_badge.set_model(model_name)
 
     # ── Internes ─────────────────────────────────────────────────────────
 
@@ -432,15 +546,15 @@ class CyberDashboard(QMainWindow):
 
         self._main_layout.addWidget(self._pages, stretch=1)
 
-        # ── 3. Metrics Panel ──
-        if MetricsPanel is not None:
-            self._metrics = MetricsPanel()
+        # ── 3. Right Panel — Diagnostic RAG ──
+        if RightPanelDiagnostic is not None:
+            self._metrics = RightPanelDiagnostic()
         else:
             self._metrics = QWidget()
-            self._metrics.setObjectName("MetricsPanel")
-            self._metrics.setFixedWidth(280)
+            self._metrics.setObjectName("RightPanelDiagnostic")
+            self._metrics.setFixedWidth(300)
             layout = QVBoxLayout(self._metrics)
-            layout.addWidget(QLabel("Métriques non disponibles"))
+            layout.addWidget(QLabel("Diagnostic non disponible"))
         self._main_layout.addWidget(self._metrics)
 
     def _wire_signals(self) -> None:
@@ -671,10 +785,17 @@ class CyberDashboard(QMainWindow):
     # ══════════════════════════════════════════════════════════════════════
 
     def _update_metrics(self) -> None:
-        """Met à jour les métriques système (RAM, LLM, RAG) toutes les secondes."""
+        """Met à jour les métriques système (RAM, LLM, RAG) toutes les secondes.
+
+        Module 3 : draine l'EventBus et route chaque event vers RightPanelDiagnostic.
+        """
         import time as _time
         try:
             now = _time.time()
+
+            # ── 0. EventBus drain (Module 3) ──
+            if hasattr(self._metrics, "update_from_events"):
+                self._metrics.update_from_events()
 
             # 1. RAM système
             mem = psutil.virtual_memory()
@@ -705,7 +826,7 @@ class CyberDashboard(QMainWindow):
                     # Reset à zéro si pas de requête active
                     self._metrics.set_rag_score(0.0)
 
-            # 4. Mise à jour du footer sidebar
+            # 4. Mise à jour du footer sidebar + cloud badge
             if hasattr(self._sidebar, "set_model_info"):
                 queries = len(self._rag_scores_session)
                 status = "Actif" if self._is_processing else "En attente"
