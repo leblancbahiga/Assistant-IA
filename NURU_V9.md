@@ -1272,7 +1272,8 @@ Et si une tâche est en cours :
 | **S3 — Feedback** | ✅ **Terminé** | feedback, tracker, optimizer, self_eval | **67 ✅** |
 | **S4 — Dashboard V9** | ✅ **Terminé** | agent_status, memory_explorer, feedback_bar, task_list + intégration dashboard.py | **86 ✅** |
 | **S5 — Raisonnement** | ✅ **Terminé** | reflexion, consistency, confidence | **26 ✅** |
-| **Total V9** | **445 tests ✅** | **26 modules** | **0 échec** |
+| **S6 — Outils** | ✅ **Terminé** | tool_registry, document_generator | **19 ✅** |
+| **Total V9+V10** | **464 tests ✅** | **28 modules** | **0 échec** |
 
 **✅ V9 — TERMINÉ (11 juin 2026)**
 
@@ -1403,10 +1404,7 @@ Ces quatre premiers modules (1–4) représentent **80 % de la valeur perçue** 
 
 ---
 
-**➡️ Prochaine étape : V10 — Sprint 6 : Outils**
-Prochains modules à implémenter :
-- `ToolRegistry` — registre central des outils (documentation, code, web)
-- `DocumentGenerator` — génération Word, PDF, PPT, Excel
+**➡️ Prochaine étape : Sprint 7 — Web Research**
 
 ---
 
