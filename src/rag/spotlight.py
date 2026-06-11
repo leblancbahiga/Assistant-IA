@@ -2,11 +2,11 @@
 NURU V10 — Spotlight Search : recherche + lecture directe sur macOS.
 
 Utilise l'index Spotlight pour chercher, puis LIT le contenu des fichiers trouvés.
-C'est la clé : pas juste les noms de fichiers, mais le CONTENU réel.
 """
 import subprocess
 import logging
 import os
+import re
 from dataclasses import dataclass
 from typing import List, Optional
 from pathlib import Path
@@ -16,12 +16,31 @@ logger = logging.getLogger(__name__)
 # Extensions lisibles
 READABLE_EXTS = {".txt", ".md", ".py", ".csv", ".json", ".html", ".rtf", ".docx", ".pdf", ".pptx", ".xlsx"}
 
+# Mots vides à extraire des requêtes
+STOP_WORDS = {
+    'le', 'la', 'les', 'de', 'du', 'des', 'un', 'une', 'et', 'ou',
+    'est', 'sont', 'a', 'ai', 'as', 'avons', 'avez', 'ont',
+    'parle', 'moi', 'dit', 'raconte', 'montre', 'donne',
+    'quel', 'quelle', 'quels', 'quelles', 'que', 'qui',
+    'comment', 'pourquoi', 'quand', 'où', 'combien',
+    'the', 'a', 'an', 'and', 'or', 'is', 'are', 'was', 'were',
+}
+
+# Dossiers du projet à exclure
+PROJECT_DIRS = {
+    '/Downloads/Assistant IA/src/',
+    '/Downloads/Assistant IA/tests/',
+    '/Downloads/Assistant IA/scripts/',
+    '/Downloads/Assistant IA/.venv/',
+    '/Downloads/Assistant IA/docs/',
+}
+
 
 @dataclass
 class SpotlightResult:
     path: str
     filename: str
-    content: str = ""  # Contenu réel du fichier (extrait)
+    content: str = ""
     relevance: float = 0.0
 
 
@@ -34,27 +53,30 @@ class SpotlightSearch:
         if not self._is_macos:
             logger.warning("Spotlight non disponible (pas macOS)")
 
+    def _extract_key_terms(self, query: str) -> List[str]:
+        """Extrait les termes clés d'une requête (supprime les mots vides)."""
+        words = re.findall(r'\w{2,}', query.lower())
+        return [w for w in words if w not in STOP_WORDS]
+
     def search(self, query: str, scope: Optional[str] = None, max_results: int = 10,
                read_content: bool = True) -> List[SpotlightResult]:
-        """
-        Cherche via Spotlight et lit le contenu des fichiers trouvés.
-
-        Args:
-            query: Terme de recherche
-            scope: Répertoire limité (ex: ~/Desktop) ou None pour tout
-            max_results: Nombre max de résultats
-            read_content: Si True, lit le contenu des fichiers
-        """
+        """Cherche via Spotlight et lit le contenu des fichiers."""
         if not self._is_macos:
             return []
 
+        # Extraire les termes clés
+        key_terms = self._extract_key_terms(query)
+        if not key_terms:
+            return []
+
         # Construire la commande mdfind
+        search_query = " ".join(key_terms[:3])
         cmd = ["mdfind"]
         if scope:
             scope_path = Path(scope).expanduser()
             if scope_path.exists():
                 cmd.extend(["-onlyin", str(scope_path)])
-        cmd.append(query)
+        cmd.append(search_query)
 
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
@@ -64,11 +86,18 @@ class SpotlightSearch:
             paths = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
             results = []
 
-            for path in paths[:max_results]:
+            for path in paths[:max_results * 3]:
                 p = Path(path)
                 if not p.exists() or not p.is_file():
                     continue
                 if p.suffix.lower() not in READABLE_EXTS:
+                    continue
+
+                # Exclure les fichiers du projet
+                path_str = str(p)
+                if any(d in path_str for d in PROJECT_DIRS):
+                    continue
+                if p.suffix.lower() == '.py' and 'Assistant IA' in path_str:
                     continue
 
                 content = ""
@@ -81,6 +110,9 @@ class SpotlightSearch:
                     content=content,
                     relevance=1.0,
                 ))
+
+                if len(results) >= max_results:
+                    break
 
             self._search_history.append({"query": query, "results": len(results)})
             return results
