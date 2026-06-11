@@ -209,8 +209,12 @@ class NuruOrchestrator:
             web_context = self.token_juice.compress(web_context, stage="post")
 
         # V10 : Ajouter le contexte Spotlight lu si disponible
+        # Tronquer à 3000 chars max pour éviter les prompts trop longs
         spotlight_ctx = getattr(route_result, 'spotlight_context', '')
         if spotlight_ctx and not rag_context:
+            MAX_SPOTLIGHT_CHARS = 3000
+            if len(spotlight_ctx) > MAX_SPOTLIGHT_CHARS:
+                spotlight_ctx = spotlight_ctx[:MAX_SPOTLIGHT_CHARS] + "\n[...tronqué...]"
             rag_context = spotlight_ctx
             logger.info(f"🔍 Spotlight contexte ajouté au prompt ({len(spotlight_ctx)} chars)")
 

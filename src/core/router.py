@@ -54,14 +54,21 @@ class Router(SemanticRouter):
         """Route en utilisant un QueryContext pour les décisions RAM-dépendantes.
 
         Ajoute les informations de stratégie hybride dans le résultat.
+        V10 : Spotlight contourne l'escalade RAM (pas de LLM, léger).
         """
         result = await self.route(ctx.query)
 
-        # Escalade cloud si RAM trop basse
-        if result.decision == "LOCAL_RAG" and self.policy_engine.should_use_cloud(ctx):
+        # V10 : Spotlight ne déclenche JAMAIS l'escalade Cloud
+        # (Spotlight = mdfind, pas de LLM, pas de RAM nécessaire)
+        is_spotlight = result.spotlight_context != ""
+        
+        # Escalade cloud si RAM trop basse (sauf si c'est du Spotlight)
+        if result.decision == "LOCAL_RAG" and not is_spotlight and self.policy_engine.should_use_cloud(ctx):
             logger.info(f"↩️ Router: RAM {ctx.ram_free_mb} MB → escalation Cloud forcée")
             result.decision = "CLOUD_GROQ"
             result.reasoning += " | RAM trop basse pour local"
+        elif is_spotlight:
+            logger.info(f"🔍 Router: Spotlight actif → pas d'escalade RAM")
 
         # Stratégie hybride : enrichir le résultat
         result.hybrid_strategy = self.hybrid_strategy.value
