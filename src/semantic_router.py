@@ -72,6 +72,7 @@ class RouterResult:
     reasoning: str = ""
     processing_time_ms: float = 0.0
     rag_top_score: float = 0.0
+    spotlight_context: str = ""  # Contexte Spotlight lu pour le prompt
     plan_branch: str = ""  # Trace de décision pour debugging
 
 class SemanticRouter:
@@ -142,14 +143,19 @@ class SemanticRouter:
         
         # ====================================
         # NIVEAU 2 : WEB TRIGGER (Actualité — pas de RAG inutile)
-        # NURU V5 : priorité RAG — si mots-clés docs, on ignore les web triggers
-        # V10 : Les web triggers ne détournent plus vers le Cloud — on essaie RAG d'abord
-        # Seules les requêtes PUREMENT d'actualité (sans aucun lien documentaire) vont au web
+        # V10 : Seules les requêtes PUREMENT d'actualité vont au web
+        # Si la requête contient un nom de document/projet → aller au RAG d'abord
         # ====================================
-        web_pattern = re.compile(r'\b(' + '|'.join(map(re.escape, WEB_TRIGGERS)) + r')\b', re.IGNORECASE)
+        web_pattern = re.compile(r'\\b(' + '|'.join(map(re.escape, WEB_TRIGGERS)) + r')\\b', re.IGNORECASE)
         has_web_trigger = bool(web_pattern.search(query_lower))
-        # Si web trigger mais la requête est courte (question d'actualité pure) → Cloud
-        if has_web_trigger and len(query_lower.split()) <= 6:
+        
+        # Vérifier si la requête contient des termes documentaires
+        doc_indicators = ['beaccom', 'yarid', 'rikolto', 'rapport', 'cv', 'document', 
+                         'fichier', 'projet', 'étude', 'proposition', 'contrat', 'facture']
+        has_doc_term = any(term in query_lower for term in doc_indicators)
+        
+        # Si web trigger MAIS pas de terme documentaire ET requête courte → Cloud
+        if has_web_trigger and not has_doc_term and len(query_lower.split()) <= 6:
             result.decision = "CLOUD_GROQ"
             result.confidence = 0.8
             result.reasoning = f"Web trigger détecté (requête courte, actualité pure)"
@@ -182,23 +188,25 @@ class SemanticRouter:
                 logger.error(f"🧠 Router N3: Erreur RAG: {e}")
         
         # ====================================
-        # NIVEAU 4 : SPOTLIGHT (tous les fichiers de l'ordinateur)
+        # NIVEAU 4 : SPOTLIGHT (tous les fichiers + LECTURE du contenu)
         # ====================================
         if self._spotlight:
             try:
-                spotlight_results = self._spotlight.search(user_query, max_results=5)
+                spotlight_results = self._spotlight.search(user_query, max_results=5, read_content=True)
                 if spotlight_results:
-                    # Spotlight a trouvé → formatter pour le LLM
+                    # Lire le contenu des fichiers trouvés
                     context_parts = []
                     for r in spotlight_results:
-                        context_parts.append(f"[SOURCE] {r.filename}\n[PATH] {r.path}")
+                        if r.content:
+                            context_parts.append(f"[SOURCE: {r.filename}]\n{r.content}\n")
+                        else:
+                            context_parts.append(f"[SOURCE: {r.filename}] (contenu non lisible)\n")
                     result.decision = "LOCAL_RAG"
-                    result.confidence = 0.6
-                    result.reasoning = f"Spotlight trouvé ({len(spotlight_results)} fichiers)"
+                    result.confidence = 0.7
+                    result.reasoning = f"Spotlight trouvé ({len(spotlight_results)} fichiers avec contenu)"
                     result.processing_time_ms = (time.time() - t_start) * 1000
-                    # Stocker le contexte Spotlight pour le prompt
-                    self._spotlight_context = "\n".join(context_parts)
-                    logger.info(f"🧠 Router N4 → LOCAL_RAG (Spotlight: {len(spotlight_results)} fichiers)")
+                    result.spotlight_context = "\n".join(context_parts)
+                    logger.info(f"🧠 Router N4 → LOCAL_RAG (Spotlight: {len(spotlight_results)} fichiers lus)")
                     self._cache.set(cache_key, result)
                     return result
             except Exception as e:

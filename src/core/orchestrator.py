@@ -208,6 +208,12 @@ class NuruOrchestrator:
         if web_context:
             web_context = self.token_juice.compress(web_context, stage="post")
 
+        # V10 : Ajouter le contexte Spotlight lu si disponible
+        spotlight_ctx = getattr(route_result, 'spotlight_context', '')
+        if spotlight_ctx and not rag_context:
+            rag_context = spotlight_ctx
+            logger.info(f"🔍 Spotlight contexte ajouté au prompt ({len(spotlight_ctx)} chars)")
+
         # ── 5. Fallback Web si RAG vide ──
         rag_context, intent = await self._maybe_web_fallback(
             query, intent, rag_context, rag_result, web_context
