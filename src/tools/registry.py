@@ -1,8 +1,10 @@
 from __future__ import annotations
 import json
+import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable
+
 
 @dataclass
 class ToolParameter:
@@ -12,13 +14,13 @@ class ToolParameter:
     required: bool = True
     default: Any = None
 
+
 @dataclass
 class ToolDefinition:
     name: str
     description: str
     category: str  # "document", "code", "web", "memory", "system"
     parameters: list[ToolParameter]
-    # Pas de callable ici — l'exécution passe par TaskExecutor (Sprint 6 = registry only)
 
     def to_schema(self) -> dict:
         """Convertit en schéma JSON pour le LLM."""
@@ -38,6 +40,7 @@ class ToolDefinition:
                 "required": [p.name for p in self.parameters if p.required],
             },
         }
+
 
 class ToolRegistry:
     def __init__(self):
@@ -63,8 +66,11 @@ class ToolRegistry:
     def search(self, query: str) -> list[ToolDefinition]:
         """Recherche par nom ou description (insensible à la casse)."""
         q = query.lower()
-        return [t for t in self._tools.values()
-                if q in t.name.lower() or q in t.description.lower()]
+        return [
+            t
+            for t in self._tools.values()
+            if q in t.name.lower() or q in t.description.lower()
+        ]
 
     def to_llm_schema(self) -> list[dict]:
         """Exporte la liste des schémas pour le prompt LLM."""
@@ -89,7 +95,76 @@ class ToolRegistry:
     def save_to_file(self, path: str | Path) -> None:
         """Sauvegarde les outils dans un fichier JSON."""
         data = {"tools": [asdict(t) for t in self._tools.values()]}
-        Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        Path(path).write_text(
+            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
     def __len__(self) -> int:
         return len(self._tools)
+
+
+# ── ToolResult & ToolExecutor ──────────────────────────────────
+
+
+@dataclass
+class ToolResult:
+    """Résultat d'exécution d'un outil."""
+
+    tool_name: str
+    success: bool
+    output: Any
+    error: str | None = None
+    duration_ms: float = 0.0
+
+
+class ToolExecutor:
+    """Exécute des outils du registre avec gestion d'erreurs et timing."""
+
+    def __init__(self, registry: ToolRegistry):
+        self.registry = registry
+        self._handlers: dict[str, Callable] = {}
+
+    def register_handler(self, tool_name: str, handler: Callable) -> None:
+        """Enregistre une fonction d'exécution pour un outil."""
+        self._handlers[tool_name] = handler
+
+    def execute(self, tool_name: str, params: dict[str, Any]) -> ToolResult:
+        """Exécute un outil par son nom avec les paramètres donnés."""
+        # Vérifier que l'outil existe dans le registre
+        tool = self.registry.get(tool_name)
+        if tool is None:
+            return ToolResult(
+                tool_name=tool_name,
+                success=False,
+                output=None,
+                error=f"Outil inconnu: {tool_name}",
+            )
+        # Vérifier qu'un handler est enregistré
+        handler = self._handlers.get(tool_name)
+        if handler is None:
+            return ToolResult(
+                tool_name=tool_name,
+                success=False,
+                output=None,
+                error=f"Pas de handler pour: {tool_name}",
+            )
+        # Exécuter
+        start = time.time()
+        try:
+            output = handler(**params)
+            duration = (time.time() - start) * 1000
+            return ToolResult(
+                tool_name=tool_name,
+                success=True,
+                output=output,
+                duration_ms=duration,
+            )
+        except Exception as e:
+            duration = (time.time() - start) * 1000
+            return ToolResult(
+                tool_name=tool_name,
+                success=False,
+                output=None,
+                error=str(e),
+                duration_ms=duration,
+            )
