@@ -1271,7 +1271,8 @@ Et si une tâche est en cours :
 | **S2 — Agent Loop** | ✅ **Terminé** | types, planner, executor, verifier, recovery, resume, orchestrator | **88 ✅** |
 | **S3 — Feedback** | ✅ **Terminé** | feedback, tracker, optimizer, self_eval | **67 ✅** |
 | **S4 — Dashboard V9** | ✅ **Terminé** | agent_status, memory_explorer, feedback_bar, task_list + intégration dashboard.py | **86 ✅** |
-| **Total V9** | **419 tests ✅** | **23 modules** | **0 échec** |
+| **S5 — Raisonnement** | ✅ **Terminé** | reflexion, consistency, confidence | **26 ✅** |
+| **Total V9** | **445 tests ✅** | **26 modules** | **0 échec** |
 
 **✅ V9 — TERMINÉ (11 juin 2026)**
 
@@ -1402,14 +1403,9 @@ Ces quatre premiers modules (1–4) représentent **80 % de la valeur perçue** 
 
 ---
 
-**➡️ Prochaine étape : V10 — Sprint 5 : Raisonnement**
+**➡️ Prochaine étape : V10 — Sprint 6 : Outils**
 Prochains modules à implémenter :
-- `ReflexionEngine` — boucle d'auto-critique et correction (2 passes max)
-- `SelfConsistency` — vote majoritaire sur 3 réponses
-- `ConfidenceCalibrator` — calibration du score de confiance et seuil « je ne sais pas »
-
-Soit **Sprint 6 — Outils** si préférence :
-- `ToolRegistry` — registre central des outils
+- `ToolRegistry` — registre central des outils (documentation, code, web)
 - `DocumentGenerator` — génération Word, PDF, PPT, Excel
 
 ---
