@@ -1274,7 +1274,8 @@ Et si une tâche est en cours :
 | **S5 — Raisonnement** | ✅ **Terminé** | reflexion, consistency, confidence | **26 ✅** |
 | **S6 — Outils** | ✅ **Terminé** | tool_registry, tool_executor, document_generator (Word/PDF/PPTX/XLSX) | **35 ✅** |
 | **S7 — Web Research** | ✅ **Terminé** | web_researcher, search_optimizer | **24 ✅** |
-| **Total V9+V10** | **504 tests ✅** | **31 modules** | **0 échec** |
+| **S8 — Intégration** | ✅ **Terminé** | tests end-to-end (19) + benchmark (16) | **35 ✅** |
+| **Total V9+V10** | **539 tests ✅** | **31 modules** | **0 échec** |
 
 **✅ V9 — TERMINÉ (11 juin 2026)**
 
