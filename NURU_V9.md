@@ -1410,6 +1410,57 @@ Ces quatre premiers modules (1–4) représentent **80 % de la valeur perçue** 
 
 ---
 
+## ⚠️ PROBLÈMES CONNUS — RAG & Documents (11 juin 2026)
+
+### Statut : 🔴 NON RÉSOLU
+
+**Problème principal :** NURU n'accède pas correctement au contenu des documents utilisateur.
+
+### Symptômes observés
+
+1. **Question "Parle-moi de BEACCOM"** → NURU répond avec des connaissances generiques (pas les documents)
+2. **Spotlight trouve les fichiers** mais le LLM ignore le contexte
+3. **Escalade Cloud** quand RAM basse → le contexte Spotlight n'est pas envoyé au LLM
+4. **Prompt trop long** quand le contexte est inclus → context_length_exceeded
+
+### Ce qui a été essayé (sans succès complet)
+
+| Tentative | Résultat |
+|---|---|
+| Ajout de mots-clés RAG (beaccom, rikolto, etc.) | ✅ Le routeur classe maintenant LOCAL_RAG |
+| SpotlightSearch avec lecture de contenu | ✅ Spotlight trouve et lit les fichiers |
+| Filtrage fichiers du projet | ✅ Spotlight ne retourne plus les .py du projet |
+| Extraction termes clés | ✅ "parle-moi de BEACCOM" → recherche "beaccom" |
+| Contexte Spotlight dans le prompt | ✅ 9,430 chars de contexte injectés |
+| Spotlight contourne escalade RAM | ✅ Pas d'escalade Cloud pour Spotlight |
+| Troncation contexte à 3000 chars | ✅ Évite les prompts trop longs |
+
+### Ce qui ne fonctionne toujours pas
+
+1. **Le LLM ignore le contexte Spotlight** — malgré 9,430 chars de contexte, le Cloud répond avec ses connaissances
+2. **Le RAG index est insuffisant** — seulement 1,024 chunks pour 977 fichiers
+3. **La réindexation n'a pas abouti** — le script timeout après 300s
+4. **Le pipeline n'est pas cohérent** — le routeur retourne LOCAL_RAG mais l'orchestrateur passe en Cloud
+
+### Pistes de solution à explorer
+
+1. **Forcer l'utilisation du contexte** — modifier le prompt pour que le LLM DOIVE utiliser le contexte fourni
+2. **Réindexation complète** — relancer la réindexation des 977 fichiers avec un timeout plus long
+3. **Bypasser le Cloud quand le contexte Spotlight existe** — ne jamais passer en Cloud si Spotlight a trouvé du contenu
+4. **Utiliser le modèle local** quand le contexte est disponible (pas besoin de Cloud)
+5. **Vérifier l'envoi du contexte** — s'assurer que rag_context contient bien le Spotlight context quand il arrive au LLM
+
+### Fichiers concernés
+
+- `src/rag/spotlight.py` — SpotlightSearch
+- `src/rag/smart_search.py` — SmartSearch
+- `src/semantic_router.py` — Routeur Always-RAG
+- `src/core/router.py` — Escalade RAM
+- `src/core/orchestrator.py` — Pipeline de génération
+- `scripts/reindex_all.py` — Script de réindexation (n'a pas abouti)
+
+---
+
 ## 14. Risques et atténuations
 
 ### 14.1 Matrice des risques
