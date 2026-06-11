@@ -39,12 +39,15 @@ TRIVIAL_PATTERNS = {
 RAG_KEYWORDS = {
     "cv", "curriculum", "vitae", "lettre", "motivation", "candidature", "postuler",
     "poste", "emploi", "travail", "job", "recrutement", "recrute",
-    "yarid", "iamgold", "iita", "fao", "usaid",
+    "yarid", "iamgold", "iita", "fao", "usaid", "beaccom", "rikolto",
     "mon cv", "mon document", "mes notes", "mes fichiers", "mes pdf",
     "diplôme", "diplome", "certificat", "attestation", "formation",
-    "rapport", "présentation", "projet", "étude",
+    "rapport", "présentation", "projet", "étude", "étude de base",
+    "filière", "filiere", "riz", "walikale", "agriculture",
     "cherche dans", "trouve le fichier", "ouvre le document",
     "document de", "fichier de", "note de", "dossier",
+    "parle-moi de", "raconte-moi", "qu'est-ce que", "qui est",
+    "donne-moi", "montre-moi", "resume", "résume",
 }
 
 # Mots-clés d'actualité/temporels qui déclenchent le Web direct (pas de RAG)
