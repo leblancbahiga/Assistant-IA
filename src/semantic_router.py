@@ -1,11 +1,12 @@
 """
-Routeur Sémantique Hybride pour NURU V4.
-Remplace le simple IntentClassifier par un système à 5 niveaux :
+Routeur Sémantique Hybride pour NURU V10.
+Système à 6 niveaux — TOUJOURS essaie RAG d'abord (plus de mots-clés codés en dur) :
 1. Trivial Check (regex, 0 Mo RAM)
 2. Web Trigger (mots-clés d'actualité — pas de RAG inutile)
-3. Recherche RAG + Score de confiance
-4. Cloud Fallback
-5. Clarification
+3. RAG d'abord (toujours — notre index)
+4. Spotlight (tous les fichiers de l'ordinateur via mdfind)
+5. Cloud Fallback
+6. Clarification
 Décisions : SIMPLE | WEB | LOCAL_RAG | CLOUD_GROQ | CLARIFICATION
 """
 import logging
@@ -88,6 +89,15 @@ class SemanticRouter:
         self.is_online = is_online_check or (lambda: True)
         # V4.5 Phase 0 : Cache TTL enfin actif (256 entrées, TTL 5 min)
         self._cache = TTLDecisionCache(maxsize=256, ttl_seconds=300)
+        # V10 : Spotlight search (tous les fichiers de l'ordinateur)
+        self._spotlight = None
+        self._spotlight_context = ""  # Contexte Spotlight pour le prompt
+        try:
+            from src.rag.spotlight import SpotlightSearch
+            self._spotlight = SpotlightSearch()
+            logger.info("🧠 Router: Spotlight initialisé (macOS mdfind)")
+        except Exception as e:
+            logger.debug(f"🧠 Router: Spotlight non disponible: {e}")
         
     def set_rag_engine(self, rag_engine):
         """Injecte le moteur RAG après construction (injection de dépendances)."""
@@ -133,42 +143,31 @@ class SemanticRouter:
         # ====================================
         # NIVEAU 2 : WEB TRIGGER (Actualité — pas de RAG inutile)
         # NURU V5 : priorité RAG — si mots-clés docs, on ignore les web triggers
-        # Correction 7 : Regex \b pour éviter faux positifs (ex: "fao" dans "il faudrait")
+        # V10 : Les web triggers ne détournent plus vers le Cloud — on essaie RAG d'abord
+        # Seules les requêtes PUREMENT d'actualité (sans aucun lien documentaire) vont au web
         # ====================================
-        rag_pattern = re.compile(r'\b(' + '|'.join(map(re.escape, RAG_KEYWORDS)) + r')\b', re.IGNORECASE)
         web_pattern = re.compile(r'\b(' + '|'.join(map(re.escape, WEB_TRIGGERS)) + r')\b', re.IGNORECASE)
-        has_rag_keyword = bool(rag_pattern.search(query_lower))
         has_web_trigger = bool(web_pattern.search(query_lower))
-        if has_web_trigger and not has_rag_keyword:
+        # Si web trigger mais la requête est courte (question d'actualité pure) → Cloud
+        if has_web_trigger and len(query_lower.split()) <= 6:
             result.decision = "CLOUD_GROQ"
             result.confidence = 0.8
-            result.reasoning = f"Web trigger détecté"
+            result.reasoning = f"Web trigger détecté (requête courte, actualité pure)"
             result.processing_time_ms = (time.time() - t_start) * 1000
             logger.info(f"🧠 Router N2 (Web Trigger) → CLOUD_GROQ: {query_lower[:50]}")
             self._cache.set(cache_key, result)
             return result
         
         # ====================================
-        # NIVEAU 3 : RAG CONFIDENCE (Embedding + Search)
+        # NIVEAU 3 : RAG D'ABORD (toujours — plus de mots-clés codés en dur)
         # ====================================
         if self.rag_engine is not None:
-            # Lancer la recherche RAG (non-bloquante)
             try:
                 rag_context, rag_result = await self.rag_engine.retrieve(user_query)
                 result.rag_top_score = rag_result.top_score
                 
-                # Debug logging pour comprendre le comportement
-                logger.debug(
-                    f"🧠 Router N3 (RAG): requête={query_lower[:40]} | "
-                    f"top_score={rag_result.top_score:.2f} | "
-                    f"chunks={rag_result.chunks_injected} | "
-                    f"rejet={rag_result.rejection_reason or 'NON'} | "
-                    f"mots-clés RAG={has_rag_keyword}"
-                )
-                
-                # Décision basée sur le RAG
-                if rag_context:
-                    # Contexte RAG trouvé et validé
+                if rag_context and rag_result.top_score > 0.2:
+                    # RAG trouvé → on utilise
                     result.decision = "LOCAL_RAG"
                     result.confidence = rag_result.top_score
                     result.reasoning = f"RAG trouvé (top1={rag_result.top_score:.2f})"
@@ -176,54 +175,54 @@ class SemanticRouter:
                     logger.info(f"🧠 Router N3 → LOCAL_RAG (top1={rag_result.top_score:.2f})")
                     self._cache.set(cache_key, result)
                     return result
-                
-                elif rag_result.rejection_reason and has_rag_keyword:
-                    # Requête avec mots-clés RAG mais pas trouvé : on essaie quand même
-                    # Peut-être que le document n'est pas indexé → passer au cloud
-                    logger.warning(
-                        f"🧠 Router N3: mots-clés RAG mais pas de docs trouvés "
-                        f"(score={rag_result.top_score:.2f}). Tentative cloud..."
-                    )
-                    # On laisse continuer vers N4
-                
+                else:
+                    # RAG pas de résultat → on continue vers Spotlight/Cloud
+                    logger.debug(f"🧠 Router N3: RAG insuffisant (score={rag_result.top_score:.2f})")
             except Exception as e:
                 logger.error(f"🧠 Router N3: Erreur RAG: {e}")
         
         # ====================================
-        # NIVEAU 4 : CLOUD FALLBACK
+        # NIVEAU 4 : SPOTLIGHT (tous les fichiers de l'ordinateur)
+        # ====================================
+        if self._spotlight:
+            try:
+                spotlight_results = self._spotlight.search(user_query, max_results=5)
+                if spotlight_results:
+                    # Spotlight a trouvé → formatter pour le LLM
+                    context_parts = []
+                    for r in spotlight_results:
+                        context_parts.append(f"[SOURCE] {r.filename}\n[PATH] {r.path}")
+                    result.decision = "LOCAL_RAG"
+                    result.confidence = 0.6
+                    result.reasoning = f"Spotlight trouvé ({len(spotlight_results)} fichiers)"
+                    result.processing_time_ms = (time.time() - t_start) * 1000
+                    # Stocker le contexte Spotlight pour le prompt
+                    self._spotlight_context = "\n".join(context_parts)
+                    logger.info(f"🧠 Router N4 → LOCAL_RAG (Spotlight: {len(spotlight_results)} fichiers)")
+                    self._cache.set(cache_key, result)
+                    return result
+            except Exception as e:
+                logger.warning(f"🧠 Router N4: Spotlight erreur: {e}")
+        
+        # ====================================
+        # NIVEAU 5 : CLOUD FALLBACK
         # ====================================
         if self.is_online():
-            # Si la requête semble complexe (longueur, mots techniques, etc.)
-            is_complex = len(user_query.split()) >= 8 or has_rag_keyword
-            
-            if is_complex or result.rag_top_score > 0.0:
-                result.decision = "CLOUD_GROQ"
-                result.confidence = 0.7
-                result.reasoning = f"Requête {'complexe' if is_complex else 'RAG insuffisant'}"
-                result.processing_time_ms = (time.time() - t_start) * 1000
-                logger.info(
-                    f"🧠 Router N3 → CLOUD_GROQ (complexe={is_complex}, "
-                    f"RAG_score={result.rag_top_score:.2f})"
-                )
-                self._cache.set(cache_key, result)
-                return result
-            
-            # Requête simple non-trivial : au cloud par défaut
             result.decision = "CLOUD_GROQ"
             result.confidence = 0.5
-            result.reasoning = "Requête simple par défaut → Cloud"
+            result.reasoning = "Pas de résultats locaux → Cloud"
             result.processing_time_ms = (time.time() - t_start) * 1000
-            logger.debug(f"🧠 Router N3 → CLOUD_GROQ (simple)")
+            logger.info(f"🧠 Router N5 → CLOUD_GROQ")
             self._cache.set(cache_key, result)
             return result
         
         # ====================================
-        # NIVEAU 5 : CLARIFICATION (Hors ligne)
+        # NIVEAU 6 : CLARIFICATION (Hors ligne)
         # ====================================
         result.decision = "CLARIFICATION"
         result.confidence = 0.0
         result.reasoning = "Pas de documents locaux et pas d'accès Internet"
         result.processing_time_ms = (time.time() - t_start) * 1000
-        logger.info(f"🧠 Router N4 → CLARIFICATION")
+        logger.info(f"🧠 Router N6 → CLARIFICATION")
         self._cache.set(cache_key, result)
         return result
