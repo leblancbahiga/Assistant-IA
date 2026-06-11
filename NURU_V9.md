@@ -1272,8 +1272,9 @@ Et si une tâche est en cours :
 | **S3 — Feedback** | ✅ **Terminé** | feedback, tracker, optimizer, self_eval | **67 ✅** |
 | **S4 — Dashboard V9** | ✅ **Terminé** | agent_status, memory_explorer, feedback_bar, task_list + intégration dashboard.py | **86 ✅** |
 | **S5 — Raisonnement** | ✅ **Terminé** | reflexion, consistency, confidence | **26 ✅** |
-| **S6 — Outils** | ✅ **Terminé** | tool_registry, document_generator | **19 ✅** |
-| **Total V9+V10** | **464 tests ✅** | **28 modules** | **0 échec** |
+| **S6 — Outils** | ✅ **Terminé** | tool_registry, tool_executor, document_generator (Word/PDF/PPTX/XLSX) | **35 ✅** |
+| **S7 — Web Research** | ✅ **Terminé** | web_researcher, search_optimizer | **24 ✅** |
+| **Total V9+V10** | **504 tests ✅** | **31 modules** | **0 échec** |
 
 **✅ V9 — TERMINÉ (11 juin 2026)**
 
