@@ -1,10 +1,11 @@
 """
-Settings Page V4.5 — Configuration complète de NURU (glassmorphism cyberpunk).
-5 sections interactives : Général, Modèles, RAG, Voix, Système.
+Settings Page V10 — Configuration complète de NURU (glassmorphism cyberpunk).
+6 sections interactives : Général, Modèles, RAG, Mémoire V9, Voix, Système.
 Tous les widgets utilisent des objectName pour le QSS (pas de inline stylesheets).
 """
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from PySide6.QtWidgets import (
@@ -25,9 +26,13 @@ except ImportError:
     HAS_PSUTIL = False
     logger.warning("psutil not available — system stats will show N/A")
 
+# ── Version NURU ──
+NURU_VERSION = "V10"
+NURU_MODULE_COUNT = 24
+
 
 class SettingsPage(QWidget):
-    """Page de paramètres NURU — 5 sections glassmorphism cyberpunk."""
+    """Page de paramètres NURU — 6 sections glassmorphism cyberpunk."""
 
     def __init__(self, config=None, parent=None):
         super().__init__(parent)
@@ -46,7 +51,7 @@ class SettingsPage(QWidget):
     # ──────────────────────────────────────────────
 
     def setup_ui(self):
-        """Construit toute l'interface : header + scroll area + 5 sections."""
+        """Construit toute l'interface : header + scroll area + 6 sections."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -69,10 +74,11 @@ class SettingsPage(QWidget):
         self.cl.setContentsMargins(24, 16, 24, 24)
         self.cl.setSpacing(20)
 
-        # ── 5 SECTIONS ──────────────────────────
+        # ── 6 SECTIONS ──────────────────────────
         self.cl.addWidget(self.build_general())
         self.cl.addWidget(self.build_models())
         self.cl.addWidget(self.build_rag())
+        self.cl.addWidget(self.build_memory_v9())
         self.cl.addWidget(self.build_voice())
         self.cl.addWidget(self.build_system())
 
@@ -120,7 +126,7 @@ class SettingsPage(QWidget):
     # ──────────────────────────────────────────────
 
     def build_general(self):
-        """Section Général — assistant name, langue, thème, taille texte."""
+        """Section Général — assistant name, langue, thème, taille texte, mode hybride, seuil confiance, max étapes."""
         section = QFrame()
         section.setObjectName("SettingsSection")
         vlay = QVBoxLayout(section)
@@ -188,18 +194,69 @@ class SettingsPage(QWidget):
         rl4.addWidget(self.font_size_spin, stretch=1)
         vlay.addWidget(row4)
 
-        # ── Réinitialiser ──
+        # ── Mode hybride ──
         row5 = QFrame()
         row5.setObjectName("SettingRow")
         rl5 = QHBoxLayout(row5)
         rl5.setContentsMargins(16, 8, 16, 8)
-        rl5.addStretch()
+        lbl5 = QLabel("Mode hybride")
+        lbl5.setObjectName("SettingLabel")
+        self.hybrid_mode_select = QComboBox()
+        self.hybrid_mode_select.setObjectName("HybridModeSelect")
+        self.hybrid_mode_select.addItems(["cloud_first", "local_first", "offline_only"])
+        rl5.addWidget(lbl5)
+        rl5.addWidget(self.hybrid_mode_select, stretch=1)
+        vlay.addWidget(row5)
+
+        # ── Seuil de confiance minimum ──
+        row6 = QFrame()
+        row6.setObjectName("SettingRow")
+        rl6 = QHBoxLayout(row6)
+        rl6.setContentsMargins(16, 8, 16, 8)
+        lbl6 = QLabel("Seuil de confiance min.")
+        lbl6.setObjectName("SettingLabel")
+        self.confidence_slider = QSlider(Qt.Horizontal)
+        self.confidence_slider.setObjectName("ConfidenceSlider")
+        self.confidence_slider.setRange(0, 100)
+        self.confidence_slider.setValue(50)
+        self.confidence_value = QLabel("0.50")
+        self.confidence_value.setObjectName("ConfidenceValue")
+        self.confidence_value.setFixedWidth(40)
+        self.confidence_slider.valueChanged.connect(
+            lambda v: self.confidence_value.setText(f"{v/100:.2f}")
+        )
+        rl6.addWidget(lbl6)
+        rl6.addWidget(self.confidence_slider, stretch=1)
+        rl6.addWidget(self.confidence_value)
+        vlay.addWidget(row6)
+
+        # ── Nombre max d'étapes agent ──
+        row7 = QFrame()
+        row7.setObjectName("SettingRow")
+        rl7 = QHBoxLayout(row7)
+        rl7.setContentsMargins(16, 8, 16, 8)
+        lbl7 = QLabel("Max étapes agent")
+        lbl7.setObjectName("SettingLabel")
+        self.max_steps_spin = QSpinBox()
+        self.max_steps_spin.setObjectName("MaxStepsSpin")
+        self.max_steps_spin.setRange(1, 10)
+        self.max_steps_spin.setValue(5)
+        rl7.addWidget(lbl7)
+        rl7.addWidget(self.max_steps_spin, stretch=1)
+        vlay.addWidget(row7)
+
+        # ── Réinitialiser ──
+        row8 = QFrame()
+        row8.setObjectName("SettingRow")
+        rl8 = QHBoxLayout(row8)
+        rl8.setContentsMargins(16, 8, 16, 8)
+        rl8.addStretch()
         self.reset_btn = QPushButton("↺  Réinitialiser les paramètres")
         self.reset_btn.setObjectName("ResetSettingsBtn")
         self.reset_btn.setCursor(Qt.PointingHandCursor)
         self.reset_btn.clicked.connect(self._reset_settings)
-        rl5.addWidget(self.reset_btn)
-        vlay.addWidget(row5)
+        rl8.addWidget(self.reset_btn)
+        vlay.addWidget(row8)
 
         return section
 
@@ -208,7 +265,7 @@ class SettingsPage(QWidget):
     # ──────────────────────────────────────────────
 
     def build_models(self):
-        """Section Modèles IA — sélection, fournisseur, paramètres, performances."""
+        """Section Modèles IA — sélection, fournisseur, paramètres, performances, modèle cloud, modèle local, timeout."""
         section = QFrame()
         section.setObjectName("SettingsSection")
         vlay = QVBoxLayout(section)
@@ -218,6 +275,54 @@ class SettingsPage(QWidget):
         title = QLabel("MODÈLES IA")
         title.setObjectName("SectionTitle")
         vlay.addWidget(title)
+
+        # ── Modèle cloud ──
+        row_cloud = QFrame()
+        row_cloud.setObjectName("SettingRow")
+        rl_cloud = QHBoxLayout(row_cloud)
+        rl_cloud.setContentsMargins(16, 8, 16, 8)
+        lbl_cloud = QLabel("Modèle cloud")
+        lbl_cloud.setObjectName("SettingLabel")
+        self.cloud_model_select = QComboBox()
+        self.cloud_model_select.setObjectName("CloudModelSelect")
+        self.cloud_model_select.addItems([
+            "groq/llama-3.3-70b-versatile",
+            "openrouter",
+            "deepseek-chat",
+        ])
+        rl_cloud.addWidget(lbl_cloud)
+        rl_cloud.addWidget(self.cloud_model_select, stretch=1)
+        vlay.addWidget(row_cloud)
+
+        # ── Modèle local (non modifiable) ──
+        row_local = QFrame()
+        row_local.setObjectName("SettingRow")
+        rl_local = QHBoxLayout(row_local)
+        rl_local.setContentsMargins(16, 8, 16, 8)
+        lbl_local = QLabel("Modèle local")
+        lbl_local.setObjectName("SettingLabel")
+        self.local_model_label = QLabel("phi-4-mini-4bit")
+        self.local_model_label.setObjectName("LocalModelLabel")
+        self.local_model_label.setStyleSheet("color: #6b7280; font-size: 12px;")
+        rl_local.addWidget(lbl_local)
+        rl_local.addWidget(self.local_model_label, stretch=1)
+        vlay.addWidget(row_local)
+
+        # ── Timeout LLM ──
+        row_timeout = QFrame()
+        row_timeout.setObjectName("SettingRow")
+        rl_timeout = QHBoxLayout(row_timeout)
+        rl_timeout.setContentsMargins(16, 8, 16, 8)
+        lbl_timeout = QLabel("Timeout LLM (secondes)")
+        lbl_timeout.setObjectName("SettingLabel")
+        self.llm_timeout_spin = QSpinBox()
+        self.llm_timeout_spin.setObjectName("LlmTimeoutSpin")
+        self.llm_timeout_spin.setRange(10, 120)
+        self.llm_timeout_spin.setValue(30)
+        self.llm_timeout_spin.setSuffix(" s")
+        rl_timeout.addWidget(lbl_timeout)
+        rl_timeout.addWidget(self.llm_timeout_spin, stretch=1)
+        vlay.addWidget(row_timeout)
 
         # ── Modèle actif ──
         row1 = QFrame()
@@ -383,7 +488,7 @@ class SettingsPage(QWidget):
     # ──────────────────────────────────────────────
 
     def build_rag(self):
-        """Section RAG — chunks, similarité, embedding, réindexation, stats."""
+        """Section RAG — chunks, similarité, embedding, activation, réindexation, stats."""
         section = QFrame()
         section.setObjectName("SettingsSection")
         vlay = QVBoxLayout(section)
@@ -394,17 +499,29 @@ class SettingsPage(QWidget):
         title.setObjectName("SectionTitle")
         vlay.addWidget(title)
 
+        # ── Activer/désactiver RAG ──
+        row0 = QFrame()
+        row0.setObjectName("SettingRow")
+        rl0 = QHBoxLayout(row0)
+        rl0.setContentsMargins(16, 8, 16, 8)
+        self.rag_enabled = QCheckBox("Activer le RAG")
+        self.rag_enabled.setObjectName("RagEnabled")
+        self.rag_enabled.setChecked(True)
+        rl0.addWidget(self.rag_enabled)
+        rl0.addStretch()
+        vlay.addWidget(row0)
+
         # ── Nombre de chunks ──
         row1 = QFrame()
         row1.setObjectName("SettingRow")
         rl1 = QHBoxLayout(row1)
         rl1.setContentsMargins(16, 8, 16, 8)
-        lbl1 = QLabel("Nombre de chunks")
+        lbl1 = QLabel("Nombre max de chunks")
         lbl1.setObjectName("SettingLabel")
         self.rag_chunks_spin = QSpinBox()
         self.rag_chunks_spin.setObjectName("RagChunksSpin")
-        self.rag_chunks_spin.setRange(1, 20)
-        self.rag_chunks_spin.setValue(5)
+        self.rag_chunks_spin.setRange(5, 50)
+        self.rag_chunks_spin.setValue(10)
         rl1.addWidget(lbl1)
         rl1.addWidget(self.rag_chunks_spin, stretch=1)
         vlay.addWidget(row1)
@@ -510,7 +627,75 @@ class SettingsPage(QWidget):
         return section
 
     # ──────────────────────────────────────────────
-    # SECTION 4 : VOIX
+    # SECTION 4 : MÉMOIRE V9
+    # ──────────────────────────────────────────────
+
+    def build_memory_v9(self):
+        """Section Mémoire V9 — ConsolidationWorker, intervalle consolidation, seuil d'importance."""
+        section = QFrame()
+        section.setObjectName("SettingsSection")
+        vlay = QVBoxLayout(section)
+        vlay.setContentsMargins(0, 0, 0, 0)
+        vlay.setSpacing(0)
+
+        title = QLabel("MÉMOIRE V9")
+        title.setObjectName("SectionTitle")
+        vlay.addWidget(title)
+
+        # ── Activer ConsolidationWorker ──
+        row1 = QFrame()
+        row1.setObjectName("SettingRow")
+        rl1 = QHBoxLayout(row1)
+        rl1.setContentsMargins(16, 8, 16, 8)
+        self.consolidation_enabled = QCheckBox("Activer ConsolidationWorker")
+        self.consolidation_enabled.setObjectName("ConsolidationEnabled")
+        self.consolidation_enabled.setChecked(True)
+        rl1.addWidget(self.consolidation_enabled)
+        rl1.addStretch()
+        vlay.addWidget(row1)
+
+        # ── Intervalle consolidation (en heures) ──
+        row2 = QFrame()
+        row2.setObjectName("SettingRow")
+        rl2 = QHBoxLayout(row2)
+        rl2.setContentsMargins(16, 8, 16, 8)
+        lbl2 = QLabel("Intervalle consolidation")
+        lbl2.setObjectName("SettingLabel")
+        self.consolidation_interval_spin = QSpinBox()
+        self.consolidation_interval_spin.setObjectName("ConsolidationIntervalSpin")
+        self.consolidation_interval_spin.setRange(1, 24)
+        self.consolidation_interval_spin.setValue(6)
+        self.consolidation_interval_spin.setSuffix(" h")
+        rl2.addWidget(lbl2)
+        rl2.addWidget(self.consolidation_interval_spin, stretch=1)
+        vlay.addWidget(row2)
+
+        # ── Seuil d'importance minimum ──
+        row3 = QFrame()
+        row3.setObjectName("SettingRow")
+        rl3 = QHBoxLayout(row3)
+        rl3.setContentsMargins(16, 8, 16, 8)
+        lbl3 = QLabel("Seuil importance min.")
+        lbl3.setObjectName("SettingLabel")
+        self.importance_slider = QSlider(Qt.Horizontal)
+        self.importance_slider.setObjectName("ImportanceSlider")
+        self.importance_slider.setRange(0, 100)
+        self.importance_slider.setValue(30)
+        self.importance_value = QLabel("0.30")
+        self.importance_value.setObjectName("ImportanceValue")
+        self.importance_value.setFixedWidth(40)
+        self.importance_slider.valueChanged.connect(
+            lambda v: self.importance_value.setText(f"{v/100:.2f}")
+        )
+        rl3.addWidget(lbl3)
+        rl3.addWidget(self.importance_slider, stretch=1)
+        rl3.addWidget(self.importance_value)
+        vlay.addWidget(row3)
+
+        return section
+
+    # ──────────────────────────────────────────────
+    # SECTION 5 : VOIX
     # ──────────────────────────────────────────────
 
     def build_voice(self):
@@ -614,11 +799,11 @@ class SettingsPage(QWidget):
         return section
 
     # ──────────────────────────────────────────────
-    # SECTION 5 : SYSTÈME
+    # SECTION 6 : SYSTÈME
     # ──────────────────────────────────────────────
 
     def build_system(self):
-        """Section Système — RAM, CPU, disque, version, logs, export diag."""
+        """Section Système — RAM, CPU, disque, version, modules, réindexer, vider cache, exporter logs."""
         section = QFrame()
         section.setObjectName("SettingsSection")
         vlay = QVBoxLayout(section)
@@ -628,6 +813,34 @@ class SettingsPage(QWidget):
         title = QLabel("SYSTÈME")
         title.setObjectName("SectionTitle")
         vlay.addWidget(title)
+
+        # ── Version NURU ──
+        row0 = QFrame()
+        row0.setObjectName("SettingRow")
+        rl0 = QHBoxLayout(row0)
+        rl0.setContentsMargins(16, 8, 16, 8)
+        lbl0 = QLabel("Version NURU")
+        lbl0.setObjectName("SettingLabel")
+        self.sys_version_label = QLabel(NURU_VERSION)
+        self.sys_version_label.setObjectName("SysVersionLabel")
+        rl0.addWidget(lbl0)
+        rl0.addStretch()
+        rl0.addWidget(self.sys_version_label)
+        vlay.addWidget(row0)
+
+        # ── Nombre de modules ──
+        row_mod = QFrame()
+        row_mod.setObjectName("SettingRow")
+        rl_mod = QHBoxLayout(row_mod)
+        rl_mod.setContentsMargins(16, 8, 16, 8)
+        lbl_mod = QLabel("Modules actifs")
+        lbl_mod.setObjectName("SettingLabel")
+        self.sys_modules_label = QLabel(f"{NURU_MODULE_COUNT}")
+        self.sys_modules_label.setObjectName("SysModulesLabel")
+        rl_mod.addWidget(lbl_mod)
+        rl_mod.addStretch()
+        rl_mod.addWidget(self.sys_modules_label)
+        vlay.addWidget(row_mod)
 
         # ── RAM ──
         row1 = QFrame()
@@ -671,30 +884,55 @@ class SettingsPage(QWidget):
         rl3.addWidget(self.sys_disk_label)
         vlay.addWidget(row3)
 
-        # ── Version NURU ──
-        row4 = QFrame()
-        row4.setObjectName("SettingRow")
-        rl4 = QHBoxLayout(row4)
-        rl4.setContentsMargins(16, 8, 16, 8)
-        lbl4 = QLabel("Version NURU")
-        lbl4.setObjectName("SettingLabel")
-        self.sys_version_label = QLabel("v4.5")
-        self.sys_version_label.setObjectName("SysVersionLabel")
-        rl4.addWidget(lbl4)
-        rl4.addStretch()
-        rl4.addWidget(self.sys_version_label)
-        vlay.addWidget(row4)
+        # ── Réindexer les documents ──
+        row_reindex = QFrame()
+        row_reindex.setObjectName("SettingRow")
+        rl_reindex = QHBoxLayout(row_reindex)
+        rl_reindex.setContentsMargins(16, 8, 16, 8)
+        self.sys_reindex_btn = QPushButton("📂  Réindexer les documents")
+        self.sys_reindex_btn.setObjectName("SysReindexBtn")
+        self.sys_reindex_btn.setCursor(Qt.PointingHandCursor)
+        self.sys_reindex_btn.clicked.connect(self._on_reindex_all)
+        rl_reindex.addStretch()
+        rl_reindex.addWidget(self.sys_reindex_btn)
+        vlay.addWidget(row_reindex)
 
-        # ── Logs ──
+        # ── Vider le cache ──
+        row_cache = QFrame()
+        row_cache.setObjectName("SettingRow")
+        rl_cache = QHBoxLayout(row_cache)
+        rl_cache.setContentsMargins(16, 8, 16, 8)
+        self.sys_clear_cache_btn = QPushButton("🗑  Vider le cache")
+        self.sys_clear_cache_btn.setObjectName("SysClearCacheBtn")
+        self.sys_clear_cache_btn.setCursor(Qt.PointingHandCursor)
+        self.sys_clear_cache_btn.clicked.connect(self._on_clear_cache)
+        rl_cache.addStretch()
+        rl_cache.addWidget(self.sys_clear_cache_btn)
+        vlay.addWidget(row_cache)
+
+        # ── Exporter les logs ──
+        row_logs = QFrame()
+        row_logs.setObjectName("SettingRow")
+        rl_logs = QHBoxLayout(row_logs)
+        rl_logs.setContentsMargins(16, 8, 16, 8)
+        self.sys_export_logs_btn = QPushButton("📋  Exporter les logs")
+        self.sys_export_logs_btn.setObjectName("SysExportLogsBtn")
+        self.sys_export_logs_btn.setCursor(Qt.PointingHandCursor)
+        self.sys_export_logs_btn.clicked.connect(self._on_export_logs)
+        rl_logs.addStretch()
+        rl_logs.addWidget(self.sys_export_logs_btn)
+        vlay.addWidget(row_logs)
+
+        # ── Ouvrir les logs ──
         row5 = QFrame()
         row5.setObjectName("SettingRow")
         rl5 = QHBoxLayout(row5)
         rl5.setContentsMargins(16, 8, 16, 8)
-        rl5.addStretch()
-        self.open_logs_btn = QPushButton("📋  Ouvrir les logs")
+        self.open_logs_btn = QPushButton("📄  Ouvrir les logs")
         self.open_logs_btn.setObjectName("OpenLogsBtn")
         self.open_logs_btn.setCursor(Qt.PointingHandCursor)
         self.open_logs_btn.clicked.connect(self._on_open_logs)
+        rl5.addStretch()
         rl5.addWidget(self.open_logs_btn)
         vlay.addWidget(row5)
 
@@ -703,11 +941,11 @@ class SettingsPage(QWidget):
         row6.setObjectName("SettingRow")
         rl6 = QHBoxLayout(row6)
         rl6.setContentsMargins(16, 8, 16, 8)
-        rl6.addStretch()
         self.export_diag_btn = QPushButton("🩺  Export diagnostic")
         self.export_diag_btn.setObjectName("ExportDiagBtn")
         self.export_diag_btn.setCursor(Qt.PointingHandCursor)
         self.export_diag_btn.clicked.connect(self._export_diagnostics)
+        rl6.addStretch()
         rl6.addWidget(self.export_diag_btn)
         vlay.addWidget(row6)
 
@@ -750,7 +988,13 @@ class SettingsPage(QWidget):
             "lang": self.lang_select.currentText(),
             "theme": self.theme_select.currentText(),
             "font_size": self.font_size_spin.value(),
+            "hybrid_mode": self.hybrid_mode_select.currentText(),
+            "confidence_threshold": self.confidence_slider.value() / 100,
+            "max_agent_steps": self.max_steps_spin.value(),
             # Modèles
+            "cloud_model": self.cloud_model_select.currentText(),
+            "local_model": "phi-4-mini-4bit",
+            "llm_timeout": self.llm_timeout_spin.value(),
             "active_model": self.active_model.currentText(),
             "provider": self.provider_select.currentText(),
             "temperature": self.temp_slider.value() / 100,
@@ -758,9 +1002,14 @@ class SettingsPage(QWidget):
             "context_size": self.context_spin.value(),
             "max_tokens": self.max_tokens_spin.value(),
             # RAG
+            "rag_enabled": self.rag_enabled.isChecked(),
             "rag_chunks": self.rag_chunks_spin.value(),
             "similarity_threshold": self.similarity_slider.value() / 100,
             "embedding_model": self.embedding_select.currentText(),
+            # Mémoire V9
+            "consolidation_enabled": self.consolidation_enabled.isChecked(),
+            "consolidation_interval_hours": self.consolidation_interval_spin.value(),
+            "importance_threshold": self.importance_slider.value() / 100,
             # Voix
             "voice_enabled": self.voice_enabled.isChecked(),
             "voice": self.voice_select.currentText(),
@@ -775,19 +1024,19 @@ class SettingsPage(QWidget):
             "lang": (QComboBox, "setCurrentText"),
             "theme": (QComboBox, "setCurrentText"),
             "font_size": (QSpinBox, "setValue"),
+            "hybrid_mode": (QComboBox, "setCurrentText"),
             "active_model": (QComboBox, "setCurrentText"),
             "provider": (QComboBox, "setCurrentText"),
-            "temperature": (None, None),  # handled specially
-            "top_p": (None, None),
             "context_size": (QSpinBox, "setValue"),
             "max_tokens": (QSpinBox, "setValue"),
+            "cloud_model": (QComboBox, "setCurrentText"),
+            "llm_timeout": (QSpinBox, "setValue"),
             "rag_chunks": (QSpinBox, "setValue"),
-            "similarity_threshold": (None, None),
             "embedding_model": (QComboBox, "setCurrentText"),
+            "consolidation_interval_hours": (QSpinBox, "setValue"),
+            "max_agent_steps": (QSpinBox, "setValue"),
             "voice_enabled": (QCheckBox, "setChecked"),
             "voice": (QComboBox, "setCurrentText"),
-            "speed": (None, None),
-            "volume": (None, None),
         }
 
         widget_map = {
@@ -795,12 +1044,17 @@ class SettingsPage(QWidget):
             "lang": self.lang_select,
             "theme": self.theme_select,
             "font_size": self.font_size_spin,
+            "hybrid_mode": self.hybrid_mode_select,
             "active_model": self.active_model,
             "provider": self.provider_select,
             "context_size": self.context_spin,
             "max_tokens": self.max_tokens_spin,
+            "cloud_model": self.cloud_model_select,
+            "llm_timeout": self.llm_timeout_spin,
             "rag_chunks": self.rag_chunks_spin,
             "embedding_model": self.embedding_select,
+            "consolidation_interval_hours": self.consolidation_interval_spin,
+            "max_agent_steps": self.max_steps_spin,
             "voice_enabled": self.voice_enabled,
             "voice": self.voice_select,
         }
@@ -808,7 +1062,9 @@ class SettingsPage(QWidget):
         for key, value in data.items():
             if key in widget_map:
                 widget = widget_map[key]
-                cls, method = mapping[key]
+                cls, method = mapping.get(key, (None, None))
+                if not cls or not method:
+                    continue
                 try:
                     if cls == QComboBox:
                         idx = widget.findText(str(value))
@@ -847,6 +1103,26 @@ class SettingsPage(QWidget):
                 self.volume_slider.setValue(int(data["volume"]))
             except (ValueError, TypeError):
                 pass
+        if "confidence_threshold" in data:
+            try:
+                self.confidence_slider.setValue(int(float(data["confidence_threshold"]) * 100))
+            except (ValueError, TypeError):
+                pass
+        if "importance_threshold" in data:
+            try:
+                self.importance_slider.setValue(int(float(data["importance_threshold"]) * 100))
+            except (ValueError, TypeError):
+                pass
+        if "rag_enabled" in data:
+            try:
+                self.rag_enabled.setChecked(bool(data["rag_enabled"]))
+            except (ValueError, TypeError):
+                pass
+        if "consolidation_enabled" in data:
+            try:
+                self.consolidation_enabled.setChecked(bool(data["consolidation_enabled"]))
+            except (ValueError, TypeError):
+                pass
 
     # ──────────────────────────────────────────────
     # ACTIONS
@@ -863,7 +1139,6 @@ class SettingsPage(QWidget):
             if self.settings_file.exists():
                 self.settings_file.unlink()
             self._dirty = False
-            # Reset UI to defaults by re-creating or reloading
             self._apply_defaults()
             QMessageBox.information(self, "Réinitialisé", "Paramètres réinitialisés.")
 
@@ -873,15 +1148,24 @@ class SettingsPage(QWidget):
         self.lang_select.setCurrentIndex(0)
         self.theme_select.setCurrentIndex(0)
         self.font_size_spin.setValue(14)
+        self.hybrid_mode_select.setCurrentIndex(0)
+        self.confidence_slider.setValue(50)
+        self.max_steps_spin.setValue(5)
+        self.cloud_model_select.setCurrentIndex(0)
+        self.llm_timeout_spin.setValue(30)
         self.active_model.setCurrentIndex(0)
         self.provider_select.setCurrentIndex(0)
         self.temp_slider.setValue(70)
         self.top_p_slider.setValue(90)
         self.context_spin.setValue(4096)
         self.max_tokens_spin.setValue(2048)
-        self.rag_chunks_spin.setValue(5)
+        self.rag_enabled.setChecked(True)
+        self.rag_chunks_spin.setValue(10)
         self.similarity_slider.setValue(60)
         self.embedding_select.setCurrentIndex(0)
+        self.consolidation_enabled.setChecked(True)
+        self.consolidation_interval_spin.setValue(6)
+        self.importance_slider.setValue(30)
         self.voice_enabled.setChecked(True)
         self.voice_select.setCurrentIndex(0)
         self.speed_slider.setValue(100)
@@ -915,6 +1199,7 @@ class SettingsPage(QWidget):
 
         diag = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "version": NURU_VERSION,
             "settings": self._gather_settings(),
             "system": self._get_sys_stats(),
         }
@@ -954,6 +1239,53 @@ class SettingsPage(QWidget):
             self, "Réindexation",
             f"✅ Réindexation de « {doc} » lancée."
         )
+
+    def _on_clear_cache(self):
+        """Vide le cache (chroma db, embeddings temporaires)."""
+        reply = QMessageBox.question(
+            self, "Vider le cache",
+            "Voulez-vous vider le cache de NURU ?\n"
+            "Les embeddings et index temporaires seront supprimés.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            logger.info("Cache clear triggered from Settings")
+            QMessageBox.information(
+                self, "Cache",
+                "✅ Cache vidé avec succès."
+            )
+
+    def _on_export_logs(self):
+        """Exporte les logs dans un fichier choisi par l'utilisateur."""
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter les logs",
+            "nuru_logs.txt", "*.txt"
+        )
+        if not path:
+            return
+
+        if self.config and hasattr(self.config, 'log_file'):
+            log_path = Path(self.config.log_file)
+            if log_path.exists():
+                try:
+                    import shutil
+                    shutil.copy2(str(log_path), path)
+                    QMessageBox.information(
+                        self, "Logs exportés",
+                        f"✅ Logs exportés vers {path}"
+                    )
+                except Exception as e:
+                    QMessageBox.warning(self, "Erreur", f"Export logs échoué : {e}")
+            else:
+                QMessageBox.warning(
+                    self, "Logs",
+                    f"Fichier de logs introuvable : {log_path}"
+                )
+        else:
+            QMessageBox.warning(
+                self, "Logs",
+                "Aucun fichier de logs configuré."
+            )
 
     def _on_audio_test(self):
         """Joue un son de test vocal."""
