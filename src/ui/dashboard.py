@@ -607,6 +607,36 @@ class CyberDashboard(QMainWindow):
 
         self._main_layout.addWidget(self._pages, stretch=1)
 
+        # ── V9 Backends (modules réels) ──
+        self._v9_memory_manager = None
+        self._v9_feedback_collector = None
+        self._v9_orchestrator = None
+
+        try:
+            from src.memory.manager import MemoryManager
+            db_path = Path.home() / ".nuru" / "memory_v9.db"
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._v9_memory_manager = MemoryManager(db_path=str(db_path))
+            logger.info("MemoryManager V9 initialisé")
+        except Exception as e:
+            logger.warning("MemoryManager V9 non disponible: %s", e)
+
+        try:
+            from src.learning.feedback import FeedbackCollector
+            self._v9_feedback_collector = FeedbackCollector()
+            logger.info("FeedbackCollector initialisé")
+        except Exception as e:
+            logger.warning("FeedbackCollector non disponible: %s", e)
+
+        try:
+            from src.agent.orchestrator import AgentOrchestrator
+            self._v9_orchestrator = AgentOrchestrator(
+                memory_manager=self._v9_memory_manager,
+            )
+            logger.info("AgentOrchestrator initialisé")
+        except Exception as e:
+            logger.warning("AgentOrchestrator non disponible: %s", e)
+
         # ── 3. Right Panel — Diagnostic RAG ──
         if RightPanelDiagnostic is not None:
             self._metrics = RightPanelDiagnostic()
@@ -652,6 +682,84 @@ class CyberDashboard(QMainWindow):
         self._metrics_timer.timeout.connect(self._update_metrics)
         self._metrics_timer.start()
 
+        # Timer V9 (mise à jour des pages V9)
+        self._v9_timer = QTimer(self)
+        self._v9_timer.setInterval(5000)  # 5 s
+        self._v9_timer.timeout.connect(self._update_v9_pages)
+        self._v9_timer.start()
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  V9 PAGES — DATA LOADING
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _load_v9_page_data(self, slug: str, page: QWidget) -> None:
+        """Charge les données réelles dans une page V9 au moment de la navigation."""
+        try:
+            if slug == "memory_v9" and self._v9_memory_manager and hasattr(page, "set_data"):
+                data = {
+                    "episodic": [
+                        {"text": h, "timestamp": ""}
+                        for h in (self._v9_memory_manager.get_recent_history() or [])
+                    ],
+                    "semantic": [
+                        {"text": s, "timestamp": ""}
+                        for s in (self._v9_memory_manager.get_full_context().get("semantic", []) if hasattr(self._v9_memory_manager, 'get_full_context') else [])
+                    ],
+                    "user": [
+                        {"key": k, "value": v}
+                        for k, v in self._v9_memory_manager.get_user_profile().items()
+                    ] if isinstance(self._v9_memory_manager.get_user_profile(), dict) else [],
+                    "error": [
+                        {"text": e, "timestamp": ""}
+                        for e in (self._v9_memory_manager.check_errors() or [])
+                    ],
+                }
+                page.set_data(data)
+
+            elif slug == "tasks" and hasattr(page, "set_tasks"):
+                import json
+                import sqlite3 as _sqlite3
+                db_path = Path.home() / ".nuru" / "task_states.db"
+                if db_path.exists():
+                    conn = _sqlite3.connect(str(db_path))
+                    rows = conn.execute(
+                        "SELECT task_id, state, status, created_at FROM task_states ORDER BY created_at DESC LIMIT 20"
+                    ).fetchall()
+                    conn.close()
+                    tasks = []
+                    for r in rows:
+                        try:
+                            state_data = json.loads(r[1]) if r[1] else {}
+                        except Exception:
+                            state_data = {}
+                        tasks.append({
+                            "id": r[0],
+                            "description": state_data.get("current_goal", r[0]),
+                            "status": r[2],
+                            "created": r[3],
+                        })
+                    page.set_tasks(tasks)
+
+            elif slug == "feedback" and self._v9_feedback_collector and hasattr(page, "set_data"):
+                stats = self._v9_feedback_collector.get_stats()
+                recent = self._v9_feedback_collector.get_recent()
+                page.set_data({"stats": stats, "recent": recent})
+
+        except Exception as e:
+            logger.debug("Erreur chargement page V9 %s: %s", slug, e)
+
+    def _update_v9_pages(self) -> None:
+        """Met à jour les pages V9 avec les données réelles (appelé par timer)."""
+        current_widget = self._pages.currentWidget()
+        if current_widget is None:
+            return
+
+        # Identifier la page active
+        for slug, page in self._v9_pages.items():
+            if page is current_widget:
+                self._load_v9_page_data(slug, page)
+                break
+
     # ══════════════════════════════════════════════════════════════════════
     #  STYLES
     # ══════════════════════════════════════════════════════════════════════
@@ -678,9 +786,8 @@ class CyberDashboard(QMainWindow):
         # Pages V9
         if slug in self._v9_pages:
             page = self._v9_pages[slug]
-            # Mettre à jour les données si besoin
-            if slug == "agent" and hasattr(page, "update_state"):
-                pass  # sera appelé par le timer
+            # Charger les données immédiatement
+            self._load_v9_page_data(slug, page)
             self._pages.setCurrentWidget(page)
             return
 
