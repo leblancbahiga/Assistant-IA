@@ -96,6 +96,24 @@ try:
 except ImportError:
     DiagnosticsPage = None
 
+# ── V9 Component imports ────────────────────────────────────────────────
+try:
+    from src.ui.components.agent_status import AgentStatusWidget
+except ImportError:
+    AgentStatusWidget = None
+try:
+    from src.ui.components.memory_explorer import MemoryExplorer
+except ImportError:
+    MemoryExplorer = None
+try:
+    from src.ui.components.feedback_bar import FeedbackBar
+except ImportError:
+    FeedbackBar = None
+try:
+    from src.ui.components.task_list import TaskListWidget
+except ImportError:
+    TaskListWidget = None
+
 
 # ══════════════════════════════════════════════════════════════════════════
 #  CONSTANTES
@@ -116,6 +134,15 @@ NAV_GROUPS = [
             ("📄 Documents", "documents"),
             ("🧠 Mémoire", "memory"),
             ("🌲 Nuru Brain", "nuru_brain"),
+        ],
+    },
+    {
+        "label": "NURU V9",
+        "items": [
+            ("🤖 Agent", "agent"),
+            ("🧠 Mémoire V9", "memory_v9"),
+            ("📋 Tâches", "tasks"),
+            ("💬 Feedback", "feedback"),
         ],
     },
     {
@@ -558,6 +585,26 @@ class CyberDashboard(QMainWindow):
             self._pages.addWidget(page)
             self._placeholder_map[slug] = page
 
+        # ── V9 Pages ──
+        self._v9_pages: dict[str, QWidget] = {}
+        v9_entries = [
+            ("agent",     "Agent",     "Supervision de l'agent ReAct en temps réel", AgentStatusWidget),
+            ("memory_v9", "Mémoire V9", "Explorateur des 6 types de mémoire", MemoryExplorer),
+            ("tasks",     "Tâches",    "Tâches en cours, terminées et interrompues", TaskListWidget),
+            ("feedback",  "Feedback",  "Historique des retours utilisateur", None),
+        ]
+        for slug, title, desc, cls in v9_entries:
+            if cls is not None:
+                try:
+                    page = cls(parent=self)
+                except Exception as e:
+                    logger.warning("Page V9 %s non disponible: %s — fallback placeholder", slug, e)
+                    page = PlaceholderPage(title, desc)
+            else:
+                page = PlaceholderPage(title, desc)
+            self._pages.addWidget(page)
+            self._v9_pages[slug] = page
+
         self._main_layout.addWidget(self._pages, stretch=1)
 
         # ── 3. Right Panel — Diagnostic RAG ──
@@ -628,6 +675,15 @@ class CyberDashboard(QMainWindow):
 
     def _on_page_changed(self, slug: str) -> None:
         """Change la page affichée selon le slug."""
+        # Pages V9
+        if slug in self._v9_pages:
+            page = self._v9_pages[slug]
+            # Mettre à jour les données si besoin
+            if slug == "agent" and hasattr(page, "update_state"):
+                pass  # sera appelé par le timer
+            self._pages.setCurrentWidget(page)
+            return
+
         if slug == "console":
             self._pages.setCurrentIndex(0)
             return

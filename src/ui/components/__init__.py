@@ -12,3 +12,5 @@ from src.ui.components.nuru_widgets import (
     MetricsPanel,
     TypingIndicator,
 )
+from src.ui.components.memory_explorer import MemoryExplorer
+from src.ui.components.task_list import TaskListWidget
