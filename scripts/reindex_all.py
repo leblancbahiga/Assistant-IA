@@ -156,7 +156,14 @@ def read_file_content(fpath: Path) -> str:
         elif suffix == ".docx":
             from docx import Document
             doc = Document(str(fpath))
-            return "\n".join([p.text for p in doc.paragraphs])
+            # V10.1 : extraire aussi le contenu des tables
+            parts = [p.text for p in doc.paragraphs]
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = "\t".join(cell.text for cell in row.cells if cell.text.strip())
+                    if row_text.strip():
+                        parts.append(row_text)
+            return "\n".join(parts)
         elif suffix == ".pptx":
             from pptx import Presentation
             prs = Presentation(str(fpath))
@@ -195,9 +202,20 @@ def read_file_content(fpath: Path) -> str:
 
 
 def chunk_text(text: str, source: str, max_chars: int = CHUNK_MAX_CHARS, overlap: int = CHUNK_OVERLAP) -> list[dict]:
-    """Découpe un texte en chunks avec overlap."""
+    """Découpe un texte en chunks via HierarchicalChunkerV2 (V10.1)."""
     if not text or len(text.strip()) < MIN_CONTENT_CHARS:
         return []
+
+    try:
+        from src.rag.v2_chunking import HierarchicalChunkerV2
+        profile = HierarchicalChunkerV2.detect_profile(source)
+        chunker = HierarchicalChunkerV2(profile=profile)
+        v2_chunks = chunker.chunk(text, source=source, doc_title=source)
+        return [{"content": c.to_dict()["content"], "source": source} for c in v2_chunks]
+    except Exception as e:
+        logger.debug(f"V2 chunker failed, fallback simple: {e}")
+
+    # Fallback : chunking simple ligne par ligne
     chunks = []
     lines = text.split("\n")
     current_chunk = ""
