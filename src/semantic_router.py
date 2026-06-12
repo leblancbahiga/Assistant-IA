@@ -23,17 +23,25 @@ logger = logging.getLogger(__name__)
 # Mots-clés pour le mode "trivial" (conversation simple, pas besoin de RAG)
 TRIVIAL_PATTERNS = {
     # Salutations / remerciements / farewell
-    r"^(bonjour|salut|hello|hi|coucou|hey|yo|merci|thanks|bonsoir|bye|aurevoir|au revoir|à demain|bonne nuit|bonne journée|bon week-end|bonne fin de semaine)\b": "SIMPLE",
-    r"^(oui|non|ok|d'accord|daccord|super|parfait|cool|génial|nickel)\b": "SIMPLE",
+    r"^(bonjour|salut|hello|hi|coucou|hey|yo|merci|thanks|bonsoir|bye|aurevoir|au revoir|à demain|bonne nuit|bonne journée|bonne fin de semaine)\\b": "SIMPLE",
+    r"^(oui|non|ok|d'accord|daccord|super|parfait|cool|génial|nickel)\\b": "SIMPLE",
     # Feedback / sentiment simple
-    r"^(c['' ]?(est|était|etait) (bien|super|génial|nul|pas mal|sympa|intéressant)\b)": "SIMPLE",
-    r"^((je (suis|va|vais) (bien|content|heureux|fatigué|occupé))\b)": "SIMPLE",
+    r"^(c['' ]?(est|était|etait) (bien|super|génial|nul|pas mal|sympa|intéressant)\\b)": "SIMPLE",
+    r"^(je (suis|va|vais) (bien|content|heureux|fatigué|occupé)\\b)": "SIMPLE",
     # Identité (questions sur NURU lui-même)
-    r"^(qui (es-?tu|êtes-?vous|suis-?je))\b": "SIMPLE",
-    r"^((tu es|vous êtes) qui)\b": "SIMPLE",
-    r"^(quelle est ton? (nom|identité|but|mission|rôle|fonction|objectif|créateur|auteur))\b": "SIMPLE",
+    r"^(qui (es-?tu|êtes-?vous|suis-?je))\\b": "SIMPLE",
+    r"^(tu es|vous êtes) qui\\b": "SIMPLE",
+    r"^(quelle est ton? (nom|identité|but|mission|rôle|fonction|objectif|créateur|auteur))\\b": "SIMPLE",
     # Méta (demande de répétition, clarification)
-    r"^((tu peux )?(répéter|répète|expliquer|clarifier|résumer|reformuler))\b": "SIMPLE",
+    r"^(tu peux )?(répéter|répète|expliquer|clarifier|résumer|reformuler)\\b": "SIMPLE",
+    # V10.1 : Maths / calculs / logique / connaissance générale
+    r"(calcul|multipli|additionne|soustrai|divise|racine carrée|pourcentage)": "SIMPLE",
+    r"(\\d+[\\.,]?\\d*\\s*[×x\\*\\/]\\s*\\d+[\\.,]?\\d*)": "SIMPLE",  # 12x12, 12.5×3
+    r"(quel est le résultat|quel résultat|combien.font|que donne)": "SIMPLE",
+    r"(énigme|puzzle|devinette|logique|taux|tasse sans fond)": "SIMPLE",
+    r"(défini|définition|qu'est-ce que|qui est|c'est quoi|signifie)": "SIMPLE",
+    r"(histoire de|explique|décris|compar|différence entre)": "SIMPLE",
+    r"(comment fonctionne|pourquoi|comment)": "SIMPLE",
 }
 
 # Mots-clés pour les requêtes qui nécessitent absolument du RAG (documents personnels)
