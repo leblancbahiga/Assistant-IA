@@ -41,8 +41,8 @@ class Config(BaseSettings):
 
     # ── RAG ──
     rag_k: int = 5
-    rag_score_threshold: float = 0.50
-    rag_score_fallback: float = 0.40
+    rag_score_threshold: float = 0.30  # V10.1: abaissé (audit: 0.50→0.30)
+    rag_score_fallback: float = 0.15   # V10.1: abaissé (audit: 0.40→0.15)
     rag_max_context_tokens: int = 1500
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 

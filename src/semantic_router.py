@@ -77,7 +77,7 @@ TRIVIAL_PATTERNS = {
 }
 
 # ── Seuils RAG (audit §7.1) ───────────────────────────────────────────────
-RAG_SCORE_THRESHOLD = 0.35  # Sous ce score, le RAG n'est PAS considéré comme "trouvé"
+RAG_SCORE_THRESHOLD = 0.15  # Sous ce score, le RAG n'est PAS considéré comme "trouvé" (audit: 0.40→0.15)
 
 
 @dataclass
