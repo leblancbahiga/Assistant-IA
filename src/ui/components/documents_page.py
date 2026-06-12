@@ -294,6 +294,13 @@ class DocumentsPage(QWidget):
 
     # ─────────── LOAD DOCUMENTS ───────────
 
+    def showEvent(self, event):
+        """Charge les documents quand la page devient visible."""
+        super().showEvent(event)
+        if self.rag_engine is not None and hasattr(self, '_loaded'):
+            self.load_documents()
+        self._loaded = True
+
     def load_documents(self):
         """Charge la liste des documents depuis la base RAG et met à jour le tableau."""
         if not self.rag_engine:

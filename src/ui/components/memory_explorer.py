@@ -387,9 +387,9 @@ class MemoryExplorer(QFrame):
 
         if not entries:
             content_label.setText(
-                f"    {TEXT_SECONDARY}Aucune entrée mémoire."
+                "    Aucune entrée mémoire."
                 if not query
-                else f"    {TEXT_SECONDARY}Aucun résultat pour \"{query}\"."
+                else f"    Aucun résultat pour \"{query}\"."
             )
             content_label.setStyleSheet(
                 f"#MemoryContent_{self._current_type} {{ color: {TEXT_SECONDARY}; "

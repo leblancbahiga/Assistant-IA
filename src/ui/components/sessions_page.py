@@ -184,6 +184,13 @@ class SessionsPage(QWidget):
 
     # ──────────────── CHARGEMENT DES SESSIONS ────────────────
 
+    def showEvent(self, event):
+        """Charge les sessions quand la page devient visible."""
+        super().showEvent(event)
+        if self.memory_store is not None and hasattr(self, '_loaded'):
+            self.load_sessions()
+        self._loaded = True
+
     def load_sessions(self):
         """Charge l'historique depuis memory_store et construit des sessions."""
         self._sessions.clear()

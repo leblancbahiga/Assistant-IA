@@ -40,7 +40,7 @@ PANEL_STYLE = f"background-color: {BG_PANEL}; border-radius: 8px; padding: 12px;
 # ── Constantes de mapping d'état ───────────────────────────────────────────
 
 AGENT_STATE_LABELS: dict[str, str] = {
-    "idle": "⚪ Inactif",
+    "idle": "⚪ Prêt — en attente de tâche",
     "planning": "🔵 Planification",
     "executing": "🟢 Exécution",
     "verifying": "🟡 Vérification",
@@ -159,7 +159,7 @@ class AgentStatusWidget(QFrame):
         self._state_icon.setStyleSheet("font-size: 16px;")
         header_layout.addWidget(self._state_icon)
 
-        self._state_label = QLabel("Agent inactif")
+        self._state_label = QLabel("Prêt — en attente de tâche")
         self._state_label.setStyleSheet(
             f"color: {TEXT_PRIMARY}; font-size: 13px; font-weight: bold;"
         )
