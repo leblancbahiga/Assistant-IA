@@ -872,16 +872,19 @@ class CyberDashboard(QMainWindow):
             try:
                 from src.memory_store import MemoryStore
                 memory_store = MemoryStore()
+                logger.info("MemoryStore créé (mode autonome)")
             except Exception as e:
                 logger.warning("MemoryStore non disponible: %s", e)
             try:
                 from src.rag_engine import RAGEngine
                 rag_engine = RAGEngine()
+                logger.info("RAGEngine créé (mode autonome)")
             except Exception as e:
                 logger.warning("RAGEngine non disponible: %s", e)
             try:
                 from src.ingestion import IngestionEngine
                 ingestion = IngestionEngine()
+                logger.info("IngestionEngine créé (mode autonome)")
             except Exception as e:
                 logger.warning("IngestionEngine non disponible: %s", e)
 
