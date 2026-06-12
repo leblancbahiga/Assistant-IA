@@ -22,6 +22,7 @@ import logging
 import os
 import sys
 import time
+import numpy as np
 from pathlib import Path
 from typing import List, Optional
 
@@ -337,19 +338,13 @@ def main():
             continue
 
         # ── Étape B: Embed le lot (batch unique — 1 thread au lieu de N) ──
-        import numpy as np
-
         texts = [c["content"] for c in batch_chunks]
         valid_chunks = []  # V10: initialiser avant le try pour éviter UnboundLocalError
         embed_success = False
 
         def _do_embed(text_subset):
             """Embed un sous-ensemble de textes (évite saturation GPU Metal 4 GB)."""
-            result = embedder.embed(text_subset, is_query=False)
-            if hasattr(result, '__await__'):
-                import asyncio
-                result = asyncio.run(result)
-            return np.array(result)
+            return np.array(embedder.embed_sync(text_subset, is_query=False))
 
         try:
             # V10: Sous-découpage par paquets de 50 chunks max

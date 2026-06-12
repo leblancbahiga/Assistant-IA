@@ -67,7 +67,26 @@ class Embedder:
             text: Le texte ou la liste de textes à encoder.
             is_query: Si True, ajoute le préfixe 'query: '. Sinon 'passage: '.
         """
-        return await asyncio.to_thread(self._embed_sync, text, is_query)
+        return await asyncio.to_thread(self.embed_sync, text, is_query)
+
+    def embed_sync(self, text: Union[str, List[str]], is_query: bool = True) -> np.ndarray:
+        """Version synchrone (sans asyncio) pour scripts sans event loop.
+
+        À utiliser dans les scripts de réindexation où il n'y a pas d'event loop.
+        Compatible avec les appels batch : passe une liste de textes d'un coup.
+        """
+        self._load_model()
+        if isinstance(text, str):
+            texts = [text]
+        else:
+            texts = text
+        prefix = "query: " if is_query else "passage: "
+        prefixed_texts = [prefix + t for t in texts]
+        output = self._mlx_emb.generate(
+            self._model, self._tokenizer, prefixed_texts
+        )
+        embeddings = output.text_embeds if output.text_embeds is not None else output.pooler_output
+        return np.array(embeddings)
 
     def _embed_sync(self, text: Union[str, List[str]], is_query: bool = True) -> np.ndarray:
         """Version synchrone pour exécuter dans un thread séparé."""
