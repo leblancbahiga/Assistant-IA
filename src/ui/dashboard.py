@@ -158,7 +158,7 @@ NAV_GROUPS = [
     {
         "label": "Système",
         "items": [
-            ("📊 V6 System", "v6_system"),
+            ("⚙️ État V10", "v6_system"),
             ("⚙️ Paramètres", "settings"),
             ("📋 Logs", "logs"),
         ],
@@ -596,7 +596,10 @@ class CyberDashboard(QMainWindow):
 
             if cls is not None:
                 try:
-                    page = cls(parent=self)
+                    if slug == "v6_system":
+                        page = cls(config=None, core=self._core, parent=self)
+                    else:
+                        page = cls(parent=self)
                 except Exception as e:
                     logger.warning("Page %s non disponible: %s — fallback placeholder", slug, e)
                     page = PlaceholderPage(title, desc)
