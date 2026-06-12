@@ -535,6 +535,38 @@ class RAGEngine:
             effective_k = max(1, k // 3)
             logger.info(f"RAG V8+ : confiance FAIBLE (score={top1_score:.2f}), top_k réduit à {effective_k}")
 
+        # V10: Vérification de pertinence lexicale — le top résultat contient-il
+        # des mots-clés de la requête ? (évite les faux positifs du scoring e5)
+        query_keywords = set(
+            w.lower() for w in re.findall(r'\w+', query)
+            if w.lower() not in {'de', 'la', 'le', 'les', 'du', 'des', 'un', 'une', 'et', 'ou',
+                                  'est', 'sont', 'dans', 'sur', 'par', 'pour', 'avec', 'que', 'qui',
+                                  'parle', 'moi', 'peux', 'tu', 'je', 'ne', 'pas'}
+        )
+        if query_keywords and ms_results:
+            top_content_lower = ms_results[0].content.lower()
+            top_source_lower = ms_results[0].source.lower()
+            top_text = top_content_lower + " " + top_source_lower
+            keyword_matches = sum(1 for kw in query_keywords if kw in top_text)
+            match_ratio = keyword_matches / len(query_keywords) if query_keywords else 0
+
+            if match_ratio < 0.3 and confidence_label == "MOYENNE":
+                # Top résultat non pertinent → rétrograder en FAIBLE
+                logger.warning(
+                    f"RAG pertinence lexicale: {keyword_matches}/{len(query_keywords)} "
+                    f"mots-clés trouvés dans top1 ({match_ratio:.0%}) → rétrogradation FAIBLE"
+                )
+                confidence_label = "FAIBLE"
+                effective_k = max(1, k // 3)
+
+            # Log de la décision finale
+            logger.info(
+                f"RAG retrieve: top_score={top1_score:.3f}, "
+                f"confiance={confidence_label}, "
+                f"k_effectif={effective_k}, "
+                f"mots-clés={keyword_matches}/{len(query_keywords)}"
+            )
+
         # Convertir SearchResult → tuples (content, source, score) pour post-processing
         combined_results = [(r.content, r.source, r.score) for r in ms_results]
 

@@ -249,6 +249,28 @@ class NuruOrchestrator:
                         f"{len(spotlight_ctx)} chars"
                     )
 
+        # V10: Vider le contexte RAG si les résultats ne sont pas pertinents
+        # (évite que le LLM réponde "je ne trouve pas" sur un contexte inutile)
+        if rag_result and getattr(rag_result, 'confidence_label', 'HAUTE') == 'FAIBLE':
+            # Vérifier si le top résultat contient des mots-clés
+            if rag_context and len(rag_context) < 3000:
+                import re
+                query_words = set(
+                    w.lower() for w in re.findall(r'\w+', query)
+                    if len(w) > 2 and w.lower() not in {
+                        'de', 'la', 'le', 'les', 'du', 'des', 'un', 'une', 'et', 'ou',
+                        'est', 'sont', 'dans', 'sur', 'par', 'pour', 'avec', 'que', 'qui',
+                        'parle', 'moi', 'peux', 'tu', 'je', 'ne', 'pas', 'the', 'a', 'an',
+                    }
+                )
+                if query_words and not any(kw in rag_context.lower() for kw in query_words):
+                    logger.warning(
+                        f"🔇 Contexte RAG vidé: aucun mot-clé trouvé dans {len(rag_context)} chars "
+                        f"(mots-clés: {query_words})"
+                    )
+                    rag_context = ""
+                    result_str = getattr(rag_result, 'confidence_label', '') if rag_result else ''
+
         # ── 5. Fallback Web si RAG vide ──
         rag_context, intent = await self._maybe_web_fallback(
             query, intent, rag_context, rag_result, web_context
