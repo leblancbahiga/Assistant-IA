@@ -29,6 +29,7 @@ from src.document_watcher import DocumentWatcher  # V4.5 : Auto-indexation watch
 from src.core.orchestrator import NuruOrchestrator  # V4.5 : Nouvel orchestrateur
 from src.core.policies import PolicyEngine  # V4.5 : Moteur de politiques
 from src.extraction import PostSessionExtractor  # V4.5 : Extraction post-session
+from src.long_term_memory import LongTermMemory  # V10.1 : Mémoire long terme
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +157,11 @@ class NuruCore:
             system_prompt_builder=self.build_system_prompt,  # V4.5 : callback prompt
         )
         logger.info("🚀 NuruOrchestrator V4.5 initialisé")
+
+        # V10.1 : Long-Term Memory — connecte MemoryStore au pipeline
+        self._ltm = LongTermMemory(self.memory)
+        self.orchestrator.set_long_term_memory(self._ltm)
+        logger.info("🧠 Long-Term Memory câblée")
 
         # V4.5 : Extracteur post-session (profil utilisateur)
         self._extractor = PostSessionExtractor()
