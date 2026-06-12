@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from pathlib import Path
 from typing import AsyncGenerator
 from src.config import config
 from src.rag_engine import RAGEngine, RAGResult
@@ -30,6 +31,7 @@ from src.core.orchestrator import NuruOrchestrator  # V4.5 : Nouvel orchestrateu
 from src.core.policies import PolicyEngine  # V4.5 : Moteur de politiques
 from src.extraction import PostSessionExtractor  # V4.5 : Extraction post-session
 from src.long_term_memory import LongTermMemory  # V10.1 : Mémoire long terme
+from src.memory_bridge import MemoryBridge  # V10.1 : Pont V5+V9
 
 logger = logging.getLogger(__name__)
 
@@ -158,10 +160,12 @@ class NuruCore:
         )
         logger.info("🚀 NuruOrchestrator V4.5 initialisé")
 
-        # V10.1 : Long-Term Memory — connecte MemoryStore au pipeline
-        self._ltm = LongTermMemory(self.memory)
+        # V10.1 : MemoryBridge — connecte V5 + V9 au pipeline
+        v9_db = str(Path.home() / ".nuru" / "memory_v9.db")
+        self._bridge = MemoryBridge(v5_memory_store=self.memory, v9_db_path=v9_db)
+        self._ltm = LongTermMemory(self._bridge)
         self.orchestrator.set_long_term_memory(self._ltm)
-        logger.info("🧠 Long-Term Memory câblée")
+        logger.info("🧠 MemoryBridge + Long-Term Memory câblées")
 
         # V4.5 : Extracteur post-session (profil utilisateur)
         self._extractor = PostSessionExtractor()

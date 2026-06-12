@@ -14,16 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class LongTermMemory:
-    """Adaptateur entre MemoryStore et le pipeline orchestrator."""
+    """Adaptateur entre MemoryBridge (V5+V9) et le pipeline orchestrator."""
 
-    def __init__(self, memory_store):
-        self.memory_store = memory_store
+    def __init__(self, memory_bridge):
+        self.bridge = memory_bridge
 
     async def get_relevant_facts(self, query: str, limit: int = 10) -> list[str]:
-        """Récupère les faits les plus récents (pas de recherche sémantique pour l'instant)."""
+        """Récupère les faits depuis V9 (priorité) ou V5."""
         try:
-            facts = self.memory_store.get_recent_facts(limit=limit)
-            return facts if facts else []
+            facts = self.bridge.get_user_facts(limit=limit)
+            return [f.get("value", "") for f in facts if f.get("value")]
         except Exception as e:
             logger.debug(f"get_relevant_facts error: {e}")
             return []
@@ -42,7 +42,7 @@ class LongTermMemory:
     def store_fact(self, fact_type: str, content: str):
         """Stocke un fait dans la base."""
         try:
-            self.memory_store.add_fact(content, category=fact_type)
+            self.bridge.add_fact("fact", content, category=fact_type)
         except Exception as e:
             logger.debug(f"store_fact error: {e}")
 
