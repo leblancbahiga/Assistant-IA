@@ -97,7 +97,7 @@ class RAGEngine:
                 ).fetchall()
             else:  # fts
                 from src.query_rewriter import STOP_WORDS
-                import re
+                # `re` est importé au niveau module (ligne 7)
                 words = [w for w in re.findall(r'\w{3,}', query.lower()) if w not in STOP_WORDS]
                 if not words:
                     words = re.findall(r'\w{3,}', query.lower())
@@ -559,45 +559,8 @@ class RAGEngine:
             logger.info(f"RAG V8+ : confiance FAIBLE (score={top1_score:.2f}), top_k réduit à {effective_k}")
 
         # ── V10 Audit: Rejeter les résultats clairement non pertinents ──
-        # Si le score est sous RAG_MIN_USABLE_SCORE OU que le top1 ne contient
-        # aucun mot-clé de la requête, on retourne "" pour que le routeur
-        # et le FallbackGuard puissent fonctionner correctement.
-        query_keywords = set(
-            w.lower() for w in re.findall(r'\w+', query)
-            if len(w) > 2 and w.lower() not in {
-                'de', 'la', 'le', 'les', 'du', 'des', 'un', 'une', 'et', 'ou',
-                'est', 'sont', 'dans', 'sur', 'par', 'pour', 'avec', 'que', 'qui',
-                'parle', 'moi', 'peux', 'tu', 'je', 'ne', 'pas', 'the', 'a', 'an',
-            }
-        )
-        should_reject = False
-        rejection_reason = ""
-
-        # Règle 1: Score trop bas
-        if top1_score < RAG_MIN_USABLE_SCORE:
-            should_reject = True
-            rejection_reason = f"score insuffisant ({top1_score:.2f} < {RAG_MIN_USABLE_SCORE})"
-
-        # Règle 2: Aucun mot-clé dans le top résultat (quel que soit le score)
-        # Le score e5 peut être élevé pour un contenu lexicalement hors-sujet
-        if not should_reject and query_keywords:
-            top_text = (ms_results[0].content + " " + ms_results[0].source).lower()
-            keyword_matches = sum(1 for kw in query_keywords if kw in top_text)
-            match_ratio = keyword_matches / len(query_keywords)
-            if match_ratio < 0.3:
-                should_reject = True
-                rejection_reason = (
-                    f"pertinence lexicale insuffisante: "
-                    f"{keyword_matches}/{len(query_keywords)} mots-clés dans top1"
-                )
-
-        if should_reject:
-            logger.warning(f"RAG V10: rejet — {rejection_reason}")
-            result.confidence_label = confidence_label
-            result.rejection_reason = rejection_reason
-            result.diagnostic = {"rejected": True, "reason": rejection_reason}
-            result.retrieval_time_ms = (time.time() - t_start) * 1000
-            return "", result
+        # AVERTISSEMENT: placée APRES Profile Boost (ligne ~620), pas ici.
+        # Les résultats bruts ms_results ne sont pas encore boostés.
 
         # Convertir SearchResult → tuples (content, source, score) pour post-processing
         combined_results = [(r.content, r.source, r.score) for r in ms_results]
@@ -628,6 +591,51 @@ class RAGEngine:
                     seen_contents.add(content)
 
         combined_results = deduped_results
+
+        # ── V10 Audit: Rejeter les résultats après Profile Boost ──
+        # Vérifie QUE le top résultat (après boost) contient des mots-clés
+        # de la requête. Empêche les CV boostés (x2.5) de dominer les résultats.
+        if combined_results:
+            query_keywords = set(
+                w.lower() for w in re.findall(r'\w+', query)
+                if len(w) > 2 and w.lower() not in {
+                    'de', 'la', 'le', 'les', 'du', 'des', 'un', 'une', 'et', 'ou',
+                    'est', 'sont', 'dans', 'sur', 'par', 'pour', 'avec', 'que', 'qui',
+                    'parle', 'moi', 'peux', 'tu', 'je', 'ne', 'pas', 'the', 'a', 'an',
+                }
+            )
+            should_reject = False
+            rejection_reason = ""
+
+            # Règle 1: Score trop bas
+            if top1_score < RAG_MIN_USABLE_SCORE:
+                should_reject = True
+                rejection_reason = f"score insuffisant ({top1_score:.2f} < {RAG_MIN_USABLE_SCORE})"
+
+            # Règle 2: Aucun mot-clé dans le TOP résultat boosté
+            # On scanne les 3 meilleurs résultats pour trouver un chunk pertinent
+            if not should_reject and query_keywords:
+                found_relevant = False
+                for rank, (top_content, top_source, _) in enumerate(combined_results[:3]):
+                    top_text = (top_content + " " + top_source).lower()
+                    keyword_matches = sum(1 for kw in query_keywords if kw in top_text)
+                    if keyword_matches >= max(1, len(query_keywords) * 0.3):
+                        found_relevant = True
+                        break
+                if not found_relevant:
+                    should_reject = True
+                    rejection_reason = (
+                        f"hors-sujet: aucun des 3 premiers chunks ne contient "
+                        f"les mots-clés de la requête"
+                    )
+
+            if should_reject:
+                logger.warning(f"RAG V10: rejet après boost — {rejection_reason}")
+                result.confidence_label = confidence_label
+                result.rejection_reason = rejection_reason
+                result.diagnostic = {"rejected": True, "reason": rejection_reason}
+                result.retrieval_time_ms = (time.time() - t_start) * 1000
+                return "", result
 
         # V4.5 Phase 0 : Reranker CONDITIONNEL
         # N'active le cross-encoder QUE si le score est dans la zone grise
@@ -781,7 +789,7 @@ class RAGEngine:
 
     def bm25_rerank(self, query: str, results: List[Tuple], top_k: int = 5) -> List[Tuple]:
         """BM25 simplifié — Zéro dépendance externe, avec filtrage de stop words et bonus source."""
-        import re
+        # re importé au niveau module (ligne 7)
         STOP_WORDS = {
             # French
             "de", "la", "le", "les", "est", "un", "une", "en", "que", "qui", "dans", "par", "pour", "sur", "avec", "du", "des", 

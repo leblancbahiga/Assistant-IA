@@ -272,7 +272,8 @@ class NuruOrchestrator:
         if rag_result and getattr(rag_result, 'confidence_label', 'HAUTE') == 'FAIBLE' and not spotlight_ctx:
             # Vérifier si le top résultat contient des mots-clés
             if rag_context and len(rag_context) < 3000:
-                import re
+                # V10 Fix: import re retiré du bloc (module-level line 9)
+                # pour eviter UnboundLocalError sur les chemins qui ne passent pas ici
                 query_words = set(
                     w.lower() for w in re.findall(r'\w+', query)
                     if len(w) > 2 and w.lower() not in {
