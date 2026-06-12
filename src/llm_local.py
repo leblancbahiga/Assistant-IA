@@ -24,6 +24,8 @@ class LocalLLM:
         self._last_temperature = 0.7
         # V4.5 : Délégation au ModelManager
         self._model_manager = ModelManager(keep_alive_seconds=300)
+        # V10 Audit: Lock thread-safe pour generate_stream()
+        self._gen_lock = asyncio.Lock()
 
     def _schedule_unload(self):
         """Planifie le déchargement après keep_alive secondes d'inactivité."""
@@ -87,86 +89,89 @@ class LocalLLM:
         On charge d'abord (synchrone, même thread que l'event loop),
         puis on génère dans un thread pool avec son propre cycle load+generate.
         """
-        model_id = self._get_required_model(intent)
+        # V10 Audit: Lock thread-safe — évite les races conditions si deux
+        # coroutines appellent generate_stream() simultanément
+        async with self._gen_lock:
+            model_id = self._get_required_model(intent)
 
-        # Chargement synchrone sur l'event loop thread
-        # (MLX Metal GPU = thread-local, load et generate doivent cohabiter)
-        try:
-            self._load_model(model_id)
-        except Exception as e:
-            logger.error(f"Impossible de charger le modèle {model_id} : {e}")
-            raise
+            # Chargement synchrone sur l'event loop thread
+            # (MLX Metal GPU = thread-local, load et generate doivent cohabiter)
+            try:
+                self._load_model(model_id)
+            except Exception as e:
+                logger.error(f"Impossible de charger le modèle {model_id} : {e}")
+                raise
 
-        try:
-            # Paramètres de sampling
-            if intent == "RAG":
-                is_1_5b = "1.5B" in model_id
-                temp = 0.35 if is_1_5b else 0.1
-                top_p = 1.0
-                rep_penalty = 1.10 if is_1_5b else 1.05
-            elif intent == "SIMPLE":
-                is_1_5b = "1.5B" in model_id
-                temp = 0.7 if is_1_5b else 0.6
-                top_p = 0.90
-                rep_penalty = 1.20 if is_1_5b else 1.05
-            else:
-                temp = 0.4
-                top_p = 0.85
-                rep_penalty = 1.10
+            try:
+                # Paramètres de sampling
+                if intent == "RAG":
+                    is_1_5b = "1.5B" in model_id
+                    temp = 0.35 if is_1_5b else 0.1
+                    top_p = 1.0
+                    rep_penalty = 1.10 if is_1_5b else 1.05
+                elif intent == "SIMPLE":
+                    is_1_5b = "1.5B" in model_id
+                    temp = 0.7 if is_1_5b else 0.6
+                    top_p = 0.90
+                    rep_penalty = 1.20 if is_1_5b else 1.05
+                else:
+                    temp = 0.4
+                    top_p = 0.85
+                    rep_penalty = 1.10
 
-            self._last_temperature = temp
-            sampler = make_sampler(temp=temp, top_p=top_p)
-            logits_processors = [make_repetition_penalty(rep_penalty)]
+                self._last_temperature = temp
+                sampler = make_sampler(temp=temp, top_p=top_p)
+                logits_processors = [make_repetition_penalty(rep_penalty)]
 
-            # apply_chat_template
-            formatted_prompt = prompt
-            if self._tokenizer is not None and hasattr(self._tokenizer, 'apply_chat_template'):
-                try:
-                    has_special_tokens = any(
-                        marker in prompt
-                        for marker in (
-                            '<|assistant|>', '<|im_start|>assistant',
-                            '<|im_end|>', '<|end|>', '<|user|>',
-                            '<|im_start|>user', '<|im_start|>system',
+                # apply_chat_template
+                formatted_prompt = prompt
+                if self._tokenizer is not None and hasattr(self._tokenizer, 'apply_chat_template'):
+                    try:
+                        has_special_tokens = any(
+                            marker in prompt
+                            for marker in (
+                                '<|assistant|>', '<|im_start|>assistant',
+                                '<|im_end|>', '<|end|>', '<|user|>',
+                                '<|im_start|>user', '<|im_start|>system',
+                            )
                         )
-                    )
-                    if not has_special_tokens:
-                        system_markers = [
-                            "Tu es NURU", "Tu es", "Ta mission",
-                            "# PRIORITÉ", "# MODE RAG", "# MODE HYBRIDE",
-                            "## INSTRUCTION STRICTE",
-                        ]
-                        found_system = any(prompt.startswith(m) for m in system_markers)
-                        messages = [{"role": "user", "content": prompt}]
-                        formatted_prompt = self._tokenizer.apply_chat_template(
-                            messages, tokenize=False, add_generation_prompt=True,
-                        )
-                        logger.debug(f"🧩 apply_chat_template ({len(formatted_prompt)} chars)")
-                    else:
-                        logger.debug("🧩 Prompt déjà formaté — skip apply_chat_template")
-                except Exception as e:
-                    logger.debug(f"apply_chat_template ignoré: {e}")
-                    formatted_prompt = prompt
+                        if not has_special_tokens:
+                            system_markers = [
+                                "Tu es NURU", "Tu es", "Ta mission",
+                                "# PRIORITÉ", "# MODE RAG", "# MODE HYBRIDE",
+                                "## INSTRUCTION STRICTE",
+                            ]
+                            found_system = any(prompt.startswith(m) for m in system_markers)
+                            messages = [{"role": "user", "content": prompt}]
+                            formatted_prompt = self._tokenizer.apply_chat_template(
+                                messages, tokenize=False, add_generation_prompt=True,
+                            )
+                            logger.debug(f"🧩 apply_chat_template ({len(formatted_prompt)} chars)")
+                        else:
+                            logger.debug("🧩 Prompt déjà formaté — skip apply_chat_template")
+                    except Exception as e:
+                        logger.debug(f"apply_chat_template ignoré: {e}")
+                        formatted_prompt = prompt
 
-            # stream_generate DOIT tourner sur le même thread que le load
-            # (Metal GPU thread-local). Donc on l'appelle directement ici,
-            # sur l'event loop thread. Le load a déjà été fait juste au-dessus.
-            for response in stream_generate(
-                self._model,
-                self._tokenizer,
-                formatted_prompt,
-                max_tokens=config.rag_max_context_tokens,
-                sampler=sampler,
-                logits_processors=logits_processors,
-            ):
-                yield response.text
-                await asyncio.sleep(0)
+                # stream_generate DOIT tourner sur le même thread que le load
+                # (Metal GPU thread-local). Donc on l'appelle directement ici,
+                # sur l'event loop thread. Le load a déjà été fait juste au-dessus.
+                for response in stream_generate(
+                    self._model,
+                    self._tokenizer,
+                    formatted_prompt,
+                    max_tokens=config.rag_max_context_tokens,
+                    sampler=sampler,
+                    logits_processors=logits_processors,
+                ):
+                    yield response.text
+                    await asyncio.sleep(0)
 
-            self._schedule_unload()
+                self._schedule_unload()
 
-        except Exception as e:
-            logger.error(f"Erreur durant l'inférence MLX : {e}")
-            raise
+            except Exception as e:
+                logger.error(f"Erreur durant l'inférence MLX : {e}")
+                raise
 
     def warmup(self):
         """Charge le modèle approprié silencieusement pour éviter le cold start."""

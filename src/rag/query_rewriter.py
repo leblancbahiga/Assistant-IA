@@ -181,7 +181,7 @@ class CloudQueryRewriter:
         )
 
         try:
-            response = self._cloud.generate(prompt, timeout=5.0)
+            response = self._cloud.generate(prompt, timeout=10.0)
             if not response or not response.strip():
                 logger.debug("Cloud rewrite: réponse vide")
                 return ""

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # ── Constantes ──
 MAX_SOURCES_CHARS = 4000     # ~1000 tokens pour les sources
 MAX_RESPONSE_CHARS = 2000    # ~500 tokens pour la réponse
-VERIFY_TIMEOUT = 5.0         # Timeout appel cloud
+VERIFY_TIMEOUT = 15.0        # V10 Audit: 5s -> 15s (JSON verification prend du temps)
 MAX_RETRIES = 1              # Max régénérations
 
 

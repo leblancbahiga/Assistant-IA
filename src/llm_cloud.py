@@ -23,7 +23,7 @@ class CloudLLM:
         self.model = config.cloud_model
         self.circuit_breaker = CircuitBreakerState()
 
-    def generate(self, prompt: str, timeout: float = 5.0, model: Optional[str] = None) -> str:
+    def generate(self, prompt: str, timeout: float = 30.0, model: Optional[str] = None) -> str:
         """Version synchrone NON-streaming pour expansion rapide de requête (QueryRewriter).
 
         Appel direct à l'API Groq avec timeout court. Supporte aussi les autres providers.
@@ -56,7 +56,7 @@ class CloudLLM:
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
-            "max_tokens": 150,
+            "max_tokens": 500,
             "stream": False,
         }
 
