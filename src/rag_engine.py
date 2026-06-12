@@ -158,8 +158,9 @@ class RAGEngine:
                     f"({ram_free_mb:.0f} MB < {self._rerank_min_ram_mb} MB requis)"
                 )
                 return False
-        except Exception:
-            pass  # Si psutil échoue, on autorise le reranker
+        except Exception as e:
+            logger.warning(f"⚠️ _should_use_reranker: psutil a échoué: {e}")
+            return False
 
         return True
 
@@ -595,7 +596,8 @@ class RAGEngine:
                 for content, source, score in combined_results
             ]
             boosted.sort(key=lambda x: x[2], reverse=True)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"⚠️ Profile boost a échoué (fallback sans boost): {e}")
             boosted = combined_results
 
         for content, source, score in boosted:
@@ -699,7 +701,8 @@ class RAGEngine:
                         meta.structured_json = entry["json_data"]
                         meta_sections.append(format_doc_for_context(meta))
                         injected += 1
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"⚠️ Formatage métadonnées ignoré: {e}")
                         pass
 
                 if meta_sections:
@@ -920,9 +923,13 @@ class RAGEngine:
             
             if parent and parent[0] != chunk_text:
                 return parent[0]
-        except Exception:
-            conn.close()
-        
+        except Exception as e:
+            logger.debug(f"⚠️ _fetch_parent_context: {e}")
+            try:
+                conn.close()
+            except Exception:
+                pass
+
         return chunk_text
     
     def clear_reranker(self, force: bool = False):

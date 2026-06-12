@@ -200,6 +200,9 @@ class NuruOrchestrator:
                 # V10 Audit: première sous-requête = requête principale déjà retrievée
                 if i == 0 and rag_context is not None:
                     rag_ctx, result, web = rag_context, rag_result, ""
+                    # V10 Audit O3: lancer la recherche web pour COMPLEX (même i=0)
+                    if intent == "COMPLEX" and self.web:
+                        web = await self.web.search(sq)
                 else:
                     rag_ctx, result, web = await self._retrieve_context(sq, intent)
                 if rag_ctx:
@@ -265,7 +268,8 @@ class NuruOrchestrator:
 
         # V10: Vider le contexte RAG si les résultats ne sont pas pertinents
         # (évite que le LLM réponde "je ne trouve pas" sur un contexte inutile)
-        if rag_result and getattr(rag_result, 'confidence_label', 'HAUTE') == 'FAIBLE':
+        # Ne PAS vider si Spotlight a contribué du contenu (plus fiable que RAG)
+        if rag_result and getattr(rag_result, 'confidence_label', 'HAUTE') == 'FAIBLE' and not spotlight_ctx:
             # Vérifier si le top résultat contient des mots-clés
             if rag_context and len(rag_context) < 3000:
                 import re
