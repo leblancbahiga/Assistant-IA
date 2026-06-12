@@ -342,21 +342,30 @@ def main():
         texts = [c["content"] for c in batch_chunks]
         valid_chunks = []  # V10: initialiser avant le try pour éviter UnboundLocalError
         embed_success = False
-        try:
-            # V10: UN SEUL appel embedder.embed(texts) au lieu de N appels individuels
-            # Appel synchrone — l'embedder gère le threading interne via asyncio.to_thread
-            result = embedder.embed(texts, is_query=False)
-            # Attendre le résultat (c'est synchrone)
+
+        def _do_embed(text_subset):
+            """Embed un sous-ensemble de textes (évite saturation GPU Metal 4 GB)."""
+            result = embedder.embed(text_subset, is_query=False)
             if hasattr(result, '__await__'):
-                # Si c'est une coroutine (asyncio), on doit l'attendre
                 import asyncio
                 result = asyncio.run(result)
-            embeddings = []
-            for i in range(len(texts)):
-                arr = np.array(result[i] if len(np.array(result).shape) > 1 else result)
-                if len(arr.shape) > 1:
-                    arr = arr.flatten()
-                embeddings.append(arr)
+            return np.array(result)
+
+        try:
+            # V10: Sous-découpage par paquets de 50 chunks max
+            # (évite Metal allocation > 4GB avec chunk_size=500)
+            SUB_BATCH = 50
+            all_embeddings = []
+            for i in range(0, len(texts), SUB_BATCH):
+                subset = texts[i:i + SUB_BATCH]
+                emb = _do_embed(subset)
+                # Normaliser les shapes
+                if len(emb.shape) == 1:
+                    emb = emb.reshape(1, -1)
+                for j in range(len(subset)):
+                    vec = emb[j].flatten()
+                    all_embeddings.append(vec)
+            embeddings = all_embeddings
             for chunk, emb in zip(batch_chunks, embeddings):
                 chunk["embedding"] = emb.tolist()
             valid_chunks = [c for c in batch_chunks if "embedding" in c]
@@ -366,16 +375,17 @@ def main():
             # Forcer GC et réessayer une fois
             gc.collect()
             try:
-                result = embedder.embed(texts, is_query=False)
-                if hasattr(result, '__await__'):
-                    import asyncio
-                    result = asyncio.run(result)
-                embeddings = []
-                for i in range(len(texts)):
-                    arr = np.array(result[i] if len(np.array(result).shape) > 1 else result)
-                    if len(arr.shape) > 1:
-                        arr = arr.flatten()
-                    embeddings.append(arr)
+                SUB_BATCH = 50
+                all_embeddings = []
+                for i in range(0, len(texts), SUB_BATCH):
+                    subset = texts[i:i + SUB_BATCH]
+                    emb = _do_embed(subset)
+                    if len(emb.shape) == 1:
+                        emb = emb.reshape(1, -1)
+                    for j in range(len(subset)):
+                        vec = emb[j].flatten()
+                        all_embeddings.append(vec)
+                embeddings = all_embeddings
                 for chunk, emb in zip(batch_chunks, embeddings):
                     chunk["embedding"] = emb.tolist()
                 valid_chunks = [c for c in batch_chunks if "embedding" in c]
