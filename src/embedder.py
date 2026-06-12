@@ -1,40 +1,58 @@
 import asyncio
 import mlx.core as mx
 import logging
+import threading
 from typing import List, Union
 import numpy as np
 from src.config import config
 
 logger = logging.getLogger(__name__)
 
+
 class Embedder:
-    """Générateur d'embeddings utilisant MLX (lazy import mlx_embeddings)."""
-    
+    """Générateur d'embeddings utilisant MLX (lazy import mlx_embeddings).
+
+    Singleton thread-safe : le modèle n'est chargé qu'une seule fois,
+    même en cas d'appels concurrents via asyncio.to_thread.
+    """
+
     _instance = None
+    _lock = threading.Lock()  # Lock classe pour le Singleton
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(Embedder, cls).__new__(cls)
-            cls._instance._initialized = False
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(Embedder, cls).__new__(cls)
+                    cls._instance._initialized = False
         return cls._instance
 
     def __init__(self):
         if self._initialized:
             return
-            
+
         self.model_id = "mlx-community/multilingual-e5-base-mlx"
         self._model = None
         self._tokenizer = None
+        self._model_lock = threading.Lock()  # Lock pour le lazy loading thread-safe
         self._initialized = True
 
     def _load_model(self):
-        """Chargement Lazy du modèle d'embedding via mlx_embeddings."""
-        if self._model is None:
+        """Chargement Lazy thread-safe du modèle d'embedding.
+
+        Le Lock garantit qu'un seul thread charge le modèle, même
+        si plusieurs appels asyncio.to_thread arrivent simultanément.
+        """
+        if self._model is not None:
+            return
+
+        with self._model_lock:
+            # Double-check : le thread winner a peut-être déjà chargé
+            if self._model is not None:
+                return
             try:
-                # Import différé pour éviter les dépendances lourdes au démarrage
                 import mlx_embeddings
                 self._mlx_emb = mlx_embeddings
-                # On utilise le chemin résolu (local si possible)
                 resolved_path = config.get_model_path(self.model_id)
                 self._model, self._tokenizer = mlx_embeddings.load(resolved_path)
                 logger.info(f"Embedder MLX chargé depuis : {resolved_path}")

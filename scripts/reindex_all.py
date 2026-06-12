@@ -331,16 +331,17 @@ def main():
                 completed_set.add(str(fpath))
             continue
 
-        # ── Étape B: Embed le lot ──
+        # ── Étape B: Embed le lot (batch unique — 1 thread au lieu de N) ──
         import numpy as np
         import asyncio
 
         async def _embed_batch(texts):
-            tasks = [embedder.embed(t) for t in texts]
-            results = await asyncio.gather(*tasks)
+            # V10: UN SEUL appel embedder.embed(texts) au lieu de N appels individuels
+            # MLX gère le batching interne, et ça évite N threads asyncio
+            result = await embedder.embed(texts)
             embeddings = []
-            for r in results:
-                arr = np.array(r)
+            for i in range(len(texts)):
+                arr = np.array(result[i] if len(result.shape) > 1 else result)
                 if len(arr.shape) > 1:
                     arr = arr.flatten()
                 embeddings.append(arr)
