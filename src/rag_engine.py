@@ -2,12 +2,11 @@
 import pysqlite3 as sqlite3
 import sqlite_vec
 import asyncio
-import os
-import json
-import time
 import logging
+import os
 import re
 import json
+import time
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
 from dataclasses import dataclass, field
@@ -235,6 +234,14 @@ class RAGEngine:
                 extracted_at TEXT
             )
         """)
+        # V10 : Table de correspondance source→rowid pour les DELETE sur vec0
+        # (les VIRTUAL TABLE vec0 ne supportent pas DELETE WHERE source=?)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chunk_rowids (
+                source TEXT,
+                rowid INTEGER UNIQUE
+            )
+        """)
         conn.commit()
         conn.close()
 
@@ -334,10 +341,22 @@ class RAGEngine:
             conn.close()
 
     def remove_file_index(self, source_name: str):
-        """Supprime tous les chunks associés à une source."""
+        """Supprime tous les chunks associés à une source.
+
+        V10 : Utilise la table chunk_rowids car vec0 ne supporte pas
+        DELETE FROM chunks WHERE source = ?.
+        """
         conn = self._get_conn()
         try:
-            conn.execute("DELETE FROM chunks WHERE source = ?", (source_name,))
+            # 1. Récupérer les rowid via la table de mapping
+            rows = conn.execute(
+                "SELECT rowid FROM chunk_rowids WHERE source = ?", (source_name,)
+            ).fetchall()
+            for (rowid,) in rows:
+                conn.execute("DELETE FROM chunks WHERE rowid = ?", (rowid,))
+            # 2. Nettoyer la table de mapping
+            conn.execute("DELETE FROM chunk_rowids WHERE source = ?", (source_name,))
+            # 3. Supprimer les entrées FTS
             conn.execute("DELETE FROM chunks_fts WHERE source = ?", (source_name,))
             conn.commit()
         except Exception as e:
@@ -817,6 +836,9 @@ class RAGEngine:
         V6.2 : Avant d'insérer, supprime les anciens chunks de la même source
         pour éviter les doublons. Utilise dedup_source=False pour ajouter
         sans supprimer (usage interne).
+
+        V10 : Utilise la table chunk_rowids car les VIRTUAL TABLE vec0
+        ne supportent pas DELETE WHERE source = ? ni SELECT COUNT(*) FROM chunks WHERE source = ?.
         """
         if not chunks:
             return
@@ -824,24 +846,32 @@ class RAGEngine:
         conn = self._get_conn()
         source_name = chunks[0].get("source", "")
         
-        # V6.2 : Supprimer les anciens chunks de cette source avant d'insérer
-        # pour éviter les doublons cumulatifs
+        # V10 : Supprimer les anciens chunks via la table de mapping rowid
         if dedup_source and source_name:
-            old_count = conn.execute(
-                "SELECT COUNT(*) FROM chunks WHERE source = ?", (source_name,)
-            ).fetchone()[0]
+            old_rows = conn.execute(
+                "SELECT rowid FROM chunk_rowids WHERE source = ?", (source_name,)
+            ).fetchall()
+            old_count = len(old_rows)
             if old_count > 0:
-                conn.execute("DELETE FROM chunks WHERE source = ?", (source_name,))
+                for (rowid,) in old_rows:
+                    conn.execute("DELETE FROM chunks WHERE rowid = ?", (rowid,))
+                conn.execute("DELETE FROM chunk_rowids WHERE source = ?", (source_name,))
                 conn.execute("DELETE FROM chunks_fts WHERE source = ?", (source_name,))
-                logger.info(f"🔄 V6.2 Déduplication : {old_count} anciens chunks de '{source_name}' remplacés")
+                logger.info(f"🔄 V10 Déduplication : {old_count} anciens chunks de '{source_name}' remplacés")
         
         for chunk in chunks:
             # V6.1 : date par défaut = aujourd'hui
             chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
-            # Insertion Vectorielle
-            conn.execute(
+            # Insertion Vectorielle — récupérer le rowid pour le mapping
+            cur = conn.execute(
                 "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
                 [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
+            )
+            # V10 : Stocker la correspondance source → rowid
+            chunk_rowid = cur.lastrowid
+            conn.execute(
+                "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
+                [chunk["source"], chunk_rowid]
             )
             # Insertion FTS
             conn.execute(
@@ -857,6 +887,8 @@ class RAGEngine:
         
         Chaque chunk peut avoir un parent_id. Lors du retrieval, si un enfant
         match, on remonte au parent pour fournir un contexte complet.
+
+        V10 : Stocke les rowid vec0 dans chunk_rowids pour permettre les suppressions.
         """
         conn = self._get_conn()
         
@@ -885,10 +917,16 @@ class RAGEngine:
             
             # V6.1 : date par défaut = aujourd'hui
             chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
-            # Insertion Vectorielle
-            conn.execute(
+            # Insertion Vectorielle — récupérer le rowid pour le mapping
+            cur_vec = conn.execute(
                 "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
                 [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
+            )
+            # V10 : Stocker la correspondance source → rowid
+            chunk_rowid = cur_vec.lastrowid
+            conn.execute(
+                "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
+                [chunk["source"], chunk_rowid]
             )
             # Insertion FTS
             conn.execute(

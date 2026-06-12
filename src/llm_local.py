@@ -76,11 +76,24 @@ class LocalLLM:
             raise
 
     def unload(self):
-        """Déchargement propre pour libérer la RAM Metal."""
-        self._model_manager.unload()
-        self._model = None
-        self._tokenizer = None
-        self._current_model_id = None
+        """Déchargement propre pour libérer la RAM Metal.
+        V10 Audit: ne délègue PAS à ModelManager (qui a sa propre référence),
+        supprime directement la référence locale pour garantir la libération mémoire.
+        """
+        if self._model is not None:
+            logger.info("🧹 Déchargement du modèle local...")
+            del self._model
+            if self._tokenizer is not None:
+                del self._tokenizer
+            self._model = None
+            self._tokenizer = None
+            self._current_model_id = None
+            gc.collect()
+            try:
+                mx.clear_cache()
+            except Exception:
+                pass
+            logger.info("✅ Modèle local déchargé, cache Metal vidé")
 
     async def generate_stream(self, prompt: str, intent: str = "RAG") -> AsyncGenerator[str, None]:
         """Génère une réponse via MLX en streaming.
@@ -107,7 +120,7 @@ class LocalLLM:
                 if intent == "RAG":
                     is_1_5b = "1.5B" in model_id
                     temp = 0.35 if is_1_5b else 0.1
-                    top_p = 1.0
+                    top_p = 0.9
                     rep_penalty = 1.10 if is_1_5b else 1.05
                 elif intent == "SIMPLE":
                     is_1_5b = "1.5B" in model_id

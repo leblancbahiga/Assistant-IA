@@ -43,7 +43,7 @@ class Config(BaseSettings):
     rag_k: int = 5
     rag_score_threshold: float = 0.50
     rag_score_fallback: float = 0.40
-    rag_max_context_tokens: int = 600
+    rag_max_context_tokens: int = 1500
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     # ── Cache ──

@@ -55,8 +55,8 @@ def _crush_timestamps(text: str) -> str:
 def _shrink_urls(text: str) -> str:
     """Tronque les URLs longues (>50 chars)."""
     return re.sub(
-        r'https?://[^\s){}\[\]]{50,}',
-        lambda m: m.group(0)[:55] + '...',
+        r'https?://\S{50,}',
+        lambda m: m.group(0)[:50] + "[...]",
         text,
     )
 

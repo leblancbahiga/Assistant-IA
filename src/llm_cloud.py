@@ -131,8 +131,8 @@ class CloudLLM:
             url = "https://api.groq.com/openai/v1/chat/completions"
             api_key = config.groq_key
         elif provider == "gemini":
-            # Gemini a un format d'URL différent avec la clé dans l'URL
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?key={config.gemini_key}"
+            # Gemini: endpoint OpenAI-compatible pour streaming SSE standard
+            url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
             api_key = config.gemini_key
         elif provider == "deepseek":
             url = "https://api.deepseek.com/v1/chat/completions"
@@ -146,36 +146,8 @@ class CloudLLM:
         if not api_key:
             raise ValueError(f"Clé API manquante pour {provider}")
             
-        if provider == "gemini":
-            # Payload spécifique pour Gemini
-            payload = {
-                "contents": [
-                    {"role": "user", "parts": [{"text": f"{system_prompt}\n\n{prompt}" if system_prompt else prompt}]}
-                ],
-                "generationConfig": {
-                    "temperature": 0.7,
-                    "maxOutputTokens": 1000
-                }
-            }
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                async with client.stream("POST", url, json=payload) as response:
-                    if response.status_code != 200:
-                        error_text = await response.aread()
-                        raise Exception(f"Gemini Error {response.status_code}: {error_text.decode()}")
-                    
-                    async for line in response.aiter_lines():
-                        if not line.strip(): continue
-                        try:
-                            # Gemini renvoie des morceaux de JSON dans une liste [...]
-                            # Pour le streaming simple, on va parser ligne par ligne
-                            if line.startswith("  "): # Indentation du JSON
-                                data = json.loads(line.strip().rstrip(","))
-                                if "candidates" in data:
-                                    yield data["candidates"][0]["content"]["parts"][0]["text"]
-                        except: continue
-            return
 
-        # OpenAI-Compatible providers (Groq, Deepseek, OpenRouter)
+        # OpenAI-Compatible providers (Groq, Deepseek, OpenRouter, Gemini)
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
