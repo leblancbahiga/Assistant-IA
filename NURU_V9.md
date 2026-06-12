@@ -1652,3 +1652,13 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 - ✅ `rag_engine.py` importe sans erreur
 - ✅ Dashboard instancie et navigation V10 fonctionnelle
 - ✅ Pages sessions, documents, memory, diagnostics = vraies classes, pas des placeholders
+
+### V10.1c — 2026-06-12 « Liens morts »
+
+**Corrections :**
+- MemoryExplorer: #8B949E fuyait dans le texte du label (TEXT_SECONDARY injecte via f-string)
+- SessionsPage: showEvent recharge les sessions a la navigation
+- DocumentsPage: showEvent recharge les documents a la navigation
+- AgentStatusWidget: Inactif -> Pret - en attente de tache
+
+**Commits :** 48c038c
