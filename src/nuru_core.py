@@ -237,7 +237,13 @@ est la source principale. Applique les règles du MODE RAG STRICT ci-dessus.""".
 # MODE RECHERCHE WEB
 Le contexte ci-dessous contient des résultats de recherche Web. Applique le MODE HYBRIDE :
 utilise les résultats Web en priorité, complète avec tes connaissances si nécessaire.""".strip())
-        else: # SIMPLE (greetings, chit-chat, small tasks)
+        elif intent == "GENERAL":
+            # V10.1 : Connaissances générales — réponse libre, pas de RAG
+            parts.append("""
+# MODE CONNAISSANCES GÉNÉRALES
+Tu réponds avec tes connaissances internes. Pas de documents à référencer.
+Si tu n'es pas certain de la réponse, indique-le honnêtement.""".strip())
+        else: # SIMPLE (greetings, chit-chat)
             parts.append("""
 # MODE CONVERSATION
 Réponds de manière naturelle et chaleureuse. Les règles sur les sources et le RAG

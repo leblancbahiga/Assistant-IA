@@ -555,8 +555,15 @@ class NuruOrchestrator:
     # ─── Privées ───
 
     def _route_to_intent(self, decision: str) -> str:
-        return {"LOCAL_RAG": "RAG", "CLOUD_GROQ": "COMPLEX", "WEB": "COMPLEX",
-                "CLARIFICATION": "SIMPLE", "SIMPLE": "SIMPLE"}.get(decision, "SIMPLE")
+        return {
+            "LOCAL_RAG": "RAG",
+            "DOCUMENT_KEYWORD": "RAG",
+            "GENERAL_KNOWLEDGE": "GENERAL",
+            "CLOUD_GROQ": "COMPLEX",
+            "WEB": "COMPLEX",
+            "CLARIFICATION": "SIMPLE",
+            "SIMPLE": "SIMPLE",
+        }.get(decision, "GENERAL")  # défaut sûr = connaissances générales
 
     # NURU V5 : Vérification réseau réelle (remplace is_online toujours True)
     async def _check_connectivity(self) -> bool:
@@ -583,6 +590,7 @@ class NuruOrchestrator:
     async def _retrieve_context(self, query: str, intent: str) -> tuple:
         rag_context, rag_result, web_context = "", None, ""
         tasks = []
+        # V10.1 : GENERAL ne déclenche AUCUN appel RAG/web (audit §7.2)
         if intent in ("RAG", "COMPLEX"):
             tasks.append(self.rag_engine.retrieve(query))
         if intent == "COMPLEX" and self.web:
@@ -655,7 +663,6 @@ class NuruOrchestrator:
 
         if intent == "COMPLEX":
             full_prompt += f"\n## QUESTION À TRAITER :\n{query}"
-            # V10 Correction BUG #3: Ajouter instruction d'utilisation du contexte pour Cloud
             if full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
                 full_prompt += (
                     f"\n\n## INSTRUCTION — CONTEXTE DISPONIBLE\n"
@@ -665,6 +672,13 @@ class NuruOrchestrator:
                     f"- Complète avec tes connaissances si nécessaire.\n"
                     f"- Cite les sources quand tu utilises le contexte.\n"
                 )
+        elif intent == "GENERAL":
+            # V10.1 : Connaissances générales — aucune instruction RAG stricte
+            full_prompt += (
+                f"\n\n## QUESTION (connaissances générales)\n"
+                f"Réponds avec tes connaissances. Si tu n'es pas certain, dis-le.\n\n"
+                f"{query}<|end|>\n<|assistant|>\n"
+            )
         elif intent == "RAG" and full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
             full_prompt += (
                 f"\n\n## INSTRUCTION STRICTE — RAG UNIQUEMENT\n"
