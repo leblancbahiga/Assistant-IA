@@ -343,25 +343,45 @@ class RAGEngine:
     def remove_file_index(self, source_name: str):
         """Supprime tous les chunks associés à une source.
 
-        V10 : Utilise la table chunk_rowids car vec0 ne supporte pas
-        DELETE FROM chunks WHERE source = ?.
+        V10.1 : timeout 30s + BEGIN IMMEDIATE + retry pour éviter
+        "database is locked" quand le dashboard maintient une connexion.
         """
-        conn = self._get_conn()
-        try:
-            # 1. Récupérer les rowid via la table de mapping
-            rows = conn.execute(
-                "SELECT rowid FROM chunk_rowids WHERE source = ?", (source_name,)
-            ).fetchall()
-            for (rowid,) in rows:
-                conn.execute("DELETE FROM chunks WHERE rowid = ?", (rowid,))
-            # 2. Nettoyer la table de mapping
-            conn.execute("DELETE FROM chunk_rowids WHERE source = ?", (source_name,))
-            # 3. Supprimer les entrées FTS
-            conn.execute("DELETE FROM chunks_fts WHERE source = ?", (source_name,))
-            conn.commit()
-        except Exception as e:
-            logger.warning(f"Impossible de supprimer l'ancien index pour {source_name}: {e}")
-        conn.close()
+        for attempt in range(3):
+            conn = sqlite3.connect(str(self.db_path), timeout=30)
+            try:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA busy_timeout=30000")
+                conn.execute("BEGIN IMMEDIATE")
+                # 1. Récupérer les rowid via la table de mapping
+                rows = conn.execute(
+                    "SELECT rowid FROM chunk_rowids WHERE source = ?", (source_name,)
+                ).fetchall()
+                for (rowid,) in rows:
+                    conn.execute("DELETE FROM chunks WHERE rowid = ?", (rowid,))
+                # 2. Nettoyer la table de mapping
+                conn.execute("DELETE FROM chunk_rowids WHERE source = ?", (source_name,))
+                # 3. Supprimer les entrées FTS
+                try:
+                    conn.execute("DELETE FROM chunks_fts WHERE source = ?", (source_name,))
+                except Exception:
+                    pass  # table peut ne pas exister
+                conn.execute("COMMIT")
+                logger.info(f"Supprimé {len(rows)} chunks pour {source_name}")
+                return True
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e).lower() and attempt < 2:
+                    import time
+                    logger.warning(f"DB verrouillée (tentative {attempt+1}), retry...")
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                logger.warning(f"Erreur suppression {source_name}: {e}")
+                return False
+            except Exception as e:
+                logger.warning(f"Erreur suppression {source_name}: {e}")
+                return False
+            finally:
+                conn.close()
+        return False
 
     # ════════════════════════════════════════════
     # V6 : CV Structuré (extraction LLM directe)
