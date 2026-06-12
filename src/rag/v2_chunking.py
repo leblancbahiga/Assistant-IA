@@ -17,15 +17,14 @@ logger = logging.getLogger(__name__)
 
 # ── Profils de chunking ──
 PROFILES = {
-    "cv": {"max_section": 6000, "min_chunk": 500, "overlap": 200},
     "rapport": {"max_section": 4000, "min_chunk": 80, "overlap": 100},
     "note": {"max_section": 2000, "min_chunk": 60, "overlap": 50},
 }
 
-# Par défaut (profil CV — le plus permissif pour les données denses)
-MAX_SECTION_CHARS = 6000
-MIN_CHUNK_CHARS = 500
-OVERLAP_CHARS = 200
+# Par défaut (profil rapport)
+MAX_SECTION_CHARS = 4000
+MIN_CHUNK_CHARS = 80
+OVERLAP_CHARS = 100
 
 # Si le texte fait moins de cette taille, on ne chunk pas du tout
 SHORT_DOC_THRESHOLD = 2000  # ~500 tokens — V6.2 : abaissé pour chunker les docs courts
@@ -95,8 +94,8 @@ class ChunkV2:
 class HierarchicalChunkerV2:
     """Chunker hiérarchique avec profils par type de document."""
 
-    def __init__(self, profile: str = "cv"):
-        p = PROFILES.get(profile, PROFILES["cv"])
+    def __init__(self, profile: str = "rapport"):
+        p = PROFILES.get(profile, PROFILES["rapport"])
         self.max_section_chars = p["max_section"]
         self.min_chunk_chars = p["min_chunk"]
         self.overlap_chars = p["overlap"]
@@ -104,10 +103,10 @@ class HierarchicalChunkerV2:
     @staticmethod
     def detect_profile(filename: str) -> str:
         """Détecte le profil de chunking adapté au fichier."""
-        if CV_PATTERNS.search(filename):
-            return "cv"
         if RAPPORT_PATTERNS.search(filename):
             return "rapport"
+        if CV_PATTERNS.search(filename):
+            return "rapport"  # CV = rapport-like (sections courtes, contenu dense)
         return "note"
 
     def chunk(self, text: str, source: str = "",
