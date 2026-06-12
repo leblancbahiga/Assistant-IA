@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 # ── Profils de chunking ──
 PROFILES = {
     "cv": {"max_section": 6000, "min_chunk": 500, "overlap": 200},
-    "rapport": {"max_section": 4000, "min_chunk": 300, "overlap": 100},
-    "note": {"max_section": 2000, "min_chunk": 150, "overlap": 50},
+    "rapport": {"max_section": 4000, "min_chunk": 80, "overlap": 100},
+    "note": {"max_section": 2000, "min_chunk": 60, "overlap": 50},
 }
 
 # Par défaut (profil CV — le plus permissif pour les données denses)

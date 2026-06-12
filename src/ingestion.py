@@ -43,7 +43,14 @@ class IngestionEngine:
                         text = ocr_text
             elif ext == ".docx":
                 doc = Document(str(path))
-                text = "\n".join([p.text for p in doc.paragraphs])
+                # V10.1 : extraire aussi le contenu des tables
+                parts = [p.text for p in doc.paragraphs]
+                for table in doc.tables:
+                    for row in table.rows:
+                        row_text = "\t".join(cell.text for cell in row.cells if cell.text.strip())
+                        if row_text.strip():
+                            parts.append(row_text)
+                text = "\n".join(parts)
             elif ext in [".txt", ".md"]:
                 with open(path, "r", encoding="utf-8") as f:
                     text = f.read()
@@ -102,7 +109,11 @@ class IngestionEngine:
 
                 # NURU V6 : Chunking hiérarchique V2 (plus robuste, chunks plus gros)
                 from src.rag.v2_chunking import HierarchicalChunkerV2
-                v2_chunker = HierarchicalChunkerV2()
+                # V10.1 : detecter le profil adapte au fichier
+                profile = HierarchicalChunkerV2.detect_profile(
+                    os.path.basename(filepath)
+                )
+                v2_chunker = HierarchicalChunkerV2(profile=profile)
                 v2_chunks = v2_chunker.chunk(
                     text,
                     source=os.path.basename(filepath),
