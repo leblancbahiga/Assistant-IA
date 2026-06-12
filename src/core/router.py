@@ -1,6 +1,7 @@
 """Router — Wrapper V4.5 autour de SemanticRouter avec PolicyEngine et stratégies hybrides."""
 import enum
 import logging
+from typing import Optional
 from src.semantic_router import SemanticRouter, RouterResult
 from src.core.policies import PolicyEngine
 from src.core.query_context import QueryContext
@@ -50,13 +51,16 @@ class Router(SemanticRouter):
         self.policy_engine = policy_engine or PolicyEngine()
         self.hybrid_strategy = HybridStrategy.from_config(hybrid_mode)
 
-    async def route_with_context(self, ctx: QueryContext) -> RouterResult:
+    async def route_with_context(self, ctx: QueryContext, rag_context: Optional[str] = None,
+                                  rag_result=None) -> RouterResult:
         """Route en utilisant un QueryContext pour les décisions RAM-dépendantes.
 
         Ajoute les informations de stratégie hybride dans le résultat.
         V10 : Spotlight contourne l'escalade RAM (pas de LLM, léger).
+        V10 Audit: Accepte un rag_context/rag_result pré-calculé pour éviter
+        le double appel retrieve().
         """
-        result = await self.route(ctx.query)
+        result = await self.route(ctx.query, rag_context=rag_context, rag_result=rag_result)
 
         # V10 : Spotlight ne déclenche JAMAIS l'escalade Cloud
         # (Spotlight = mdfind, pas de LLM, pas de RAM nécessaire)

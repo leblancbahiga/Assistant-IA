@@ -104,7 +104,9 @@ class SemanticRouter:
         """Injecte le moteur RAG après construction (injection de dépendances)."""
         self.rag_engine = rag_engine
     
-    async def route(self, user_query: str, context: Optional[Dict] = None) -> RouterResult:
+    async def route(self, user_query: str, context: Optional[Dict] = None,
+                     rag_context: Optional[str] = None,
+                     rag_result=None) -> RouterResult:
         """
         Route une requête utilisateur vers le bon modèle de réponse.
         
@@ -167,25 +169,35 @@ class SemanticRouter:
         # ====================================
         # NIVEAU 3 : RAG D'ABORD (toujours — plus de mots-clés codés en dur)
         # ====================================
-        if self.rag_engine is not None:
+        # V10 Audit: Si un rag_context/rag_result est déjà fourni par
+        # l'orchestrateur (single retrieve), on l'utilise sans refaire l'appel.
+        if rag_result is not None:
+            rag_context_local = rag_context
+            rag_result_local = rag_result
+        elif self.rag_engine is not None:
             try:
-                rag_context, rag_result = await self.rag_engine.retrieve(user_query)
-                result.rag_top_score = rag_result.top_score
-                
-                if rag_context and rag_result.top_score > 0.2:
-                    # RAG trouvé → on utilise
-                    result.decision = "LOCAL_RAG"
-                    result.confidence = rag_result.top_score
-                    result.reasoning = f"RAG trouvé (top1={rag_result.top_score:.2f})"
-                    result.processing_time_ms = (time.time() - t_start) * 1000
-                    logger.info(f"🧠 Router N3 → LOCAL_RAG (top1={rag_result.top_score:.2f})")
-                    self._cache.set(cache_key, result)
-                    return result
-                else:
-                    # RAG pas de résultat → on continue vers Spotlight/Cloud
-                    logger.debug(f"🧠 Router N3: RAG insuffisant (score={rag_result.top_score:.2f})")
+                rag_context_local, rag_result_local = await self.rag_engine.retrieve(user_query)
             except Exception as e:
                 logger.error(f"🧠 Router N3: Erreur RAG: {e}")
+                rag_context_local, rag_result_local = "", None
+        else:
+            rag_context_local, rag_result_local = "", None
+
+        if rag_result_local is not None:
+            result.rag_top_score = rag_result_local.top_score
+
+            if rag_context_local and rag_result_local.top_score > 0.2:
+                # RAG trouvé → on utilise
+                result.decision = "LOCAL_RAG"
+                result.confidence = rag_result_local.top_score
+                result.reasoning = f"RAG trouvé (top1={rag_result_local.top_score:.2f})"
+                result.processing_time_ms = (time.time() - t_start) * 1000
+                logger.info(f"🧠 Router N3 → LOCAL_RAG (top1={rag_result_local.top_score:.2f})")
+                self._cache.set(cache_key, result)
+                return result
+            else:
+                # RAG pas de résultat → on continue vers Spotlight/Cloud
+                logger.debug(f"🧠 Router N3: RAG insuffisant (score={rag_result_local.top_score:.2f})")
         
         # ====================================
         # NIVEAU 4 : SPOTLIGHT (tous les fichiers + LECTURE du contenu)

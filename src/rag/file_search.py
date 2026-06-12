@@ -32,7 +32,10 @@ DOC_DIRS = [
 # Exclusion V8+ : Nuru_Brain — les exports markdown de l'index RAG
 # ne doivent pas être rescannés (boucle d'écho sémantique)
 EXCLUDE_DIRS = [
-    os.path.expanduser("~/Nuru_Brain"),
+    # V10 Audit: ~/Nuru_Brain n'est plus exclu — l'utilisateur peut y stocker
+    # des documents. On garde ~/Nuru_Brain/sources pour éviter les boucles
+    # d'écho sémantique avec les exports markdown de l'index RAG.
+    # os.path.expanduser("~/Nuru_Brain"),  # ← retiré
     os.path.expanduser("~/Nuru_Brain/sources"),
 ]
 

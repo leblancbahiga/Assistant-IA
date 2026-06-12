@@ -135,8 +135,17 @@ class NuruOrchestrator:
             )
         await self.event_bus.emit("query.received", {"query": query})
 
-        # ── 2. Routage avec PolicyEngine (NURU V5) ──
-        route_result = await self.router.route_with_context(ctx)
+        # ── 2. RAG retrieval (UNE SEULE FOIS — partagé entre routeur et contexte) ──
+        # V10 Audit: retrieve() est appelé UNE SEULE fois, avant le routage.
+        # Le résultat est passé au routeur (évite N3 duplicate) et réutilisé
+        # pour la construction du prompt.
+        rag_context, rag_result = "", None
+        # Toujours retrieve : si la requête est triviale, le Score Gate
+        # retourne "" rapidement sans coût excessif.
+        rag_context, rag_result = await self.rag_engine.retrieve(query)
+        self.last_rag_result = rag_result
+
+        route_result = await self.router.route_with_context(ctx, rag_context=rag_context, rag_result=rag_result)
         hybrid_strategy = getattr(route_result, 'hybrid_strategy', 'local_only')
         ctx = ctx.with_route(route_result.decision, hybrid_strategy=hybrid_strategy)
         intent = self._route_to_intent(route_result.decision)
@@ -188,7 +197,11 @@ class NuruOrchestrator:
             web_contexts: list[str] = []
 
             for i, sq in enumerate(sub_queries):
-                rag_ctx, result, web = await self._retrieve_context(sq, intent)
+                # V10 Audit: première sous-requête = requête principale déjà retrievée
+                if i == 0 and rag_context is not None:
+                    rag_ctx, result, web = rag_context, rag_result, ""
+                else:
+                    rag_ctx, result, web = await self._retrieve_context(sq, intent)
                 if rag_ctx:
                     rag_contexts.append(rag_ctx)
                 if result and merged_result is None:
@@ -200,7 +213,8 @@ class NuruOrchestrator:
             web_context = "\n".join(web_contexts) if web_contexts else ""
             rag_result = merged_result
         else:
-            rag_context, rag_result, web_context = await self._retrieve_context(query, intent)
+            # SIMPLE/CLARIFICATION — pas de RAG, mais le retrieve() est déjà fait
+            web_context = ""
 
         # NURU V6 : TokenJuice — compression du contexte RAG et web avant construction prompt
         if rag_context:

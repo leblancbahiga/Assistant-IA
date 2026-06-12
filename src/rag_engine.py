@@ -109,7 +109,8 @@ class RAGEngine:
                     [fts_q]
                 ).fetchall()
             return [(r[0], r[1], float(r[2])) for r in rows]
-        except Exception:
+        except Exception as e:
+            logger.warning(f"⚠️ _ms_vector_search({search_type}) a échoué: {e}")
             return []
         finally:
             conn.close()
@@ -130,7 +131,8 @@ class RAGEngine:
                 [serialized, top_k]
             ).fetchall()
             return [(r[0], r[1], float(r[2])) for r in rows if r[0] and r[2] > 0]
-        except Exception:
+        except Exception as e:
+            logger.warning(f"⚠️ _ms_vector_search_vec a échoué (top_k={top_k}): {e}")
             return []
         finally:
             conn.close()
