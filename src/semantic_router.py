@@ -20,6 +20,15 @@ from src.infra.cache import TTLDecisionCache
 
 logger = logging.getLogger(__name__)
 
+# ── Prompt de classification LLM (V10.1) ─────────────────────────────────
+CLASSIFY_PROMPT = """Classe cette requête en UN seul mot parmi ces catégories :
+- SIMPLE : calcul, logique, définition, culture générale, conversation, opinion, conseil
+- RAG : demande spécifique sur un document personnel, CV, rapport, projet, fichier
+- WEB : information temps réel, actualité, prix, météo, personne publique en poste
+
+Requête : "{query}"
+Réponse (un seul mot) :"""
+
 # Mots-clés pour le mode "trivial" (conversation simple, pas besoin de RAG)
 TRIVIAL_PATTERNS = {
     # Salutations / remerciements / farewell
@@ -88,13 +97,15 @@ class SemanticRouter:
     Routeur sémantique 4 niveaux conçu pour M1 8 Go.
     
     Niveau 1 - Trivial Check : patterns regex (0 Mo RAM, < 1 ms)
-    Niveau 2 - RAG Confidence : embedding + search + reranker score
-    Niveau 3 - Cloud Fallback : si RAG insuffisant mais internet disponible
-    Niveau 4 - Clarification : si rien n'est trouvé
+    Niveau 2 - LLM Classification : compréhension sémantique via Groq (~100 ms)
+    Niveau 3 - RAG : recherche dans l'index local
+    Niveau 4 - Cloud Fallback : si rien trouvé
+    Niveau 5 - Clarification : si hors ligne
     """
     
-    def __init__(self, rag_engine=None, is_online_check=None):
+    def __init__(self, rag_engine=None, is_online_check=None, cloud_llm=None):
         self.rag_engine = rag_engine
+        self.cloud_llm = cloud_llm  # V10.1 : pour classification LLM
         self.is_online = is_online_check or (lambda: True)
         # V4.5 Phase 0 : Cache TTL enfin actif (256 entrées, TTL 5 min)
         self._cache = TTLDecisionCache(maxsize=256, ttl_seconds=300)
@@ -152,69 +163,76 @@ class SemanticRouter:
                 return result
         
         # ====================================
-        # NIVEAU 2 : WEB TRIGGER (Actualité — pas de RAG inutile)
-        # V10 : Seules les requêtes PUREMENT d'actualité vont au web
-        # Si la requête contient un nom de document/projet → aller au RAG d'abord
+        # NIVEAU 2 : RAG KEYWORDS (instantané)
         # ====================================
-        web_pattern = re.compile(r'\\b(' + '|'.join(map(re.escape, WEB_TRIGGERS)) + r')\\b', re.IGNORECASE)
-        has_web_trigger = bool(web_pattern.search(query_lower))
-        
-        # Vérifier si la requête contient des termes documentaires
         doc_indicators = ['beaccom', 'yarid', 'rikolto', 'rapport', 'cv', 'document', 
                          'fichier', 'projet', 'étude', 'proposition', 'contrat', 'facture']
         has_doc_term = any(term in query_lower for term in doc_indicators)
         
-        # Si web trigger MAIS pas de terme documentaire ET requête courte → Cloud
-        if has_web_trigger and not has_doc_term and len(query_lower.split()) <= 6:
-            result.decision = "CLOUD_GROQ"
-            result.confidence = 0.8
-            result.reasoning = f"Web trigger détecté (requête courte, actualité pure)"
+        if has_doc_term:
+            result.decision = "LOCAL_RAG"
+            result.confidence = 0.9
+            result.reasoning = "Document keyword match"
             result.processing_time_ms = (time.time() - t_start) * 1000
-            logger.info(f"🧠 Router N2 (Web Trigger) → CLOUD_GROQ: {query_lower[:50]}")
             self._cache.set(cache_key, result)
             return result
         
         # ====================================
-        # NIVEAU 3 : RAG D'ABORD (toujours — plus de mots-clés codés en dur)
+        # NIVEAU 3 : LLM CLASSIFICATION (~100ms via Groq)
+        # V10.1 : Le LLM comprend le sens de la requête
         # ====================================
-        # V10 Audit: Si un rag_context/rag_result est déjà fourni par
-        # l'orchestrateur (single retrieve), on l'utilise sans refaire l'appel.
-        if rag_result is not None:
-            rag_context_local = rag_context
-            rag_result_local = rag_result
-        elif self.rag_engine is not None:
+        if self.cloud_llm and self.is_online():
             try:
-                rag_context_local, rag_result_local = await self.rag_engine.retrieve(user_query)
-            except Exception as e:
-                logger.error(f"🧠 Router N3: Erreur RAG: {e}")
-                rag_context_local, rag_result_local = "", None
-        else:
-            rag_context_local, rag_result_local = "", None
-
-        if rag_result_local is not None:
-            result.rag_top_score = rag_result_local.top_score
-
-            if rag_context_local and rag_result_local.top_score > 0.2:
-                # RAG trouvé → on utilise
-                result.decision = "LOCAL_RAG"
-                result.confidence = rag_result_local.top_score
-                result.reasoning = f"RAG trouvé (top1={rag_result_local.top_score:.2f})"
+                intent = await self._classify_with_llm(user_query)
+                logger.info(f"🧠 Router N3 (LLM) → {intent}: {query_lower[:50]}")
+                
+                if intent == "RAG":
+                    # LLM dit RAG → essayer le RAG local
+                    if rag_result is not None:
+                        rag_context_local, rag_result_local = rag_context, rag_result
+                    elif self.rag_engine is not None:
+                        try:
+                            rag_context_local, rag_result_local = await self.rag_engine.retrieve(user_query)
+                        except Exception:
+                            rag_context_local, rag_result_local = "", None
+                    else:
+                        rag_context_local, rag_result_local = "", None
+                    
+                    if rag_result_local and rag_result_local.top_score > 0.3:
+                        result.decision = "LOCAL_RAG"
+                        result.confidence = rag_result_local.top_score
+                        result.rag_top_score = rag_result_local.top_score
+                        result.reasoning = f"LLM→RAG, score={rag_result_local.top_score:.2f}"
+                    else:
+                        # LLM dit RAG mais score faible → cloud quand même
+                        result.decision = "CLOUD_GROQ"
+                        result.confidence = 0.5
+                        result.reasoning = f"LLM→RAG mais score faible ({getattr(rag_result_local, 'top_score', 0):.2f})"
+                
+                elif intent == "WEB":
+                    result.decision = "CLOUD_GROQ"
+                    result.confidence = 0.8
+                    result.reasoning = "LLM→WEB (actualité)"
+                
+                else:  # SIMPLE
+                    result.decision = "CLOUD_GROQ"
+                    result.confidence = 0.7
+                    result.reasoning = f"LLM→{intent} (réponse générale)"
+                
                 result.processing_time_ms = (time.time() - t_start) * 1000
-                logger.info(f"🧠 Router N3 → LOCAL_RAG (top1={rag_result_local.top_score:.2f})")
                 self._cache.set(cache_key, result)
                 return result
-            else:
-                # RAG pas de résultat → on continue vers Spotlight/Cloud
-                logger.debug(f"🧠 Router N3: RAG insuffisant (score={rag_result_local.top_score:.2f})")
+                
+            except Exception as e:
+                logger.warning(f"🧠 Router N3: LLM classify failed: {e}")
         
         # ====================================
-        # NIVEAU 4 : SPOTLIGHT (tous les fichiers + LECTURE du contenu)
+        # NIVEAU 4 : SPOTLIGHT (fichiers locaux)
         # ====================================
         if self._spotlight:
             try:
                 spotlight_results = self._spotlight.search(user_query, max_results=5, read_content=True)
                 if spotlight_results:
-                    # Lire le contenu des fichiers trouvés
                     context_parts = []
                     for r in spotlight_results:
                         if r.content:
@@ -223,10 +241,9 @@ class SemanticRouter:
                             context_parts.append(f"[SOURCE: {r.filename}] (contenu non lisible)\n")
                     result.decision = "LOCAL_RAG"
                     result.confidence = 0.7
-                    result.reasoning = f"Spotlight trouvé ({len(spotlight_results)} fichiers avec contenu)"
+                    result.reasoning = f"Spotlight ({len(spotlight_results)} fichiers)"
                     result.processing_time_ms = (time.time() - t_start) * 1000
                     result.spotlight_context = "\n".join(context_parts)
-                    logger.info(f"🧠 Router N4 → LOCAL_RAG (Spotlight: {len(spotlight_results)} fichiers lus)")
                     self._cache.set(cache_key, result)
                     return result
             except Exception as e:
@@ -238,7 +255,7 @@ class SemanticRouter:
         if self.is_online():
             result.decision = "CLOUD_GROQ"
             result.confidence = 0.5
-            result.reasoning = "Pas de résultats locaux → Cloud"
+            result.reasoning = "Fallback cloud"
             result.processing_time_ms = (time.time() - t_start) * 1000
             logger.info(f"🧠 Router N5 → CLOUD_GROQ")
             self._cache.set(cache_key, result)
@@ -254,3 +271,25 @@ class SemanticRouter:
         logger.info(f"🧠 Router N6 → CLARIFICATION")
         self._cache.set(cache_key, result)
         return result
+
+    async def _classify_with_llm(self, query: str) -> str:
+        """Classe l'intent via un appel LLM rapide (Groq, ~100ms)."""
+        prompt = CLASSIFY_PROMPT.format(query=query)
+        response = ""
+        async for token in self.cloud_llm.generate_stream(
+            prompt, intent="SIMPLE",
+            system_prompt="Tu es un classificateur. Réponds uniquement par un seul mot.",
+            temperature=0.0
+        ):
+            response += token
+        
+        response = response.strip().lower()
+        for valid in ["simple", "rag", "web"]:
+            if valid in response:
+                return valid.upper()
+        return "SIMPLE"  # défaut
+
+    async def route_with_context(self, ctx, rag_context=None, rag_result=None):
+        """Route en utilisant un QueryContext (compatibilité orchestrator)."""
+        query = getattr(ctx, 'query', '') or getattr(ctx, 'text', '')
+        return await self.route(query, rag_context=rag_context, rag_result=rag_result)

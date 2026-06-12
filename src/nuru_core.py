@@ -114,10 +114,11 @@ class NuruCore:
     def __init__(self):
         # V4 : Routeur Sémantique Hybride (remplace le simple IntentClassifier)
         self.rag = RAGEngine()
-        self.router = Router(rag_engine=self.rag, is_online_check=self._is_online)
+        self.cloud_llm = CloudLLM()  # V10.1 : déplacé AVANT le router pour classification
+        self.router = Router(rag_engine=self.rag, is_online_check=self._is_online,
+                            cloud_llm=self.cloud_llm)
         self.web = WebSearch()
         self.local_llm = LocalLLM()
-        self.cloud_llm = CloudLLM()
         self.memory = MemoryStore()
         self.audio = AudioEngine()
         self.context_budget = ContextBudget(

@@ -46,8 +46,10 @@ class Router(SemanticRouter):
 
     def __init__(self, rag_engine=None, is_online_check=None,
                  policy_engine: PolicyEngine = None,
-                 hybrid_mode: str = "local_only"):
-        super().__init__(rag_engine=rag_engine, is_online_check=is_online_check)
+                 hybrid_mode: str = "local_only",
+                 cloud_llm=None):  # V10.1 : pour classification LLM
+        super().__init__(rag_engine=rag_engine, is_online_check=is_online_check,
+                        cloud_llm=cloud_llm)
         self.policy_engine = policy_engine or PolicyEngine()
         self.hybrid_strategy = HybridStrategy.from_config(hybrid_mode)
 
