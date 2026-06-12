@@ -45,8 +45,8 @@ CHECKPOINT_PATH = project_root / "indexes" / "reindex_checkpoint.json"
 DB_PATH = project_root / "indexes" / "nuru.db"
 MAX_FILE_CHARS = 500_000   # Ignorer les fichiers >500K chars (>10 min)
 MIN_CONTENT_CHARS = 100    # Ignorer les fichiers trop courts
-CHUNK_MAX_CHARS = 2000
-CHUNK_OVERLAP = 200
+CHUNK_MAX_CHARS = 500      # V10 Expert: 500 chars (était 2000)
+CHUNK_OVERLAP = 100         # V10 Expert: 100 chars (était 200)
 EMBED_BATCH_SIZE = 16      # Embeddings par appel asyncio.gather
 
 
@@ -144,6 +144,11 @@ def read_file_content(fpath: Path) -> str:
         elif suffix == ".pdf":
             import pymupdf
             doc = pymupdf.open(str(fpath))
+            # V10: Gérer les PDFs cryptés/protégés
+            if doc.is_encrypted:
+                logger.debug(f"⚠️ PDF crypté: {fpath.name} — skip")
+                doc.close()
+                return ""
             text = "\n".join([page.get_text() for page in doc])
             doc.close()
             return text
