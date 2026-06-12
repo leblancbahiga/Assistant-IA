@@ -311,13 +311,27 @@ class DocumentsPage(QWidget):
 
             # Agrégation du nombre de chunks par source
             chunk_counts = {}
+            chunk_counts_by_basename = {}
             try:
                 cc_rows = conn.execute(
                     "SELECT source, COUNT(*) as cnt FROM chunks GROUP BY source"
                 ).fetchall()
                 chunk_counts = {r[0]: r[1] for r in cc_rows}
+                # Aussi indexer par basename pour les lookups
+                for src, cnt in cc_rows:
+                    bn = os.path.basename(src)
+                    chunk_counts_by_basename[bn] = chunk_counts_by_basename.get(bn, 0) + cnt
             except Exception:
                 pass  # table peut être vide
+
+            # Fallback: si indexed_files est vide, reconstruire depuis chunks
+            if not rows and chunk_counts:
+                rows = [
+                    (source, 0.0, "")
+                    for source in sorted(chunk_counts.keys(),
+                                         key=lambda s: chunk_counts[s],
+                                         reverse=True)
+                ]
 
             conn.close()
         except Exception as e:
@@ -349,7 +363,7 @@ class DocumentsPage(QWidget):
                     doc.close()
                 except Exception:
                     pages = "?"
-            chunks = chunk_counts.get(name, 0)
+            chunks = chunk_counts_by_basename.get(name, 0)
             date_str = ""
             if mtime:
                 dt = datetime.datetime.fromtimestamp(mtime)

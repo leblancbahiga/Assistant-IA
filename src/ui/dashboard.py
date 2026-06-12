@@ -848,38 +848,70 @@ class CyberDashboard(QMainWindow):
     def _wire_page_dependencies(self) -> None:
         """Connecte les sources de données aux pages qui en ont besoin.
 
-        Tentative d'initialiser rag_engine / memory_store / ingestion
-        à partir du core ou des composants déjà instanciés.
+        Si le core est disponible, utilise ses références.
+        Sinon, crée les instances directement (MemoryStore, RAGEngine).
         """
-        # SessionsPage ← memory_store (V5) ou V9 MemoryManager
         session_page = self._placeholder_map.get("sessions")
         doc_page = self._placeholder_map.get("documents")
         memory_page = self._placeholder_map.get("memory")
 
-        if session_page is not None:
-            # V5 MemoryStore si dispo via le core
-            memory_store = None
-            if self._core is not None and hasattr(self._core, "memory_store"):
-                memory_store = self._core.memory_store
-            session_page.memory_store = memory_store
-            session_page.load_sessions()
+        # Récupérer ou créer les sources de données
+        memory_store = None
+        rag_engine = None
+        ingestion = None
 
+        if self._core is not None:
+            if hasattr(self._core, "memory_store"):
+                memory_store = self._core.memory_store
+            if hasattr(self._core, "rag_engine"):
+                rag_engine = self._core.rag_engine
+            if hasattr(self._core, "ingestion"):
+                ingestion = self._core.ingestion
+        else:
+            # Mode autonome : créer les instances directement
+            try:
+                from src.memory_store import MemoryStore
+                memory_store = MemoryStore()
+            except Exception as e:
+                logger.warning("MemoryStore non disponible: %s", e)
+            try:
+                from src.rag_engine import RAGEngine
+                rag_engine = RAGEngine()
+            except Exception as e:
+                logger.warning("RAGEngine non disponible: %s", e)
+            try:
+                from src.ingestion import IngestionEngine
+                ingestion = IngestionEngine()
+            except Exception as e:
+                logger.warning("IngestionEngine non disponible: %s", e)
+
+        # SessionsPage ← memory_store
+        if session_page is not None:
+            session_page.memory_store = memory_store
+            if memory_store is not None:
+                try:
+                    session_page.load_sessions()
+                except Exception as e:
+                    logger.debug("load_sessions: %s", e)
+
+        # DocumentsPage ← rag_engine + ingestion
         if doc_page is not None:
-            rag_engine = None
-            ingestion = None
-            if self._core is not None:
-                if hasattr(self._core, "rag_engine"):
-                    rag_engine = self._core.rag_engine
-                if hasattr(self._core, "ingestion"):
-                    ingestion = self._core.ingestion
             doc_page.rag_engine = rag_engine
             doc_page.ingestion = ingestion
-            doc_page.load_documents()
+            if rag_engine is not None:
+                try:
+                    doc_page.load_documents()
+                except Exception as e:
+                    logger.debug("load_documents: %s", e)
 
+        # MemoryPage ← memory_store
         if memory_page is not None:
-            if self._core is not None and hasattr(self._core, "memory_store"):
-                memory_page.memory_store = self._core.memory_store
-                memory_page.load_data()
+            memory_page.memory_store = memory_store
+            if memory_store is not None and hasattr(memory_page, "load_data"):
+                try:
+                    memory_page.load_data()
+                except Exception as e:
+                    logger.debug("load_data: %s", e)
 
         # V9 MemoryExplorer ← V9 MemoryManager
         v9_memory_page = self._v9_pages.get("memory_v9")
