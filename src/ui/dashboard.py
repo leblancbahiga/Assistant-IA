@@ -114,6 +114,16 @@ try:
 except ImportError:
     TaskListWidget = None
 
+# ── V10 Component imports ────────────────────────────────────────────────
+try:
+    from src.ui.components.stats_page import StatsPage
+except ImportError:
+    StatsPage = None
+try:
+    from src.ui.components.tool_tester import ToolTester
+except ImportError:
+    ToolTester = None
+
 
 # ══════════════════════════════════════════════════════════════════════════
 #  CONSTANTES
@@ -153,6 +163,13 @@ NAV_GROUPS = [
             ("📋 Logs", "logs"),
         ],
     },
+    {
+        "label": "NURU V10",
+        "items": [
+            ("📈 Stats V10", "stats_v10"),
+            ("🔧 Outils V10", "tools_v10"),
+        ],
+    },
 ]
 
 PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
@@ -164,6 +181,8 @@ PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
     "settings":   ("⚙️ Paramètres",     "Configuration de l'application NURU."),
     "logs":       ("📋 Logs",           "Journaux système et traces de débogage."),
     "diagnostics":("📊 Diagnostics",    "Analyse des performances RAG et diagnostic des requêtes."),
+    "stats_v10":   ("📈 Stats V10",      "Statistiques temps réel et coûts de NURU V10."),
+    "tools_v10":   ("🔧 Outils V10",     "Test des outils de génération et de recherche."),
 }
 
 
@@ -604,6 +623,24 @@ class CyberDashboard(QMainWindow):
                 page = PlaceholderPage(title, desc)
             self._pages.addWidget(page)
             self._v9_pages[slug] = page
+
+        # ── V10 Pages ──
+        self._v10_pages: dict[str, QWidget] = {}
+        v10_entries = [
+            ("stats_v10", "Stats V10", "Statistiques temps réel", StatsPage),
+            ("tools_v10", "Outils V10", "Test des outils", ToolTester),
+        ]
+        for slug, title, desc, cls in v10_entries:
+            if cls is not None:
+                try:
+                    page = cls(parent=self)
+                except Exception as e:
+                    logger.warning("Page V10 %s non disponible: %s — fallback placeholder", slug, e)
+                    page = PlaceholderPage(title, desc)
+            else:
+                page = PlaceholderPage(title, desc)
+            self._pages.addWidget(page)
+            self._v10_pages[slug] = page
 
         self._main_layout.addWidget(self._pages, stretch=1)
 

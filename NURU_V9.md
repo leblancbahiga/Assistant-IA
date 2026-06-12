@@ -1275,7 +1275,8 @@ Et si une tâche est en cours :
 | **S6 — Outils** | ✅ **Terminé** | tool_registry, tool_executor, document_generator (Word/PDF/PPTX/XLSX) | **35 ✅** |
 | **S7 — Web Research** | ✅ **Terminé** | web_researcher, search_optimizer | **24 ✅** |
 | **S8 — Intégration** | ✅ **Terminé** | tests end-to-end (19) + benchmark (16) | **35 ✅** |
-| **Total V9+V10** | **539 tests ✅** | **31 modules** | **0 échec** |
+| **S9 — Dashboard V10** | ✅ **Terminé** | stats_page, tool_tester + intégration dashboard.py | **45 ✅** |
+| **Total V9+V10** | **584 tests ✅** | **33 modules** | **0 échec** |
 
 **✅ V9 — TERMINÉ (11 juin 2026)**
 
@@ -1406,7 +1407,7 @@ Ces quatre premiers modules (1–4) représentent **80 % de la valeur perçue** 
 
 ---
 
-**➡️ Prochaine étape : Sprint 7 — Web Research**
+**➡️ Prochaine étape : Sprint 10 — Polish & Tests (intégration finale)**
 
 ---
 
