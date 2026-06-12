@@ -338,7 +338,7 @@ class NuruOrchestrator:
         duration = time.time() - start_gen
 
         # ── 7.5 Vérification des citations post-génération (NURU V5) ──
-        if intent == "RAG" and rag_context and response_content.strip():
+        if intent == "RAG" and rag_context and response_content.strip() and "AUCUNE SOURCE" not in rag_context:
             # Extraire les sources des chunks
             chunk_sources = []
             if rag_result and hasattr(rag_result, 'chunks_retrieved'):
@@ -373,7 +373,7 @@ class NuruOrchestrator:
                 })
 
         # ── 7.6 V8+ Sprint 5 : Vérificateur de faits Cloud + retry ──
-        if intent == "RAG" and response_content.strip() and ctx.is_online and not ctx.already_fact_checked:
+        if intent == "RAG" and response_content.strip() and ctx.is_online and not ctx.already_fact_checked and "AUCUNE SOURCE" not in rag_context:
             try:
                 from src.rag.fact_checker import FactChecker
                 checker = FactChecker(cloud_llm=self.cloud_llm)
