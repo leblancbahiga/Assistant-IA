@@ -296,6 +296,7 @@ class NuruOrchestrator:
         )
 
         # ── 5.5 FallbackGuard V2 : bloquer cloud si mots-clés docs + contexte vide (NURU V5) ──
+        # V10.1 : Ne s'applique QUE pour intent RAG — GENERAL/COMPLEX passent librement
         if intent == "COMPLEX" and not rag_context and not web_context:
             query_lower = query.lower()
             from src.semantic_router import RAG_KEYWORDS
@@ -311,7 +312,8 @@ class NuruOrchestrator:
                 return
 
         # ── 5.6 Mode Strict RAG (NURU V5) : refuser si aucun contexte documentaire ──
-        if self.response_guard.is_strict and not rag_context.strip():
+        # V10.1 : Ne s'applique QUE pour intent RAG — GENERAL/COMPLEX ne sont jamais refusés
+        if intent == "RAG" and self.response_guard.is_strict and not rag_context.strip():
             logger.info("🔒 Strict RAG: refus — pas de contexte documentaire")
             event_data = {"query": query, "intent": intent}
             await self.event_bus.emit("query.strict_refused", event_data)
