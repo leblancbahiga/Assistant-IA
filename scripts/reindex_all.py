@@ -333,25 +333,25 @@ def main():
 
         # ── Étape B: Embed le lot (batch unique — 1 thread au lieu de N) ──
         import numpy as np
-        import asyncio
-
-        async def _embed_batch(texts):
-            # V10: UN SEUL appel embedder.embed(texts) au lieu de N appels individuels
-            # MLX gère le batching interne, et ça évite N threads asyncio
-            result = await embedder.embed(texts)
-            embeddings = []
-            for i in range(len(texts)):
-                arr = np.array(result[i] if len(result.shape) > 1 else result)
-                if len(arr.shape) > 1:
-                    arr = arr.flatten()
-                embeddings.append(arr)
-            return embeddings
 
         texts = [c["content"] for c in batch_chunks]
         valid_chunks = []  # V10: initialiser avant le try pour éviter UnboundLocalError
         embed_success = False
         try:
-            embeddings = asyncio.run(_embed_batch(texts))
+            # V10: UN SEUL appel embedder.embed(texts) au lieu de N appels individuels
+            # Appel synchrone — l'embedder gère le threading interne via asyncio.to_thread
+            result = embedder.embed(texts, is_query=False)
+            # Attendre le résultat (c'est synchrone)
+            if hasattr(result, '__await__'):
+                # Si c'est une coroutine (asyncio), on doit l'attendre
+                import asyncio
+                result = asyncio.run(result)
+            embeddings = []
+            for i in range(len(texts)):
+                arr = np.array(result[i] if len(np.array(result).shape) > 1 else result)
+                if len(arr.shape) > 1:
+                    arr = arr.flatten()
+                embeddings.append(arr)
             for chunk, emb in zip(batch_chunks, embeddings):
                 chunk["embedding"] = emb.tolist()
             valid_chunks = [c for c in batch_chunks if "embedding" in c]
@@ -361,7 +361,16 @@ def main():
             # Forcer GC et réessayer une fois
             gc.collect()
             try:
-                embeddings = asyncio.run(_embed_batch(texts))
+                result = embedder.embed(texts, is_query=False)
+                if hasattr(result, '__await__'):
+                    import asyncio
+                    result = asyncio.run(result)
+                embeddings = []
+                for i in range(len(texts)):
+                    arr = np.array(result[i] if len(np.array(result).shape) > 1 else result)
+                    if len(arr.shape) > 1:
+                        arr = arr.flatten()
+                    embeddings.append(arr)
                 for chunk, emb in zip(batch_chunks, embeddings):
                     chunk["embedding"] = emb.tolist()
                 valid_chunks = [c for c in batch_chunks if "embedding" in c]
