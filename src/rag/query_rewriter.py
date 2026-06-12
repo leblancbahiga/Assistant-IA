@@ -29,10 +29,54 @@ DOMAIN_TERMS = {
 
 # Mots reflecteurs de domaine
 DOMAIN_KEYWORDS = {
-    "riz|mais|manioc|sorgho|haricot|cassava|semence|rendement|recolte|sol|fertilisation": "agronomie",
+    "riz|mais|manioc|sorgho|haricot|cassava|semence|rendement|recolte|sol|fertilisation|beaccom|rikolto|yarid|palabek|lubero|kananga|innogence": "agronomie",
     "cv|competence|diplome|experience|parcours|formation|poste": "cv",
     "python|javascript|code|logiciel|programmation|base de donnees|algorithme|api": "informatique",
 }
+
+
+# V10 BUG #1: Protection contre les réécritures Cloud qui dévient le sens
+# Le Cloud LLM peut interpréter BEACCOM comme "système de paiement électronique"
+# alors que c'est une ONG agricole en RDC. Cette fonction détecte ces déviations.
+def _cloud_rewrite_is_safe(original_query: str, cloud_rewrite: str) -> bool:
+    """Vérifie que la réécriture Cloud ne change pas le sens de la requête.
+
+    Règles:
+    1. La réécriture doit contenir au moins 50% des mots significatifs de l'originale
+    2. Les nouveaux termes ne doivent pas contredire le contexte documentaire
+    """
+    import re
+    # Extraire les mots significatifs (non stop-words) des deux requêtes
+    stop_words = {
+        'de', 'la', 'le', 'les', 'un', 'une', 'des', 'du', 'au', 'aux', 'en', 'et', 'ou',
+        'est', 'sont', 'dans', 'sur', 'par', 'pour', 'avec', 'sans', 'que', 'qui', 'ne', 'pas',
+        'the', 'a', 'an', 'in', 'on', 'at', 'of', 'to', 'is', 'are', 'and', 'or', 'for',
+    }
+
+    orig_words = set(
+        w.lower() for w in re.findall(r'\w+', original_query)
+        if w.lower() not in stop_words and len(w) > 1
+    )
+    cloud_words = set(
+        w.lower() for w in re.findall(r'\w+', cloud_rewrite)
+        if w.lower() not in stop_words and len(w) > 1
+    )
+
+    if not orig_words:
+        return True  # Requête vide ou stop-words uniquement → safe
+
+    # Au moins 50% des mots originaux doivent être dans la réécriture
+    overlap = orig_words & cloud_words
+    retention_ratio = len(overlap) / len(orig_words)
+
+    if retention_ratio < 0.5:
+        logger.debug(
+            f"Cloud rewrite unsafe: seulement {retention_ratio:.0%} des mots "
+            f"originaux conservés ({overlap} vs {orig_words})"
+        )
+        return False
+
+    return True
 
 
 class CloudQueryRewriter:
@@ -76,10 +120,19 @@ class CloudQueryRewriter:
             try:
                 cloud_result = self._rewrite_with_cloud(query)
                 if cloud_result:
-                    logger.info(
-                        f"Cloud Query Rewriting: '{query[:60]}' -> '{cloud_result[:80]}'"
-                    )
-                    return cloud_result
+                    # V10 Correction BUG #1: Vérifier que la réécriture Cloud ne dévie pas
+                    # du contexte réel (ex: BEACCOM → "système de paiement électronique")
+                    if self._v6_rewriter and _cloud_rewrite_is_safe(query, cloud_result):
+                        logger.info(
+                            f"Cloud Query Rewriting: '{query[:60]}' -> '{cloud_result[:80]}'"
+                        )
+                        return cloud_result
+                    else:
+                        # Cloud a déliré → fallback V6
+                        logger.warning(
+                            f"Cloud rewrite unsafe (hallucination détectée): "
+                            f"'{query[:40]}' -> '{cloud_result[:80]}' → fallback V6"
+                        )
             except Exception as e:
                 logger.debug(f"Cloud rewrite failed: {e}")
 

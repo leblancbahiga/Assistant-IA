@@ -61,6 +61,16 @@ class Router(SemanticRouter):
         # V10 : Spotlight ne déclenche JAMAIS l'escalade Cloud
         # (Spotlight = mdfind, pas de LLM, pas de RAM nécessaire)
         is_spotlight = result.spotlight_context != ""
+
+        # V10 Expert fix: Spotlight bypass — si Spotlight a trouvé du contenu,
+        # forcer LOCAL_ONLY quel que soit l'état RAM
+        if is_spotlight and len(result.spotlight_context) > 500:
+            logger.info(
+                f"🔍 Spotlight bypass: {len(result.spotlight_context)} chars trouvés "
+                f"→ forçage LOCAL_ONLY (pas d'escalade Cloud)"
+            )
+            # Ne pas changer la décision (déjà LOCAL_RAG depuis N4)
+            return result
         
         # Escalade cloud si RAM trop basse (sauf si c'est du Spotlight)
         if result.decision == "LOCAL_RAG" and not is_spotlight and self.policy_engine.should_use_cloud(ctx):

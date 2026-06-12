@@ -73,14 +73,14 @@ class CloudLLM:
             return parts[0], parts[1]
         return default_provider, config_str
 
-    async def generate_stream(self, prompt: str, intent: str = "SIMPLE", system_prompt: Optional[str] = None) -> AsyncGenerator[str, None]:
+    async def generate_stream(self, prompt: str, intent: str = "SIMPLE", system_prompt: Optional[str] = None, temperature: float = 0.7) -> AsyncGenerator[str, None]:
         """Génère une réponse en streaming avec Circuit Breaker et Fallback automatique."""
         primary_provider = self.provider
         primary_model = self.model
-        
+
         # 1. Tentative sur le Provider Primaire
         primary_failed = False
-        
+
         if self.circuit_breaker.state == "OPEN":
             if time.time() - self.circuit_breaker.last_failure > self.circuit_breaker.timeout:
                 self.circuit_breaker.state = "HALF_OPEN"
@@ -88,11 +88,11 @@ class CloudLLM:
             else:
                 logger.warning("CloudLLM Circuit Breaker: OPEN. Passage direct au Fallback.")
                 primary_failed = True
-                
+
         if not primary_failed:
             success = False
             try:
-                async for chunk in self._do_stream(prompt, primary_provider, primary_model, system_prompt=system_prompt):
+                async for chunk in self._do_stream(prompt, primary_provider, primary_model, system_prompt=system_prompt, temperature=temperature):
                     if not success:
                         success = True
                     yield chunk
@@ -117,7 +117,7 @@ class CloudLLM:
             try:
                 # Indicateur visuel du fallback
                 yield f" [⚠️ Bascule vers fallback: {fallback_provider}] "
-                async for chunk in self._do_stream(prompt, fallback_provider, fallback_model, system_prompt=system_prompt):
+                async for chunk in self._do_stream(prompt, fallback_provider, fallback_model, system_prompt=system_prompt, temperature=temperature):
                     yield chunk
             except Exception as e:
                 logger.error(f"Erreur fatale Cloud LLM avec le fallback: {e}")
@@ -125,7 +125,7 @@ class CloudLLM:
         else:
             yield "\n[Erreur : Cloud LLM temporairement indisponible et aucun fallback configuré.]"
 
-    async def _do_stream(self, prompt: str, provider: str, model: str, system_prompt: Optional[str] = None) -> AsyncGenerator[str, None]:
+    async def _do_stream(self, prompt: str, provider: str, model: str, system_prompt: Optional[str] = None, temperature: float = 0.7) -> AsyncGenerator[str, None]:
         """Exécute l'appel réseau réel pour un provider donné (Groq, Gemini, Deepseek, OpenRouter)."""
         if provider == "groq":
             url = "https://api.groq.com/openai/v1/chat/completions"
@@ -185,18 +185,18 @@ class CloudLLM:
             headers["HTTP-Referer"] = "https://github.com/nuru-assistant"
             headers["X-Title"] = "NURU V3"
             
-        max_tokens = 1000
-        
+        max_tokens = 2000  # V10: augmenté de 1000 à 2000 pour éviter troncatures RAG
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        
+
         payload = {
             "model": model,
             "messages": messages,
             "stream": True,
-            "temperature": 0.7,
+            "temperature": temperature,  # V10: paramétrable (0.1 pour RAG, 0.7 par défaut)
             "max_tokens": max_tokens
         }
         

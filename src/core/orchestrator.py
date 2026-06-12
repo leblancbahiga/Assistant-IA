@@ -211,12 +211,43 @@ class NuruOrchestrator:
         # V10 : Ajouter le contexte Spotlight lu si disponible
         # Tronquer à 3000 chars max pour éviter les prompts trop longs
         spotlight_ctx = getattr(route_result, 'spotlight_context', '')
-        if spotlight_ctx and not rag_context:
+        if spotlight_ctx:
             MAX_SPOTLIGHT_CHARS = 3000
             if len(spotlight_ctx) > MAX_SPOTLIGHT_CHARS:
                 spotlight_ctx = spotlight_ctx[:MAX_SPOTLIGHT_CHARS] + "\n[...tronqué...]"
-            rag_context = spotlight_ctx
-            logger.info(f"🔍 Spotlight contexte ajouté au prompt ({len(spotlight_ctx)} chars)")
+
+            # V10 Correction BUG #2: Utiliser Spotlight MÊME si RAG a des résultats
+            # RAG retourne des scores faibles (e5: 0.28-0.33) mais Spotlight lit le vrai contenu
+            if not rag_context:
+                # RAG vide → Spotlight seul
+                rag_context = spotlight_ctx
+                logger.info(f"🔍 Spotlight seul: {len(spotlight_ctx)} chars (RAG vide)")
+            else:
+                # RAG existe → vérifier la qualité
+                rag_top_score = getattr(rag_result, 'top_score', 0.0) if rag_result else 0.0
+                if rag_top_score < 0.35:
+                    # Spotlight préféré au RAG de faible qualité
+                    rag_context = (
+                        f"[CONTENU SPOTLIGHT — Documents trouvés sur le système]\n"
+                        f"{spotlight_ctx}\n\n"
+                        f"[CONTENU INDEX RAG (score={rag_top_score:.2f})]\n"
+                        f"{rag_context}"
+                    )
+                    logger.info(
+                        f"🔍 Spotlight prioritaire (RAG score faible {rag_top_score:.2f}): "
+                        f"{len(spotlight_ctx)} chars"
+                    )
+                else:
+                    # RAG de bonne qualité → Spotlight en complément
+                    rag_context = (
+                        f"{rag_context}\n\n"
+                        f"[CONTENU SPOTLIGHT — Documents supplémentaires trouvés]\n"
+                        f"{spotlight_ctx}"
+                    )
+                    logger.info(
+                        f"🔍 Spotlight complémentaire (RAG score {rag_top_score:.2f}): "
+                        f"{len(spotlight_ctx)} chars"
+                    )
 
         # ── 5. Fallback Web si RAG vide ──
         rag_context, intent = await self._maybe_web_fallback(
@@ -274,7 +305,7 @@ class NuruOrchestrator:
         start_gen = time.time()
 
         try:
-            async for token in self._generate(system_prompt, full_prompt, query, intent, ctx, web_context=web_context, rag_context=rag_context):
+            async for token in self._generate(system_prompt, full_prompt, query, intent, ctx, web_context=web_context, rag_context=rag_context, original_query=original_query):
                 response_content += token
                 yield token
         except Exception as e:
@@ -583,6 +614,16 @@ class NuruOrchestrator:
 
         if intent == "COMPLEX":
             full_prompt += f"\n## QUESTION À TRAITER :\n{query}"
+            # V10 Correction BUG #3: Ajouter instruction d'utilisation du contexte pour Cloud
+            if full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
+                full_prompt += (
+                    f"\n\n## INSTRUCTION — CONTEXTE DISPONIBLE\n"
+                    f"Le CONTEXTE ci-dessus contient des documents de l'utilisateur. "
+                    f"Utilise- les en PRIORITÉ pour répondre.\n"
+                    f"- Consulte d'abord le contexte dans ta réponse.\n"
+                    f"- Complète avec tes connaissances si nécessaire.\n"
+                    f"- Cite les sources quand tu utilises le contexte.\n"
+                )
         elif intent == "RAG" and full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
             full_prompt += (
                 f"\n\n## INSTRUCTION STRICTE — RAG UNIQUEMENT\n"
@@ -599,16 +640,22 @@ class NuruOrchestrator:
             full_prompt += f"{query}<|end|>\n<|assistant|>\n"
         return system_prompt, full_prompt
 
-    async def _generate(self, system_prompt, full_prompt, query, intent, ctx, web_context="", rag_context=""):
+    async def _generate(self, system_prompt, full_prompt, query, intent, ctx, web_context="", rag_context="", original_query=""):
         # NURU V5 : Fallback cloud renforcé — si RAM < 1 Go ET online,
         # on passe en cloud même pour RAG (évite les hallucinations du petit modèle qui swap)
         ram_too_low = ctx.ram_free_mb < 1000
         hybrid = getattr(ctx, 'hybrid_strategy', 'local_only')
 
+        # V10: Temperature basse (0.1) pour RAG avec contexte, standard (0.7) sinon
+        cloud_temp = 0.1 if rag_context.strip() else 0.7
+
+        # V10: Message utilisateur ancré dans le contexte (pas query compressée seule)
+        user_message = original_query or query
+
         # NURU V6 : Stratégie Archon (RAG local + synthèse cloud)
         if hybrid == "rag" and intent == "RAG" and ctx.is_online and rag_context.strip():
             logger.info("☁️ Stratégie Archon: RAG local → synthèse cloud")
-            # NURU V6 FIX : Prompt anti-hallucination renforcé pour Groq
+            # V10 Correctif A+B: prompt ancré avec user_message + temperature basse
             cloud_system = (
                 f"Tu es NURU, assistant IA personnel. Tu dois répondre UNIQUEMENT à partir des documents ci-dessous.\n\n"
                 f"## RÈGLES IMPÉRATIVES (sous peine d'être déconnecté) :\n"
@@ -622,11 +669,13 @@ class NuruOrchestrator:
                 f"=== DOCUMENTS ===\n"
                 f"{rag_context}\n"
                 f"=== FIN DES DOCUMENTS ===\n\n"
-                f"Question : {query}\n\n"
+                f"En te basant EXCLUSIVEMENT sur les DOCUMENTS ci-dessus, "
+                f"réponds à la question suivante : {user_message}\n\n"
                 f"Réponse :"
             )
+            logger.info(f"☁️ Archon cloud call — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
             async for token in self.cloud_llm.generate_stream(
-                query, intent=intent, system_prompt=cloud_system
+                user_message, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
             ):
                 yield token
             return
@@ -639,17 +688,19 @@ class NuruOrchestrator:
             if not ctx.is_online:
                 logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")
             else:
-                logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB, hybrid={hybrid})")
-                # NURU V6 FIX : Instruction stricte pour le cloud aussi
+                logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB, hybrid={hybrid}, temp={cloud_temp})")
+                # V10 Correctif A+B: prompt ancré + temperature basse
                 cloud_system = (
                     f"Tu es NURU, assistant personnel de Leblanc. Tu réponds en français.\n\n"
                 )
                 if rag_context.strip():
                     cloud_system += (
-                        f"## CONTEXTE DE VOS DOCUMENTS (prioritaire)\n"
+                        f"## CONTEXTE DE VOS DOCUMENTS (prioritaire, utilise EXCLUSIVEMENT ces informations)\n"
                         f"Les informations ci-dessous sont extraites de VOS documents personnels. "
                         f"Elles sont prioritaires sur toute autre source.\n"
-                        f"- N'invente PAS d'information.\n"
+                        f"- N'invente PAS d'information. Utilise UNIQUEMENT ce contexte.\n"
+                        f"- Si l'information n'est pas dans le contexte, dis "
+                        f"\"Je ne trouve pas cette information dans vos documents.\"\n"
                         f"- Cite tes sources avec [Source: fichier].\n"
                         f"{rag_context}\n\n"
                     )
@@ -657,8 +708,14 @@ class NuruOrchestrator:
                     cloud_system += (
                         f"## CONTEXTE DE RECHERCHE WEB\n{web_context}\n\n"
                     )
+                # V10: message utilisateur ancré dans le contexte
+                anchored_prompt = (
+                    f"En te basant sur le contexte ci-dessus, "
+                    f"réponds à la question suivante : {user_message}"
+                )
+                logger.info(f"☁️ Cloud call — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
                 async for token in self.cloud_llm.generate_stream(
-                    query, intent=intent, system_prompt=cloud_system
+                    anchored_prompt, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
                 ):
                     yield token
                 return
@@ -676,14 +733,21 @@ class NuruOrchestrator:
         except Exception as e:
             logger.error(f"Local fail: {e}. Fallback Cloud.")
             yield " [Bascule Cloud...] "
-            # V6.2 : Inclure le contexte RAG dans le prompt cloud (pas seulement la query)
-            cloud_prompt = query
+            # V10: prompt ancré avec user_message + temperature basse
+            cloud_prompt = user_message
             cloud_sys = system_prompt
             if rag_context and rag_context.strip() and "AUCUNE SOURCE" not in rag_context:
-                cloud_sys = f"{system_prompt}\n\n## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag_context.strip()}\n\nInstructions : réponds UNIQUEMENT à partir du contexte ci-dessus. Si l'information n'y est pas, dis-le clairement."
-                cloud_prompt = f"{query}\n\n[RAG context provided above]"
+                cloud_sys = (
+                    f"{system_prompt}\n\n"
+                    f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag_context.strip()}\n\n"
+                    f"Instructions : utilise EXCLUSIVEMENT le contexte ci-dessus pour répondre. "
+                    f"Si l'information n'y est pas, dis-le clairement.\n\n"
+                    f"Question : {user_message}"
+                )
+                cloud_prompt = user_message
+            logger.info(f"☁️ Local-fail fallback — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
             async for token in self.cloud_llm.generate_stream(
-                cloud_prompt, intent=intent, system_prompt=cloud_sys
+                cloud_prompt, intent=intent, system_prompt=cloud_sys, temperature=cloud_temp
             ):
                 yield token
 
