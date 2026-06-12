@@ -737,23 +737,33 @@ class CyberDashboard(QMainWindow):
         """Charge les données réelles dans une page V9 au moment de la navigation."""
         try:
             if slug == "memory_v9" and self._v9_memory_manager and hasattr(page, "set_data"):
+                # V10.1 : Utiliser l'API correcte du V9 MemoryManager
+                user_facts = []
+                try:
+                    if hasattr(self._v9_memory_manager.user, 'get_all'):
+                        user_facts = self._v9_memory_manager.user.get_all()
+                except Exception:
+                    pass
+
+                episodic_entries = []
+                try:
+                    episodic = self._v9_memory_manager.episodic
+                    if hasattr(episodic, 'recall'):
+                        episodic_entries = episodic.recall("") or []
+                except Exception:
+                    pass
+
                 data = {
                     "episodic": [
-                        {"text": h, "timestamp": ""}
-                        for h in (self._v9_memory_manager.get_recent_history() or [])
+                        {"text": str(e.get("content", e)) if isinstance(e, dict) else str(e), "timestamp": str(e.get("timestamp", "")) if isinstance(e, dict) else ""}
+                        for e in episodic_entries
                     ],
-                    "semantic": [
-                        {"text": s, "timestamp": ""}
-                        for s in (self._v9_memory_manager.get_full_context().get("semantic", []) if hasattr(self._v9_memory_manager, 'get_full_context') else [])
-                    ],
+                    "semantic": [],
                     "user": [
-                        {"key": k, "value": v}
-                        for k, v in self._v9_memory_manager.get_user_profile().items()
-                    ] if isinstance(self._v9_memory_manager.get_user_profile(), dict) else [],
-                    "error": [
-                        {"text": e, "timestamp": ""}
-                        for e in (self._v9_memory_manager.check_errors() or [])
+                        {"key": f.get("key", ""), "value": f.get("value", "")}
+                        for f in user_facts
                     ],
+                    "error": [],
                 }
                 page.set_data(data)
 
