@@ -337,7 +337,7 @@ class NavSidebar(QWidget):
 
         header_layout.addStretch()
 
-        badge = QLabel("V7")
+        badge = QLabel("V10")
         badge.setObjectName("VersionBadge")
         header_layout.addWidget(badge)
 
@@ -495,7 +495,7 @@ class CyberDashboard(QMainWindow):
     def __init__(self, core=None):
         super().__init__()
         self._core = core
-        logger.info("CyberDashboard V7 — initialisation...")
+        logger.info("CyberDashboard V10 — initialisation...")
 
         # ── État interne ──
         self._rag_scores_session: list[float] = []
@@ -537,7 +537,7 @@ class CyberDashboard(QMainWindow):
             pass
         self._sidebar.set_model_info(model_name, "Prêt")
 
-        logger.info("CyberDashboard V7 — prêt.")
+        logger.info("CyberDashboard V10 — prêt.")
 
     # ══════════════════════════════════════════════════════════════════════
     #  BUILD
@@ -545,7 +545,7 @@ class CyberDashboard(QMainWindow):
 
     def _build_window(self) -> None:
         """Configure les propriétés de la fenêtre."""
-        self.setWindowTitle("NURU V8+")
+        self.setWindowTitle("NURU V10")
         self.setMinimumSize(1100, 680)
         self.resize(1400, 860)
 
@@ -861,12 +861,16 @@ class CyberDashboard(QMainWindow):
         ingestion = None
 
         if self._core is not None:
-            if hasattr(self._core, "memory_store"):
-                memory_store = self._core.memory_store
-            if hasattr(self._core, "rag_engine"):
-                rag_engine = self._core.rag_engine
-            if hasattr(self._core, "ingestion"):
-                ingestion = self._core.ingestion
+            # NuruCore utilise memory / rag (pas memory_store / rag_engine)
+            memory_store = getattr(self._core, "memory_store", None) or getattr(self._core, "memory", None)
+            rag_engine = getattr(self._core, "rag_engine", None) or getattr(self._core, "rag", None)
+            ingestion = getattr(self._core, "ingestion", None)
+            if memory_store is not None:
+                logger.info("MemoryStore fourni par NuruCore")
+            if rag_engine is not None:
+                logger.info("RAGEngine fourni par NuruCore")
+            if ingestion is not None:
+                logger.info("IngestionEngine fourni par NuruCore")
         else:
             # Mode autonome : créer les instances directement
             try:
