@@ -686,6 +686,7 @@ class RAGEngine:
         result.confidence_label = confidence_label
 
         # Build sources list
+        source_list = []
         for content, source, score in reranked:
             source_list.append({
                 "name": source,
