@@ -386,7 +386,7 @@ class ReliabilityScorer:
 | `src/rag/decomposer.py` | Circuit breaker, MAX=3 |
 | `src/llm_local.py` | MLX Phi-4-mini, to_thread, apply_chat_template |
 | `src/llm_cloud.py` | Multi-provider, circuit breaker, fallback |
-| `src/profile_boost.py` | Boost ×2.5 docs personnels |
+| `~~src/profile_boost.py~~` | ~~Boost ×2.5 docs personnels~~ **SUPPRIMÉ** (V10.1 — tous fichiers égaux) |
 | `src/auto_fetch.py` | Scan périodique, détection MD5 |
 
 ---
@@ -1633,3 +1633,22 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 
 *Document compilé le 11 juin 2026 à partir de trois analyses d'experts*
 *Leblanc BAHIGA Mudarhi — NURU Project*
+
+
+## Sprint Log
+
+### V10.1 — 2026-06-12 "Nettoyage & Navigation"
+
+**Suppressions :**
+- `src/profile_boost.py` supprime — tous les fichiers ont la meme importance
+- Code Profile Boost retire de `rag_engine.py` — plus de get_boost_score ni x2.5
+
+**Corrections :**
+- Navigation V10 reparee dans `dashboard.py:_on_page_changed` — les pages Stats V10 et Outils V10
+  pointaient vers un `PlaceholderPage` car le handler `_v10_pages` manquait
+- Cablage des dependances via `_wire_page_dependencies()` — connecte les pages aux sources du core
+
+**Etat :**
+- ✅ `rag_engine.py` importe sans erreur
+- ✅ Dashboard instancie et navigation V10 fonctionnelle
+- ✅ Pages sessions, documents, memory, diagnostics = vraies classes, pas des placeholders

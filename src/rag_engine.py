@@ -566,23 +566,12 @@ class RAGEngine:
         combined_results = [(r.content, r.source, r.score) for r in ms_results]
 
         # Profile Boost (V8+ P2 : freshness bonus supprimé — pas de chunk_date depuis multi_search)
+        # Déduplication simple (tous les fichiers ont la même importance)
         seen_contents = set()
         source_counts = {}
         deduped_results = []
-        source_list = []
 
-        try:
-            from src.profile_boost import get_boost_score
-            boosted = [
-                (content, source, score * get_boost_score(source))
-                for content, source, score in combined_results
-            ]
-            boosted.sort(key=lambda x: x[2], reverse=True)
-        except Exception as e:
-            logger.warning(f"⚠️ Profile boost a échoué (fallback sans boost): {e}")
-            boosted = combined_results
-
-        for content, source, score in boosted:
+        for content, source, score in combined_results:
             if content not in seen_contents:
                 count = source_counts.get(source, 0)
                 if count < 2:
@@ -592,9 +581,8 @@ class RAGEngine:
 
         combined_results = deduped_results
 
-        # ── V10 Audit: Rejeter les résultats après Profile Boost ──
-        # Vérifie QUE le top résultat (après boost) contient des mots-clés
-        # de la requête. Empêche les CV boostés (x2.5) de dominer les résultats.
+        # ── V10 Audit: Rejeter les résultats non pertinents ──
+        # Vérifie si le top résultat contient des mots-clés de la requête.
         if combined_results:
             query_keywords = set(
                 w.lower() for w in re.findall(r'\w+', query)
@@ -630,7 +618,7 @@ class RAGEngine:
                     )
 
             if should_reject:
-                logger.warning(f"RAG V10: rejet après boost — {rejection_reason}")
+                logger.warning(f"RAG V10: rejet — {rejection_reason}")
                 result.confidence_label = confidence_label
                 result.rejection_reason = rejection_reason
                 result.diagnostic = {"rejected": True, "reason": rejection_reason}

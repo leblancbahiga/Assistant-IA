@@ -516,6 +516,7 @@ class CyberDashboard(QMainWindow):
         self._wire_signals()
         self._init_timers()
         self.load_styles()
+        self._wire_page_dependencies()
 
         # Message de bienvenue
         self.console_page.clear_chat()
@@ -591,7 +592,7 @@ class CyberDashboard(QMainWindow):
             elif slug == "diagnostics":
                 cls = DiagnosticsPage
             else:
-                cls = None  # nuru_brain → placeholder
+                cls = None  # nuru_brain, stats_v10, tools_v10 → placeholder / V10/V9
 
             if cls is not None:
                 try:
@@ -828,6 +829,12 @@ class CyberDashboard(QMainWindow):
             self._pages.setCurrentWidget(page)
             return
 
+        # Pages V10
+        if slug in self._v10_pages:
+            page = self._v10_pages[slug]
+            self._pages.setCurrentWidget(page)
+            return
+
         if slug == "console":
             self._pages.setCurrentIndex(0)
             return
@@ -837,6 +844,57 @@ class CyberDashboard(QMainWindow):
             idx = self._pages.indexOf(page)
             if idx >= 0:
                 self._pages.setCurrentIndex(idx)
+
+    def _wire_page_dependencies(self) -> None:
+        """Connecte les sources de données aux pages qui en ont besoin.
+
+        Tentative d'initialiser rag_engine / memory_store / ingestion
+        à partir du core ou des composants déjà instanciés.
+        """
+        # SessionsPage ← memory_store (V5) ou V9 MemoryManager
+        session_page = self._placeholder_map.get("sessions")
+        doc_page = self._placeholder_map.get("documents")
+        memory_page = self._placeholder_map.get("memory")
+
+        if session_page is not None:
+            # V5 MemoryStore si dispo via le core
+            memory_store = None
+            if self._core is not None and hasattr(self._core, "memory_store"):
+                memory_store = self._core.memory_store
+            session_page.memory_store = memory_store
+            session_page.load_sessions()
+
+        if doc_page is not None:
+            rag_engine = None
+            ingestion = None
+            if self._core is not None:
+                if hasattr(self._core, "rag_engine"):
+                    rag_engine = self._core.rag_engine
+                if hasattr(self._core, "ingestion"):
+                    ingestion = self._core.ingestion
+            doc_page.rag_engine = rag_engine
+            doc_page.ingestion = ingestion
+            doc_page.load_documents()
+
+        if memory_page is not None:
+            if self._core is not None and hasattr(self._core, "memory_store"):
+                memory_page.memory_store = self._core.memory_store
+                memory_page.load_data()
+
+        # V9 MemoryExplorer ← V9 MemoryManager
+        v9_memory_page = self._v9_pages.get("memory_v9")
+        if v9_memory_page is not None and self._v9_memory_manager is not None:
+            if hasattr(v9_memory_page, "set_manager"):
+                try:
+                    v9_memory_page.set_manager(self._v9_memory_manager)
+                except Exception:
+                    pass
+
+        # Charger les données V9 au démarrage
+        for slug in list(self._v9_pages):
+            page = self._v9_pages.get(slug)
+            if page is not None:
+                self._load_v9_page_data(slug, page)
 
     def _on_query(self, text: str, strict_mode: bool) -> None:
         """Traite une requête utilisateur en temps réel.
