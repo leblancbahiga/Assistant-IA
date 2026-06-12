@@ -86,7 +86,7 @@ class RAGEngine:
             if search_type == "vector":
                 # Embed la requête et chercher par vecteur
                 import sqlite_vec
-                embed = self.embedder.embed(query, is_query=True)
+                embed = self.embedder.embed_sync(query, is_query=True)
                 if not embed or not embed[0]:
                     return []
                 qvec = sqlite_vec.serialize_float32(embed[0])
@@ -682,6 +682,18 @@ class RAGEngine:
         
         result.chunks_injected = len(reranked)
         result.top_k_actual = len(reranked)
+        # V10.1 : Utiliser le score du reranker (pas le RRF normalisé)
+        if reranked:
+            result.top_score = max(r[2] for r in reranked)
+            result.all_scores = [r[2] for r in reranked]
+            self.last_top_score = result.top_score
+            # Recalculer le confidence_label avec le vrai score reranké
+            if result.top_score >= 0.7:
+                confidence_label = "HAUTE"
+            elif result.top_score >= 0.4:
+                confidence_label = "MOYENNE"
+            else:
+                confidence_label = "FAIBLE"
         # V8+ : Propager le niveau de confiance
         result.confidence_label = confidence_label
 
