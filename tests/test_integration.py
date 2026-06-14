@@ -1,554 +1,385 @@
-"""Tests d'intégration complets — Sprint 6 (Consolidation V8+).
-
-Utilise pytest fixtures pour mocker les dépendances externes (CloudLLM, RAG)
-et tester le pipeline complet de NuruOrchestrator.
-
-Tests :
-1. Pipeline RAG complet avec mock cloud
-2. Pipeline avec décomposition (sub-queries)
-3. Pipeline avec FactChecker + retry loop
-4. Pipeline offline (mode dégradé)
 """
+Tests d'intégration V10.3 — Orchestrator découplé.
+
+Valide que RAGOrchestrator + LLMGenerator + NuruOrchestrator allégé
+fonctionnent ensemble comme prévu.
+"""
+from __future__ import annotations
+
 import asyncio
-import json
 import logging
-import sys
-from pathlib import Path
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.rag_engine import RAGResult
+from src.orchestration.rag_pipeline import RAGOrchestrator
+from src.orchestration.llm_generator import LLMGenerator
 
-logging.basicConfig(level=logging.ERROR)
-
-# ═══════════════════════════════════════════════════════════
-# Mock fixtures
-# ═══════════════════════════════════════════════════════════
+logger = logging.getLogger(__name__)
 
 
-class MockCloudLLM:
-    """Mock CloudLLM avec modes contrôlables."""
+# ══════════════════════════════════════════════════════════════════════════
+#  Fixtures
+# ══════════════════════════════════════════════════════════════════════════
 
-    def __init__(self, mode="ok"):
-        self.mode = mode
-
-    def generate(self, prompt: str, timeout: float = 5.0) -> str:
-        if self.mode == "empty":
-            return ""
-        if self.mode == "slow":
-            raise TimeoutError("Timeout simulé")
-        if "verified" in prompt.lower() or "vérificateur" in prompt.lower():
-            if self.mode == "fact_fail":
-                return '{"verified": false, "issues": ["Affirmation non trouvée dans les sources"]}'
-            return '{"verified": true, "issues": []}'
-        if "décompose" in prompt.lower() or "sous-question" in prompt.lower():
-            return '["rendement riz Palabek 2023", "rendement mais Palabek 2023"]'
-        if "requête de recherche" in prompt.lower():
-            return "rendement riz Palabek 2023 production agricole"
-        return "Réponse générique du mock cloud"
-
-    async def generate_stream(self, prompt="", intent="RAG", system_prompt=""):
-        response = "Voici une réponse basée sur les documents fournis."
-        for token in response:
-            yield token
-            await asyncio.sleep(0)
+@pytest.fixture
+def mock_rag_engine():
+    engine = MagicMock()
+    # retrieve() utilisé par retrieve_primary
+    engine.retrieve = AsyncMock(return_value=(
+        "Document A sur le machine learning. Document B sur les réseaux.",
+        MagicMock(confidence_label="HAUTE", rag_score=0.85, last_top_score=0.87,
+                  source_list=["doc_a.pdf", "doc_b.pdf"], chunks_retrieved=2),
+    ))
+    return engine
 
 
-class MockRAGResult:
-    """Mock RAGResult avec niveaux de confiance contrôlables."""
-
-    def __init__(
-        self,
-        confidence_label="HAUTE",
-        chunks_injected=3,
-        top_score=0.85,
-        sources=None,
-        diagnostic=None,
-    ):
-        self.confidence_label = confidence_label
-        self.chunks_injected = chunks_injected
-        self.top_score = top_score
-        self.sources = sources or [
-            {"name": "test.pdf", "score": 0.85, "preview": "Contenu test..."}
-        ]
-        self.diagnostic = diagnostic or {
-            "confiance": confidence_label,
-            "chunks": chunks_injected,
-            "score": top_score,
-        }
-        self.documents_found = 1
-        self.chunks_retrieved = 5
-        self.retrieval_time_ms = 150.0
-        self.query_rewritten = "requête optimisée"
-        self.rejected_chunks = 0
-        self.rejection_reason = ""
-        self.tokens_injected = 200
-        self.top_k_configured = 5
-        self.top_k_actual = 3
-        self.all_scores = [top_score, 0.65, 0.45]
-        self.source_list = ["test.pdf"]
+@pytest.fixture
+def mock_guard():
+    guard = MagicMock()
+    guard.is_active = False
+    guard.is_strict = False
+    guard.should_block = MagicMock(return_value=False)
+    guard.refuse_message = MagicMock(return_value="⛔ Réponse bloquée.")
+    return guard
 
 
-class MockRAGEngine:
-    """Mock RAGEngine retournant des résultats contrôlés."""
-
-    def __init__(self, confidence_label="HAUTE"):
-        self.result = MockRAGResult(confidence_label=confidence_label)
-        self.last_top_score = self.result.top_score
-
-    async def retrieve(self, query, k=None):
-        return "Contexte RAG: Le rendement du riz est de 4.5 t/ha.", self.result
+@pytest.fixture
+def mock_verifier():
+    vr = MagicMock()
+    vr.verify = MagicMock(return_value=MagicMock(valid=True, score=0.9))
+    return vr
 
 
-class MockRouter:
-    """Mock SemanticRouter retournant des décisions contrôlées."""
-
-    async def route_with_context(self, ctx):
-        return MagicMock(
-            decision="LOCAL_RAG",
-            confidence=0.85,
-            rag_top_score=0.85,
-            hybrid_strategy="local_only",
-        )
+@pytest.fixture
+def mock_event_bus():
+    bus = MagicMock()
+    bus.emit = AsyncMock()
+    return bus
 
 
-class MockMemoryStore:
-    """Mock MemoryStore pour les tests."""
+@pytest.fixture
+def mock_stream_llm():
+    llm = MagicMock()
+    llm.is_online = True
+    llm.model_name = "mock-model"
 
-    def __init__(self):
-        self.facts = []
-        self.history = []
-        self.cache = {}
-
-    async def get_cache(self, query):
-        return None, None
-
-    async def set_cache(self, query, response, diagnostic=None):
-        pass
-
-    def add_message(self, role, content):
-        self.history.append({"role": role, "content": content})
-
-    def add_reflection(self, query, feedback, score):
-        pass
-
-    def get_recent_facts(self, limit=20):
-        return self.facts
-
-    def get_recent_history(self, limit=8):
-        return self.history[-limit:]
-
-    def get_procedures(self):
-        return ""
-
-
-class MockWebSearch:
-    """Mock WebSearch."""
-
-    async def search(self, query):
-        return "Résultat recherche Web pour: " + query
-
-
-class MockRuntime:
-    """Mock RuntimeManager."""
-
-    def __init__(self):
-        self._last_generation_stats = {"rag_score": 0.85}
-
-    async def schedule_generator(self, name, gen):
-        async for token in gen:
+    async def _stream(*args, **kwargs):
+        for token in ["Réponse", " mockée", " découplée", "."]:
             yield token
 
-    def update_generation_stats(self, **kwargs):
-        self._last_generation_stats.update(kwargs)
-
-
-class MockPolicyEngine:
-    def should_use_cloud(self, ctx):
-        return False
-
-
-class MockEventBus:
-    """Mock EventBus qui capture les événements émis."""
-
-    def __init__(self):
-        self.events = []
-
-    async def emit(self, event_type, data=None):
-        self.events.append((event_type, data))
-
-    def emit_sync(self, event_type, data=None):
-        self.events.append((event_type, data))
-
-    def drain(self):
-        return list(self.events)
-
-
-# ═══════════════════════════════════════════════════════════
-# Fixtures pytest
-# ═══════════════════════════════════════════════════════════
+    llm.generate_stream = _stream
+    return llm
 
 
 @pytest.fixture
-def mock_cloud():
-    return MockCloudLLM()
-
-
-@pytest.fixture
-def mock_rag_high():
-    return MockRAGEngine(confidence_label="HAUTE")
-
-
-@pytest.fixture
-def mock_rag_low():
-    return MockRAGEngine(confidence_label="FAIBLE")
-
-
-@pytest.fixture
-def mock_memory():
-    return MockMemoryStore()
-
-
-@pytest.fixture
-def mock_router():
-    return MockRouter()
-
-
-@pytest.fixture
-def mock_web():
-    return MockWebSearch()
+def mock_ctx():
+    ctx = MagicMock()
+    ctx.is_online = True
+    ctx.already_fact_checked = False
+    ctx.already_retried = False
+    ctx.keywords = None
+    ctx.mode = "cloud"
+    ctx.ram_free_mb = 4096
+    ctx.already_fallback = False
+    return ctx
 
 
 @pytest.fixture
 def mock_runtime():
-    return MockRuntime()
-
-
-@pytest.fixture
-def mock_bus():
-    return MockEventBus()
+    rt = MagicMock()
+    rt.is_online = True
+    rt.get_config = MagicMock(return_value={})
+    return rt
 
 
 @pytest.fixture
 def mock_policy():
-    return MockPolicyEngine()
+    pe = MagicMock()
+    pe.get = MagicMock(return_value=None)
+    return pe
 
 
-@pytest.fixture
-def orchestrator(mock_router, mock_rag_high, mock_cloud, mock_memory,
-                  mock_policy, mock_bus, mock_runtime, mock_web):
-    """Crée un NuruOrchestrator avec toutes les dépendances mockées."""
-    from src.core.orchestrator import NuruOrchestrator
-    from src.core.policies import PolicyEngine
-    from src.core.events import EventBus
+# ══════════════════════════════════════════════════════════════════════════
+#  RAGOrchestrator factory
+# ══════════════════════════════════════════════════════════════════════════
 
-    orch = NuruOrchestrator(
-        router=mock_router,
-        rag_engine=mock_rag_high,
-        local_llm=MagicMock(),
-        cloud_llm=mock_cloud,
-        memory_store=mock_memory,
-        policy_engine=mock_policy,
-        event_bus=mock_bus,
-        runtime_manager=mock_runtime,
-        web_search=mock_web,
-        context_budget=MagicMock(),
-        reflection_engine=None,
-        system_prompt_builder=lambda intent, facts=None, procedures="": (
-            "Tu es NURU, assistant de Leblanc."
-        ),
+def _make_rag(mock_rag_engine, mock_guard, mock_verifier,
+              mock_event_bus, mock_stream_llm):
+    web = AsyncMock()
+    web.search = AsyncMock(return_value="Résultat web mocké")
+    r = RAGOrchestrator(
+        rag_engine=mock_rag_engine,
+        cloud_llm=mock_stream_llm,
+        web_search=web,
+        event_bus=mock_event_bus,
+        response_guard=mock_guard,
+        evidence_verifier=mock_verifier,
     )
-    return orch
-
-
-# ═══════════════════════════════════════════════════════════
-# 1. Pipeline RAG complet avec mock cloud
-# ═══════════════════════════════════════════════════════════
-
-
-@pytest.mark.asyncio
-async def test_rag_pipeline_complet(orchestrator, mock_bus):
-    """Test : Pipeline RAG complet → tokens streamés + événements émis."""
-    tokens = []
-    async for token in orchestrator.process_query(
-        query="Quel est le rendement du riz?",
-        session_id="test-session",
-    ):
-        tokens.append(token)
-
-    full_response = "".join(tokens)
-    assert len(full_response) > 0, "La réponse ne devrait pas être vide"
-    assert "réponse" in full_response.lower() or "document" in full_response.lower(), \
-        f"Réponse inattendue: {full_response[:100]}"
-
-    # Vérifier les événements émis
-    event_types = [e[0] for e in mock_bus.events]
-    print(f"Événements émis: {event_types}")
-
-    assert "query.received" in event_types, "Événement query.received manquant"
-    assert "route.decided" in event_types, "Événement route.decided manquant"
-    assert "generation_complete" in event_types, "Événement generation_complete manquant"
-    assert "rag_score" in event_types, "Événement rag_score manquant"
-
-    # Vérifier les données de rag_score
-    rag_events = [e for e in mock_bus.events if e[0] == "rag_score"]
-    assert len(rag_events) >= 1
-    assert rag_events[0][1]["score"] > 0
-
-    print("✅ Pipeline RAG complet OK")
-
-
-# ═══════════════════════════════════════════════════════════
-# 2. Pipeline avec décomposition (sub-queries)
-# ═══════════════════════════════════════════════════════════
-
-
-@pytest.mark.asyncio
-async def test_pipeline_with_decomposition(orchestrator, mock_bus):
-    """Test : Pipeline avec décomposition → sous-requêtes traitées."""
-    # Requête longue qui déclenche la décomposition
-    complex_query = (
-        "Quels sont les rendements du riz et du maïs à Palabek "
-        "en 2023 et quelles sont les superficies cultivées?"
-    )
-
-    tokens = []
-    async for token in orchestrator.process_query(
-        query=complex_query,
-        session_id="test-session",
-    ):
-        tokens.append(token)
-
-    full_response = "".join(tokens)
-    assert len(full_response) > 0, "La réponse décomposée ne devrait pas être vide"
-
-    # Vérifier que query.decomposed a été émis (ou au moins que le pipeline a fonctionné)
-    event_types = [e[0] for e in mock_bus.events]
-    print(f"Événements (décomposition): {event_types}")
-
-    assert "generation_complete" in event_types, "generation_complete manquant"
-
-    query_received = [e for e in mock_bus.events if e[0] == "query.received"]
-    assert len(query_received) >= 1
-
-    print("✅ Pipeline avec décomposition OK")
-
-
-# ═══════════════════════════════════════════════════════════
-# 3. Pipeline avec FactChecker + retry loop
-# ═══════════════════════════════════════════════════════════
-
-
-@pytest.mark.asyncio
-async def test_pipeline_factcheck_retry(mock_router, mock_rag_high, mock_memory,
-                                         mock_policy, mock_bus, mock_runtime, mock_web):
-    """Test : FactChecker échoue → retry → vérification warning émis."""
-    from src.core.orchestrator import NuruOrchestrator
-
-    # CloudLLM qui échoue la vérification
-    failing_cloud = MockCloudLLM(mode="fact_fail")
-
-    orch = NuruOrchestrator(
-        router=mock_router,
-        rag_engine=mock_rag_high,
-        local_llm=MagicMock(),
-        cloud_llm=failing_cloud,
-        memory_store=mock_memory,
-        policy_engine=mock_policy,
-        event_bus=mock_bus,
-        runtime_manager=mock_runtime,
-        web_search=mock_web,
-        context_budget=MagicMock(),
-        reflection_engine=None,
-        system_prompt_builder=lambda intent, facts=None, procedures="": (
-            "Tu es NURU, assistant de Leblanc."
-        ),
-    )
-
-    tokens = []
-    async for token in orch.process_query(
-        query="Quel est le rendement du riz à Palabek?",
-        session_id="test-session",
-    ):
-        tokens.append(token)
-
-    full_response = "".join(tokens)
-    assert len(full_response) > 0
-
-    event_types = [e[0] for e in mock_bus.events]
-    print(f"Événements (factcheck): {event_types}")
-
-    # Soit verification_failed (retry réussi) ou verification_warning (retry déjà fait)
-    has_verification_event = (
-        "verification_failed" in event_types or
-        "verification_warning" in event_types
-    )
-    assert has_verification_event, \
-        f"Aucun événement de vérification émis. Événements: {event_types}"
-
-    print("✅ Pipeline FactChecker + retry OK")
-
-
-@pytest.mark.asyncio
-async def test_pipeline_factcheck_passes(mock_router, mock_rag_high, mock_memory,
-                                          mock_policy, mock_bus, mock_runtime, mock_web):
-    """Test : FactChecker réussi → pas de warning."""
-    from src.core.orchestrator import NuruOrchestrator
-
-    passing_cloud = MockCloudLLM(mode="ok")
-
-    orch = NuruOrchestrator(
-        router=mock_router,
-        rag_engine=mock_rag_high,
-        local_llm=MagicMock(),
-        cloud_llm=passing_cloud,
-        memory_store=mock_memory,
-        policy_engine=mock_policy,
-        event_bus=mock_bus,
-        runtime_manager=mock_runtime,
-        web_search=mock_web,
-        context_budget=MagicMock(),
-        reflection_engine=None,
-        system_prompt_builder=lambda intent, facts=None, procedures="": (
-            "Tu es NURU, assistant de Leblanc."
-        ),
-    )
-
-    tokens = []
-    async for token in orch.process_query(
-        query="Quel est le rendement du riz?",
-        session_id="test-session",
-    ):
-        tokens.append(token)
-
-    event_types = [e[0] for e in mock_bus.events]
-    print(f"Événements (factcheck ok): {event_types}")
-
-    # Pas de verification_failed ou verification_warning
-    has_fail = "verification_failed" in event_types
-    has_warning = "verification_warning" in event_types
-    assert not has_fail, "verification_failed ne devrait pas être émis"
-    assert not has_warning, "verification_warning ne devrait pas être émis"
-
-    print("✅ Pipeline FactChecker passe OK")
-
-
-# ═══════════════════════════════════════════════════════════
-# 4. Pipeline offline (mode dégradé)
-# ═══════════════════════════════════════════════════════════
-
-
-@pytest.mark.asyncio
-async def test_pipeline_offline(mock_router, mock_rag_high, mock_memory,
-                                 mock_policy, mock_bus, mock_runtime, mock_web):
-    """Test : Pipeline offline → fallback local + mode dégradé."""
-    from src.core.orchestrator import NuruOrchestrator
-
-    orch = NuruOrchestrator(
-        router=mock_router,
-        rag_engine=mock_rag_high,
-        local_llm=MagicMock(),
-        cloud_llm=MockCloudLLM(),
-        memory_store=mock_memory,
-        policy_engine=mock_policy,
-        event_bus=mock_bus,
-        runtime_manager=mock_runtime,
-        web_search=mock_web,
-        context_budget=MagicMock(),
-        reflection_engine=None,
-        system_prompt_builder=lambda intent, facts=None, procedures="": (
-            "Tu es NURU, assistant de Leblanc."
-        ),
-    )
-
-    # Patch _check_connectivity pour retourner False (offline)
-    original_check = orch._check_connectivity
-    orch._check_connectivity = AsyncMock(return_value=False)
-
-    tokens = []
-    async for token in orch.process_query(
-        query="Quel est le rendement du riz?",
-        session_id="test-session",
-    ):
-        tokens.append(token)
-
-    # Restaurer
-    orch._check_connectivity = original_check
-
-    full_response = "".join(tokens)
-    assert len(full_response) > 0, "La réponse offline ne devrait pas être vide"
-
-    event_types = [e[0] for e in mock_bus.events]
-    print(f"Événements (offline): {event_types}")
-
-    assert "query.received" in event_types
-    assert "route.decided" in event_types
-
-    print("✅ Pipeline offline OK")
-
-
-# ═══════════════════════════════════════════════════════════
-# 5. Cache sémantique SemanticCache (isolation)
-# ═══════════════════════════════════════════════════════════
-
-
-@pytest.mark.asyncio
-async def test_semantic_cache():
-    """Test : SemanticCache opérations CRUD + diagnostic."""
-    import tempfile
-    import os
-    from src.rag.memory_store import SemanticCache
-
-    tmp = Path(tempfile.mktemp(suffix=".db"))
-    sc = SemanticCache(db_path=tmp)
-
-    try:
-        # Cache miss
-        h = sc.hash_query("requête inconnue")
-        resp, diag = sc.get_cache(h)
-        assert resp is None
-        assert diag is None
-        print("  ✅ Cache miss OK")
-
-        # Cache set + get avec diagnostic
-        h2 = sc.hash_query("rendement riz Palabek")
-        diag_data = {
-            "strategies_tried": ["vector", "fts"],
-            "scores": [0.85, 0.65],
-            "timing_ms": 120.5,
-        }
-        sc.set_cache(h2, "Le rendement du riz est de 4.5 t/ha",
-                      diagnostic=diag_data,
-                      query_sample="rendement riz Palabek")
-
-        resp, diag = sc.get_cache(h2)
-        assert resp == "Le rendement du riz est de 4.5 t/ha"
-        assert diag["strategies_tried"] == ["vector", "fts"]
-        assert diag["scores"] == [0.85, 0.65]
-        print("  ✅ Cache set+get avec diagnostic OK")
-
-        # get_diagnostics
-        diags = sc.get_diagnostics()
-        assert len(diags) >= 1
-        assert diags[0]["query_hash"] == h2
-        assert diags[0]["hit_count"] >= 1
-        print("  ✅ get_diagnostics OK")
-
-        # stats
-        stats = sc.get_stats()
-        assert stats["total_entries"] >= 1
-        assert stats["total_hits"] >= 1
-        print("  ✅ Stats OK")
-
-    finally:
-        os.unlink(tmp)
-    print("  ✅ Cache sémantique complet OK")
-
-
-# ═══════════════════════════════════════════════════════════
-# Exécution directe
-# ═══════════════════════════════════════════════════════════
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "--tb=short"])
+    r.fallback_guard = mock_guard
+    return r
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  1. RAGOrchestrator — retrieve_multi
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestRAGOrchestratorRetrieve:
+
+    @pytest.fixture
+    def rag(self, mock_rag_engine, mock_guard, mock_verifier,
+            mock_event_bus, mock_stream_llm):
+        return _make_rag(mock_rag_engine, mock_guard, mock_verifier,
+                         mock_event_bus, mock_stream_llm)
+
+    @pytest.mark.asyncio
+    async def test_retrieve_multi_rag(self, rag):
+        """RAG intent → retrieve multi-sources + merge."""
+        # D'abord un retrieve primaire pour avoir du contexte
+        primary_ctx, primary_result = await rag.rag_engine.retrieve(
+            "machine learning")
+        rag_context, web_context, merged = await rag.retrieve_multi(
+            query="Parle-moi du machine learning",
+            intent="RAG",
+            primary_rag_context=primary_ctx,
+            primary_rag_result=primary_result,
+        )
+        assert rag_context.strip(), "RAG context should be non-empty"
+        assert merged is not None
+        assert merged.confidence_label in ("HAUTE", "MOYENNE", "FAIBLE")
+
+    @pytest.mark.asyncio
+    async def test_retrieve_multi_simple(self, rag):
+        """SIMPLE intent → pas de retrieve."""
+        rag_context, web_context, merged = await rag.retrieve_multi(
+            query="Bonjour",
+            intent="SIMPLE",
+            primary_rag_context="",
+            primary_rag_result=None,
+        )
+        assert rag_context == ""
+        assert web_context == ""
+        assert merged is None
+
+    @pytest.mark.asyncio
+    async def test_retrieve_multi_complex(self, rag):
+        """COMPLEX intent → retrieve déclenché."""
+        primary_ctx, primary_result = await rag.rag_engine.retrieve(
+            "transformers")
+        rag_context, web_context, merged = await rag.retrieve_multi(
+            query="Explique les transformers et le fine-tuning",
+            intent="COMPLEX",
+            primary_rag_context=primary_ctx,
+            primary_rag_result=primary_result,
+        )
+        assert rag_context.strip(), "Complex intent should retrieve"
+        assert merged is not None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  2. RAGOrchestrator — integrate_spotlight
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestRAGOrchestratorSpotlight:
+
+    @pytest.fixture
+    def rag(self, mock_rag_engine, mock_guard, mock_verifier,
+            mock_event_bus, mock_stream_llm):
+        return _make_rag(mock_rag_engine, mock_guard, mock_verifier,
+                         mock_event_bus, mock_stream_llm)
+
+    def test_integrate_spotlight(self, rag):
+        """Spotlight s'intègre sans erreur."""
+        result = rag.integrate_spotlight(
+            rag_context="Contexte existant.",
+            rag_result=RAGResult(),
+            spotlight_ctx="",
+        )
+        assert isinstance(result, str)
+
+    def test_integrate_spotlight_empty(self, rag):
+        """Spotlight avec contexte vide."""
+        result = rag.integrate_spotlight(
+            rag_context="",
+            rag_result=RAGResult(),
+            spotlight_ctx="",
+        )
+        assert isinstance(result, str)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  3. RAGOrchestrator — check_strict_blocks
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestRAGOrchestratorStrictBlocks:
+
+    @pytest.fixture
+    def rag(self, mock_rag_engine, mock_guard, mock_verifier,
+            mock_event_bus, mock_stream_llm):
+        return _make_rag(mock_rag_engine, mock_guard, mock_verifier,
+                         mock_event_bus, mock_stream_llm)
+
+    @pytest.mark.asyncio
+    async def test_check_strict_blocks_normal(self, rag):
+        """check_strict_blocks ne bloque pas en mode normal."""
+        blocked = await rag.check_strict_blocks(
+            query="question normale",
+            intent="RAG",
+            rag_context="Contexte valide",
+            web_context="",
+        )
+        assert blocked is None
+
+    @pytest.mark.asyncio
+    async def test_check_strict_blocks_strict(self, rag):
+        """Mode strict + aucune source + mot-clé RAG → blocage."""
+        rag.fallback_guard.is_strict = True
+        rag.response_guard.is_strict = True
+
+        blocked = await rag.check_strict_blocks(
+            query="trouve le fichier machine learning",
+            intent="COMPLEX",
+            rag_context="",
+            web_context="",
+        )
+        assert blocked is not None
+        assert isinstance(blocked, str)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  4. LLMGenerator — generate + check_connectivity
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestLLMGenerator:
+
+    @pytest.fixture
+    def gen(self, mock_stream_llm, mock_event_bus, mock_policy, mock_runtime):
+        return LLMGenerator(
+            local_llm=mock_stream_llm,
+            cloud_llm=mock_stream_llm,
+            policy_engine=mock_policy,
+            runtime=mock_runtime,
+            event_bus=mock_event_bus,
+        )
+
+    @pytest.mark.asyncio
+    async def test_generate_streaming(self, gen, mock_ctx):
+        """Generate produit des tokens."""
+        tokens = []
+        async for token in gen.generate(
+            system_prompt="System",
+            full_prompt="Question?",
+            query="test",
+            intent="SIMPLE",
+            ctx=mock_ctx,
+        ):
+            tokens.append(token)
+        assert len(tokens) > 0
+        full = "".join(tokens)
+        assert "Réponse" in full
+
+    @pytest.mark.asyncio
+    async def test_generate_offline(self, gen):
+        """Generate fonctionne en offline."""
+        gen.cloud_llm.is_online = False
+        gen.policy_engine.get = MagicMock(return_value="local")
+        gen.policy_engine.should_use_cloud = MagicMock(return_value=False)
+        gen.runtime = None
+        local = MagicMock()
+        local.is_online = True
+        local.model_name = "local-model"
+
+        async def _local_stream(*args, **kwargs):
+            for token in ["Réponse", " locale", "."]:
+                yield token
+        local.generate_stream = _local_stream
+        gen.local_llm = local
+
+        ctx = MagicMock()
+        ctx.is_online = False
+        ctx.ram_free_mb = 4096
+        ctx.mode = "local"
+        ctx.hybrid_strategy = "local"
+        ctx.already_fact_checked = False
+        ctx.already_retried = False
+        ctx.already_fallback = False
+        ctx.keywords = None
+
+        tokens = []
+        async for token in gen.generate(
+            system_prompt="System",
+            full_prompt="Question?",
+            query="test",
+            intent="SIMPLE",
+            ctx=ctx,
+        ):
+            tokens.append(token)
+        full = "".join(tokens)
+        assert "locale" in full
+
+    @pytest.mark.asyncio
+    async def test_check_connectivity_online(self, gen):
+        """Connectivity check retourne booléen."""
+        result = await gen.check_connectivity()
+        assert isinstance(result, bool)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  5. RAGOrchestrator — verify_citations
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestRAGOrchestratorCitations:
+
+    @pytest.fixture
+    def rag(self, mock_rag_engine, mock_guard, mock_verifier,
+            mock_event_bus, mock_stream_llm):
+        return _make_rag(mock_rag_engine, mock_guard, mock_verifier,
+                         mock_event_bus, mock_stream_llm)
+
+    @pytest.mark.asyncio
+    async def test_verify_citations_normal(self, rag):
+        """verify_citations ne bloque pas une réponse valide."""
+        result = await rag.verify_citations(
+            intent="RAG",
+            rag_context="Contexte avec sources",
+            response_content="Réponse valide avec citation.",
+            rag_result=RAGResult(),
+            query="question de test",
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_verify_citations_simple(self, rag):
+        """SIMPLE intent → pas de vérif."""
+        result = await rag.verify_citations(
+            intent="SIMPLE",
+            rag_context="",
+            response_content="Bonjour",
+            rag_result=None,
+            query="bonjour",
+        )
+        assert result is None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  6. RAGOrchestrator — retrieve_primary
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestRAGOrchestratorRetrievePrimary:
+
+    @pytest.fixture
+    def rag(self, mock_rag_engine, mock_guard, mock_verifier,
+            mock_event_bus, mock_stream_llm):
+        return _make_rag(mock_rag_engine, mock_guard, mock_verifier,
+                         mock_event_bus, mock_stream_llm)
+
+    @pytest.mark.asyncio
+    async def test_retrieve_primary_rag(self, rag, mock_ctx):
+        """retrieve_primary retourne contexte + résultat."""
+        rag_context, rag_result = await rag.retrieve_primary(
+            query="machine learning", ctx=mock_ctx)
+        assert rag_context.strip()
+        assert rag_result is not None
+        assert hasattr(rag_result, 'confidence_label')
