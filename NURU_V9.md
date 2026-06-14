@@ -1832,3 +1832,19 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 
 **Tests :** 10 tests unitaires. 60 verts total.
 
+### V10.3i — 2026-06-14 « CLI interactif + delete/rename SessionStore »
+
+**Nouveau :**
+- `cli.py` — CLI interactif NURU : `ask`, `chat`, `list`, `show`, `delete`
+  - `ask <question>` : one‑shot streaming
+  - `chat` : mode multi‑tour avec sessions persistantes
+  - `list` : sessions depuis SessionStore (formaté)
+  - `show <id>` : historique complet d'une session
+  - `delete <id>` : suppression d'une session
+  - Commandes : `/help`, `/clear`, `/new`, `/exit`
+
+**Modifié :**
+- `src/ui/components/sessions_page.py` — `_on_row_delete()` et `_on_row_rename()` persistent via SessionStore (delete_session / update_title)
+
+**Tests :** 60 verts (inchangés)
+
