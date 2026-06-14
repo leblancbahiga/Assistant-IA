@@ -1682,3 +1682,23 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 - Modules V8 (MultiSearchOrchestrator, FactChecker, HyDE, decomposer) — tous actifs/instanciés en prod
 
 **Commits :** 1fe237e
+
+### V10.2c — 2026-06-14 « Phase 3 — Architecture & Mémoire »
+
+**Fenêtre contextuelle 32K :**
+- `ContextBudget(max_prompt_tokens=8192, reserved_response=2048)` — prompt jusqu'à 6144 tokens
+- Changé dans `src/nuru_core.py` et `src/context_manager.py` (défauts)
+
+**Hiérarchie d'exceptions :**
+- `src/core/exceptions.py` créé : `OrchestratorError` → `RAGError | LLMError | MemoryError | RouterError | ConfigError | GuardError`
+- 6 `except Exception` remplacés par `except (LLMError, RAGError)` etc. dans `orchestrator.py`
+
+**Race conditions cache :**
+- `asyncio.Lock()` ajouté sur `get_cache()` et `set_cache()` dans `memory_store.py`
+
+**Constats :**
+- `_memory_context = {}` défini mais jamais utilisé (code mort inoffensif)
+- Orchestrator (831 lignes) est coordinateur bien structuré, pas God Object bloquant
+- Découplage complet = ~4h, à planifier séparément
+
+**Commits :** 331f467
