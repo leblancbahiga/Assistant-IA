@@ -15,15 +15,11 @@ from src.cloud import WebSearch
 from src.context_manager import ContextBudget
 from src.runtime_manager import RuntimeManager
 from src.core.events import EventBus
-# NURU V5 : plugin_system supprimé
-PluginSystem = object  # stub
-# NURU V5 : reflection_engine supprimé
-class ReflectionEngine:
-    """Stub pour compatibilité ascendante."""
-    async def analyze(self, *args, **kwargs):
-        return {}
-    def add_reflection(self, *args, **kwargs):
-        pass
+# NURU V10.3 — AUDIT-FIX : PluginSystem et ReflectionEngine supprimés (Arch-01).
+# Étaient des stubs legacy (YAGNI) qui ajoutaient du bruit dans NuruCore.__init__
+# et correspondaient à du code mort — aucun call site ne les utilisait réellement.
+# Si un vrai système de plugins est nécessaire un jour, il sera ajouté frais
+# dans un module dédié (src/plugins/) avec tests et DI explicite.
 from src.ingestion import IngestionEngine
 from src.ram_monitor import RAMMonitor  # V4 : Monitoring RAM
 from src.document_watcher import DocumentWatcher  # V4.5 : Auto-indexation watchdog
@@ -130,8 +126,7 @@ class NuruCore:
         )
         self.runtime = RuntimeManager()
         self.event_bus = EventBus()
-        self.plugins = PluginSystem()
-        self.reflection = ReflectionEngine()
+        # V10.3 — AUDIT Arch-01 : self.plugins et self.reflection supprimés (stubs YAGNI)
         self.ingestion = IngestionEngine()
         
         # V4 : Monitoring RAM actif
@@ -155,7 +150,8 @@ class NuruCore:
             runtime_manager=self.runtime,
             web_search=self.web,
             context_budget=self.context_budget,
-            reflection_engine=self.reflection,
+            # V10.3 — AUDIT Arch-01 : reflection_engine=None (ref stubs supprimés)
+            reflection_engine=None,
             system_prompt_builder=self.build_system_prompt,  # V4.5 : callback prompt
         )
         logger.info("🚀 NuruOrchestrator V4.5 initialisé")

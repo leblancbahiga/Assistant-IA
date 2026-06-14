@@ -48,6 +48,8 @@ _INJECTION_PATTERNS: Final[tuple[str, ...]] = (
     "<user>", "</user>", "[SYSTEM_PROMPT]", "[SYS]",
     "End of system prompt", "Fin du prompt système",
     "Ignore above", "Ignore tout ce qui précède",
+    "Ignore previous", "Ignore everything previous",
+    "Ignore all previous", "Disregard previous", "Disregard earlier",
     "Output only:", "Réponds uniquement",
 )
 

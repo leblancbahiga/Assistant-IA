@@ -127,6 +127,13 @@ class NuruOrchestrator:
         self.session_store = SessionStore()
         self._session_max_context = getattr(config, 'session_max_messages', 10)
 
+        # V10.3h : ArchonRefiner — auto‑correction post‑génération
+        from src.ai.archon_refiner import ArchonRefiner
+        self.archon_refiner = ArchonRefiner(
+            cloud_llm=self.cloud_llm,
+            enabled=getattr(config, 'archon_enabled', True),
+        )
+
         # V10.2 : Sous-orchestrateurs
         self.rag_pipeline = RAGOrchestrator(
             rag_engine=self.rag_engine,
@@ -338,6 +345,17 @@ class NuruOrchestrator:
         elif warning_msg:
             yield "\n\n---\n" + warning_msg + "\n---\n"
 
+        # V10.3h : ArchonRefiner — auto‑correction post‑génération
+        refined = await self.archon_refiner.refine(
+            response_content,
+            rag_context=rag_context,
+            rag_score=rag_result.top_score if rag_result else 0.0,
+            intent=intent,
+        )
+        if refined != response_content:
+            response_content = refined
+            yield "\n\n🔮 **Vérification Archon : réponse raffinée**\n"
+
         # V10.3f : Enregistrer la réponse dans l'historique session
         self.session_store.add_message(
             session_id, "assistant", response_content,
@@ -458,6 +476,15 @@ class NuruOrchestrator:
         else:
             full_rag = rag_context
 
+        # AUDIT V10.3 — S-002b : sanitiser le contenu RAG avant injection dans le prompt.
+        # Le contenu vient de documents indexés potentiellement contrôlés par des tiers
+        # (CVs, rapports, fichiers publiques) et constitue la surface d'injection #1.
+        if full_rag:
+            full_rag = sanitize_document_content(full_rag, max_chars=4000)
+
+        # AUDIT V10.3 — S-002 : sanitiser la query AVANT l'injection dans le template.
+        safe_query = sanitize_for_prompt_injection(query, max_chars=1000)
+
         # Construire le prompt système via le callback NuruCore
         if self._system_prompt_builder:
             system_prompt = self._system_prompt_builder(
@@ -474,13 +501,24 @@ class NuruOrchestrator:
                 session_ctx = self.session_store.build_context(
                     session_id, max_messages=self._session_max_context)
                 if session_ctx:
-                    system_prompt += f"\n\n{session_ctx}"
+                    # AUDIT V10.3c — sanitiser le contexte de session aussi (historique user)
+                    sanitized_session = sanitize_for_prompt_injection(session_ctx, max_chars=2000)
+                    system_prompt += f"\n\n{sanitized_session}"
             except Exception:
                 logger.debug("SessionStore: erreur injection contexte", exc_info=True)
 
-        # NURU V4.5 : Injection des faits utilisateur long terme dans le système
+        # AUDIT V10.3 — wrap user_facts_str dans un bloc sécurisé
+        # Avant : `f"... {user_facts_str}"` injectait les faits tels quels.
+        # Maintenant : wrap avec délimiteurs + sanitization par fait.
         if user_facts_str:
-            system_prompt += f"\n\n## INFORMATIONS SUR L'UTILISATEUR\n{user_facts_str}"
+            facts_list = [
+                line.strip("- ").strip()
+                for line in user_facts_str.split("\n")
+                if line.strip()
+            ]
+            safe_facts_block = build_safe_user_facts_block(facts_list)
+            if safe_facts_block:
+                system_prompt += f"\n\n{safe_facts_block}"
 
         if self.context_budget:
             # Formater user_facts en liste pour le budget
@@ -497,7 +535,7 @@ class NuruOrchestrator:
             full_prompt = f"{system_prompt}\n\n{full_rag}"
 
         if intent == "COMPLEX":
-            full_prompt += f"\n## QUESTION À TRAITER :\n{query}"
+            full_prompt += f"\n## QUESTION À TRAITER :\n{safe_query}"
             if full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
                 full_prompt += (
                     f"\n\n## INSTRUCTION — CONTEXTE DISPONIBLE\n"
@@ -508,11 +546,11 @@ class NuruOrchestrator:
                     f"- Cite les sources quand tu utilises le contexte.\n"
                 )
         elif intent == "GENERAL":
-            # V10.1 : Connaissances générales — aucune instruction RAG stricte
+            # AUDIT V10.3 — utiliser safe_query
             full_prompt += (
                 f"\n\n## QUESTION (connaissances générales)\n"
                 f"Réponds avec tes connaissances. Si tu n'es pas certain, dis-le.\n\n"
-                f"{query}<|end|>\n<|assistant|>\n"
+                f"{safe_query}<|end|>\n<|assistant|>\n"
             )
         elif intent == "RAG" and full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
             full_prompt += (
@@ -524,10 +562,11 @@ class NuruOrchestrator:
                 f"\"Je ne trouve pas cette information dans les documents.\"\n"
                 f"- N'invente RIEN. Ne complète PAS.\n"
                 f"- Cite la source avec [Source: nom_du_fichier].\n\n"
-                f"{query}<|end|>\n<|assistant|>\n"
+                f"{safe_query}<|end|>\n<|assistant|>\n"
             )
         else:
-            full_prompt += f"{query}<|end|>\n<|assistant|>\n"
+            # AUDIT V10.3 — utiliser safe_query
+            full_prompt += f"{safe_query}<|end|>\n<|assistant|>\n"
         return system_prompt, full_prompt
 
     def _finalize(self, response, duration, intent, rag_result):

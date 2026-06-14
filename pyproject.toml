@@ -1,7 +1,7 @@
 [project]
-name = "nuru-v45"
-version = "4.5.0"
-description = "NURU V4.5 — Assistant IA local pour Apple Silicon (Phi-4-mini / Groq / RAG)"
+name = "nuru"
+version = "10.3.0"
+description = "NURU V10.3 — Assistant IA local pour Apple Silicon (Phi-4-mini / Groq / RAG multi-stratégie sécurisé)"
 authors = [
     { name = "Leblanc BAHIGA Mudarhi" }
 ]
