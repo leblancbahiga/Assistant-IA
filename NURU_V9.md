@@ -1662,3 +1662,23 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 - AgentStatusWidget: Inactif -> Pret - en attente de tache
 
 **Commits :** 48c038c
+
+### V10.2 — 2026-06-14 « Correctifs Audit P0+P1 (consensus 7 experts) »
+
+**Corrections bloquantes (Phase 1 — < 1h) :**
+- `import logging` ajouté dans `config.py` — tous les toggles Settings (TokenJuice, Learning, Nuru_Brain, Auto-Fetch, Hybrid mode) marchaient silencieusement
+- URL OpenRouter corrigée (`api.openrouter.ai` → `openrouter.ai`) dans `llm_cloud.py`
+- Fuite mémoire MLX : `self.unload()` dans le bloc `except` de `generate_stream()` (prévention fuite GPU)
+- `pysqlite3` → `pysqlite3-binary` dans `pyproject.toml` + import protégé (try/except) dans `rag_engine.py`
+- PromptGuard implémenté : `sanitize_rag_query()` + `sanitize_chunk_content()` dans `rag_engine.py`
+
+**Corrections mineures (Phase 2 — 30 min) :**
+- `confidence_label = "ABSENT"` forcé sur retour RAG vide (plus de HAUTE déclarée par défaut)
+- `rag_score_threshold` abaissé de 0.40 à 0.30 dans `settings.yaml` (réduit faux négatifs RAG)
+
+**Constatations (audits partiellement obsolètes) :**
+- `audio_tts.py`, `sqlite_compat.py` déjà supprimés du codebase
+- `process_query()` déjà un wrapper mince (334 lignes, pas 679)
+- Modules V8 (MultiSearchOrchestrator, FactChecker, HyDE, decomposer) — tous actifs/instanciés en prod
+
+**Commits :** 1fe237e

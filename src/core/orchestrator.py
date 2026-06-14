@@ -17,6 +17,10 @@ from src.core.query_context import QueryContext, EvidencePack
 from src.core.events import EventBus
 from src.core.policies import PolicyEngine
 from src.core.response_guard import StrictRAGGuard
+from src.core.exceptions import (
+    OrchestratorError, RAGError, LLMError, MemoryError,
+    RouterError, ConfigError, GuardError,
+)
 from src.ai.verifier import EvidenceVerifier
 from src.token_juice import TokenJuice
 from src.learning.trace_collector import TraceCollector
@@ -188,7 +192,7 @@ class NuruOrchestrator:
                             "original": query,
                             "sub_queries": sub_queries,
                         })
-                except Exception as e:
+                except (RAGError, ConfigError) as e:
                     logger.debug(f"Décomposition non disponible: {e}")
 
             # Contextes fusionnés
@@ -351,7 +355,7 @@ class NuruOrchestrator:
             async for token in self._generate(system_prompt, full_prompt, query, intent, ctx, web_context=web_context, rag_context=rag_context, original_query=original_query):
                 response_content += token
                 yield token
-        except Exception as e:
+        except (LLMError, GuardError, RAGError) as e:
             logger.error(f"❌ Génération: {e}")
             yield f"\n[⚠️ Erreur: {e}]"
             return
@@ -367,7 +371,7 @@ class NuruOrchestrator:
                     # Récupérer les sources depuis le résultat RAG
                     if hasattr(rag_result, 'source_list'):
                         chunk_sources = rag_result.source_list
-                except Exception:
+                except (AttributeError, RAGError):
                     pass
             if not chunk_sources and rag_context:
                 # Fallback : extraire les [SOURCE N] du contexte
@@ -458,7 +462,7 @@ class NuruOrchestrator:
                                 "issues": check.issues[:5],
                                 "query": query,
                             })
-            except Exception as e:
+            except (RAGError, LLMError) as e:
                 logger.debug(f"V8+ FactChecker ignoré: {e}")
 
         # ── 8. Finalisation ──
@@ -551,7 +555,7 @@ class NuruOrchestrator:
                     source="conversation",
                     confidence=fact.get("confidence", 0.8),
                 )
-        except Exception as e:
+        except (MemoryError, RAGError) as e:
             logger.debug(f"🧠 LTM extrait post-réponse ignoré ({e})")
 
     # ─── Privées ───
@@ -787,7 +791,7 @@ class NuruOrchestrator:
             else:
                 async for token in gen:
                     yield token
-        except Exception as e:
+        except (LLMError, RAGError) as e:
             logger.error(f"Local fail: {e}. Fallback Cloud.")
             yield " [Bascule Cloud...] "
             # V10: prompt ancré avec user_message + temperature basse

@@ -12,6 +12,7 @@ from typing import List, Optional, Tuple
 from src.config import config
 import sqlite_vec
 from src.embedder import Embedder
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,8 @@ class MemoryStore:
         self._init_db()
         self._init_feedback_tables()  # V4.5 Phase 3 : Feedback + Knowledge Cards
         self._memory_context = {} # Working Memory (RAM)
+        self._cache_lock = asyncio.Lock()  # V10.2: protection race condition cache
+        self._mem_lock = asyncio.Lock()     # V10.2: protection race condition working memory
 
     def _get_conn(self):
         """Ouvre une nouvelle connexion (Thread-safe) avec WAL mode."""
@@ -113,42 +116,43 @@ class MemoryStore:
 
         V8+ Sprint 6.2 : Retourne (response, diagnostic) si trouvé.
         """
-        embeddings = await self.embedder.embed(query, is_query=True)
-        qvec = sqlite_vec.serialize_float32(embeddings[0])
-        
-        conn = self._get_conn()
-        conn.enable_load_extension(True)
-        sqlite_vec.load(conn)
-        
-        row = conn.execute("""
-            SELECT response, distance
-            FROM semantic_cache
-            WHERE embedding MATCH ?
-            ORDER BY distance
-            LIMIT 1
-        """, [qvec]).fetchone()
-        
-        if row:
-            raw_response, dist = row
-            similarity = 1 - dist
-            if similarity > 0.92:
-                logger.info(f"Semantic Cache Hit (Sim={similarity:.2f})")
-                conn.execute("UPDATE semantic_cache SET hit_count = hit_count + 1 WHERE response = ?", [raw_response])
-                conn.commit()
-                conn.close()
+        async with self._cache_lock:
+            embeddings = await self.embedder.embed(query, is_query=True)
+            qvec = sqlite_vec.serialize_float32(embeddings[0])
+            
+            conn = self._get_conn()
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+            
+            row = conn.execute("""
+                SELECT response, distance
+                FROM semantic_cache
+                WHERE embedding MATCH ?
+                ORDER BY distance
+                LIMIT 1
+            """, [qvec]).fetchone()
+            
+            if row:
+                raw_response, dist = row
+                similarity = 1 - dist
+                if similarity > 0.92:
+                    logger.info(f"Semantic Cache Hit (Sim={similarity:.2f})")
+                    conn.execute("UPDATE semantic_cache SET hit_count = hit_count + 1 WHERE response = ?", [raw_response])
+                    conn.commit()
+                    conn.close()
 
-                # V8+ Sprint 6.2 : Tenter de parser le diagnostic embarqué
-                try:
-                    payload = json.loads(raw_response)
-                    if isinstance(payload, dict) and "response" in payload:
-                        return payload["response"], payload.get("diagnostic")
-                except (json.JSONDecodeError, TypeError):
-                    pass
+                    # V8+ Sprint 6.2 : Tenter de parser le diagnostic embarqué
+                    try:
+                        payload = json.loads(raw_response)
+                        if isinstance(payload, dict) and "response" in payload:
+                            return payload["response"], payload.get("diagnostic")
+                    except (json.JSONDecodeError, TypeError):
+                        pass
 
-                return raw_response, None  # Legacy : pas de diagnostic
-        
-        conn.close()
-        return None, None
+                    return raw_response, None  # Legacy : pas de diagnostic
+            
+            conn.close()
+            return None, None
 
     async def set_cache(self, query: str, response: str, diagnostic: Optional[dict] = None):
         """Enregistre une réponse dans le cache vectoriel.
@@ -156,29 +160,30 @@ class MemoryStore:
         V8+ Sprint 6.2 : Stocke le diagnostic embarqué dans la réponse
         pour que le dashboard affiche les infos même sur cache hit.
         """
-        # V8+ : Embarquer le diagnostic dans la réponse (JSON envelope)
-        if diagnostic is not None:
-            payload = json.dumps({
-                "response": response,
-                "diagnostic": diagnostic,
-                "cached_at": time.time(),
-            })
-        else:
-            payload = response  # Legacy : pas de diagnostic
+        async with self._cache_lock:
+            # V8+ : Embarquer le diagnostic dans la réponse (JSON envelope)
+            if diagnostic is not None:
+                payload = json.dumps({
+                    "response": response,
+                    "diagnostic": diagnostic,
+                    "cached_at": time.time(),
+                })
+            else:
+                payload = response  # Legacy : pas de diagnostic
 
-        embeddings = await self.embedder.embed(query, is_query=False)
-        qvec = sqlite_vec.serialize_float32(embeddings[0])
-        
-        conn = self._get_conn()
-        conn.enable_load_extension(True)
-        sqlite_vec.load(conn)
-        
-        conn.execute("""
-            INSERT INTO semantic_cache (embedding, query, response, hit_count)
-            VALUES (?, ?, ?, 0)
-        """, [qvec, query, payload])
-        conn.commit()
-        conn.close()
+            embeddings = await self.embedder.embed(query, is_query=False)
+            qvec = sqlite_vec.serialize_float32(embeddings[0])
+            
+            conn = self._get_conn()
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+            
+            conn.execute("""
+                INSERT INTO semantic_cache (embedding, query, response, hit_count)
+                VALUES (?, ?, ?, 0)
+            """, [qvec, query, payload])
+            conn.commit()
+            conn.close()
 
     # --- Historique de Session (Episodic) ---
     def add_message(self, role: str, content: str):

@@ -125,8 +125,8 @@ class NuruCore:
         self.memory = MemoryStore()
         self.audio = AudioEngine()
         self.context_budget = ContextBudget(
-            max_prompt_tokens=4096, # Augmenté pour V4
-            reserved_response=1024
+            max_prompt_tokens=8192, # V10.2: 32K pour Phi-4-mini (était 4096)
+            reserved_response=2048  # V10.2: réponses plus longues (était 1024)
         )
         self.runtime = RuntimeManager()
         self.event_bus = EventBus()

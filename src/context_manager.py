@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ContextBudget:
-    def __init__(self, max_prompt_tokens: int = 3000, reserved_response: int = 800):
+    def __init__(self, max_prompt_tokens: int = 8192, reserved_response: int = 2048):
         self.max_prompt = max_prompt_tokens
         self.max_prompt_tokens = max_prompt_tokens
         self.reserved_response = reserved_response
