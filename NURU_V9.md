@@ -1732,3 +1732,33 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 **Tests :** 7/7 — miss, L2→L1 promotion, L1 hit, purge, TTL, stats, set/get
 
 **Commits :** 80dcee8
+
+### V10.2f — 2025-06-14 « Tests unitaires (25 tests, tous verts) »
+
+**Nouveaux tests :**
+- `test_llm_cache.py` — 11 tests (L1/L2/promotion/TTL/LRU/stats/concurrence)
+- `test_rag_scoring.py` — 7 tests (labels HAUTE/MOYENNE/FAIBLE/ABSENT, seuils config, ContextBudget 32K)
+- `test_orchestrator_pipeline.py` — 7 tests (cache hit/miss, erreur LLM, events, mémoire, offline)
+
+**Commits :** cc75d01
+
+### V10.2g — 2025-06-14 « Découplage Orchestrator (RAGOrchestrator + LLMGenerator) »
+
+**Architecture :** `src/orchestration/`
+- `RAGOrchestrator` (~380 l.) : pipeline RAG (retrieve, décomposition, Spotlight, FallbackGuard, vérif citations, FactChecker)
+- `LLMGenerator` (~195 l.) : génération cloud/local, Archon, connectivity, température
+- `NuruOrchestrator` allégé : -135 lignes net (835→700). Coordinateur conservant cache, prompt, finalisation, mémoire, réflexion
+
+**Sections déléguées :**
+1. `_check_connectivity()` → `self.llm_gen.check_connectivity()`
+2. Section 2 (retrieve) → `self.rag_pipeline.retrieve_primary()`
+3. Section 4 (décomposition RAG) → `self.rag_pipeline.retrieve_multi()`
+4. Section 4.5 (Spotlight) → `self.rag_pipeline.integrate_spotlight()`
+5. Section 4.6 (nettoyage FAIBLE) → `self.rag_pipeline.clear_low_confidence_context()`
+6. Section 5 (Web fallback) → `self.rag_pipeline.maybe_web_fallback()`
+7. Sections 5.5-5.6 (FallbackGuard + Strict RAG) → `self.rag_pipeline.check_strict_blocks()`
+8. Section 7 (génération) → `self.llm_gen.generate()`
+9. Section 7.5 (vérif citations) → `self.rag_pipeline.verify_citations()`
+10. Section 7.6 (FactChecker) → `self.rag_pipeline.fact_check_and_retry()` + régénération orchestrateur
+
+**Tests :** 25/25 passent (inchangés)

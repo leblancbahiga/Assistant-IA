@@ -25,6 +25,7 @@ from src.ai.verifier import EvidenceVerifier
 from src.token_juice import TokenJuice
 from src.learning.trace_collector import TraceCollector
 from src.cache.llm_cache import LLMCache
+from src.orchestration import RAGOrchestrator, LLMGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,23 @@ class NuruOrchestrator:
         # V10.2 : Cache LLM multi-niveau (L1 RAM + L2 SQLite)
         self.llm_cache = LLMCache(self.memory_store)
 
+        # V10.2 : Sous-orchestrateurs
+        self.rag_pipeline = RAGOrchestrator(
+            rag_engine=self.rag_engine,
+            cloud_llm=self.cloud_llm,
+            web_search=self.web,
+            event_bus=self.event_bus,
+            response_guard=self.response_guard,
+            evidence_verifier=self.evidence_verifier,
+        )
+        self.llm_gen = LLMGenerator(
+            local_llm=self.local_llm,
+            cloud_llm=self.cloud_llm,
+            policy_engine=self.policy_engine,
+            runtime=self.runtime,
+            event_bus=self.event_bus,
+        )
+
     async def process_query(
         self,
         query: str,
@@ -128,7 +146,7 @@ class NuruOrchestrator:
         Yields les tokens de réponse.
         """
         # ── 1. Contexte avec état réseau réel (NURU V5) ──
-        is_online = await self._check_connectivity()
+        is_online = await self.llm_gen.check_connectivity()
         ctx = QueryContext.from_runtime(
             query, session_id,
             is_online=is_online,
@@ -144,13 +162,7 @@ class NuruOrchestrator:
         await self.event_bus.emit("query.received", {"query": query})
 
         # ── 2. RAG retrieval (UNE SEULE FOIS — partagé entre routeur et contexte) ──
-        # V10 Audit: retrieve() est appelé UNE SEULE fois, avant le routage.
-        # Le résultat est passé au routeur (évite N3 duplicate) et réutilisé
-        # pour la construction du prompt.
-        rag_context, rag_result = "", None
-        # Toujours retrieve : si la requête est triviale, le Score Gate
-        # retourne "" rapidement sans coût excessif.
-        rag_context, rag_result = await self.rag_engine.retrieve(query)
+        rag_context, rag_result = await self.rag_pipeline.retrieve_primary(query, ctx)
         self.last_rag_result = rag_result
 
         route_result = await self.router.route_with_context(ctx, rag_context=rag_context, rag_result=rag_result)
@@ -177,155 +189,43 @@ class NuruOrchestrator:
                 yield cached
                 return
 
-        # ── 4. Récupération contexte (avec décomposition si requête complexe) ──
-        if intent in ("RAG", "COMPLEX"):
-            # V8+ P10 : Décomposition des questions complexes en sous-requêtes
-            from src.rag.decomposer import QueryDecomposer, should_decompose
-            
-            sub_queries = [query]
-            if should_decompose(query):
-                try:
-                    decomposer = QueryDecomposer(cloud_llm=self.cloud_llm)
-                    decomposed = await decomposer.decompose(query)
-                    if len(decomposed) > 1:
-                        sub_queries = decomposed
-                        logger.info(
-                            f"🔀 Décomposition: {query[:50]} → {len(sub_queries)} sous-requêtes"
-                        )
-                        await self.event_bus.emit("query.decomposed", {
-                            "original": query,
-                            "sub_queries": sub_queries,
-                        })
-                except (RAGError, ConfigError) as e:
-                    logger.debug(f"Décomposition non disponible: {e}")
+        # ── 4. Récupération contexte (RAGOrchestrator multi-sous-requêtes) ──
+        rag_context, web_context, merged_result = await self.rag_pipeline.retrieve_multi(
+            query, intent, rag_context, rag_result,
+        )
+        rag_result = merged_result or rag_result
 
-            # Contextes fusionnés
-            rag_contexts: list[str] = []
-            merged_result = None
-            web_contexts: list[str] = []
-
-            for i, sq in enumerate(sub_queries):
-                # V10 Audit: première sous-requête = requête principale déjà retrievée
-                if i == 0 and rag_context is not None:
-                    rag_ctx, result, web = rag_context, rag_result, ""
-                    # V10 Audit O3: lancer la recherche web pour COMPLEX (même i=0)
-                    if intent == "COMPLEX" and self.web:
-                        web = await self.web.search(sq)
-                else:
-                    rag_ctx, result, web = await self._retrieve_context(sq, intent)
-                if rag_ctx:
-                    rag_contexts.append(rag_ctx)
-                if result and merged_result is None:
-                    merged_result = result
-                if web:
-                    web_contexts.append(web)
-
-            rag_context = "\n\n---\n\n".join(rag_contexts) if rag_contexts else ""
-            web_context = "\n".join(web_contexts) if web_contexts else ""
-            rag_result = merged_result
-        else:
-            # SIMPLE/CLARIFICATION — pas de RAG, mais le retrieve() est déjà fait
-            web_context = ""
-
-        # NURU V6 : TokenJuice — compression du contexte RAG et web avant construction prompt
+        # NURU V6 : TokenJuice — compression du contexte RAG et web
         if rag_context:
             rag_context = self.token_juice.compress(rag_context, stage="post")
         if web_context:
             web_context = self.token_juice.compress(web_context, stage="post")
 
         # V10 : Ajouter le contexte Spotlight lu si disponible
-        # Tronquer à 3000 chars max pour éviter les prompts trop longs
         spotlight_ctx = getattr(route_result, 'spotlight_context', '')
         if spotlight_ctx:
-            MAX_SPOTLIGHT_CHARS = 3000
-            if len(spotlight_ctx) > MAX_SPOTLIGHT_CHARS:
-                spotlight_ctx = spotlight_ctx[:MAX_SPOTLIGHT_CHARS] + "\n[...tronqué...]"
+            rag_context = self.rag_pipeline.integrate_spotlight(
+                rag_context, rag_result, spotlight_ctx,
+            )
 
-            # V10 Correction BUG #2: Utiliser Spotlight MÊME si RAG a des résultats
-            # RAG retourne des scores faibles (e5: 0.28-0.33) mais Spotlight lit le vrai contenu
-            if not rag_context:
-                # RAG vide → Spotlight seul
-                rag_context = spotlight_ctx
-                logger.info(f"🔍 Spotlight seul: {len(spotlight_ctx)} chars (RAG vide)")
-            else:
-                # RAG existe → vérifier la qualité
-                rag_top_score = getattr(rag_result, 'top_score', 0.0) if rag_result else 0.0
-                if rag_top_score < 0.35:
-                    # Spotlight préféré au RAG de faible qualité
-                    rag_context = (
-                        f"[CONTENU SPOTLIGHT — Documents trouvés sur le système]\n"
-                        f"{spotlight_ctx}\n\n"
-                        f"[CONTENU INDEX RAG (score={rag_top_score:.2f})]\n"
-                        f"{rag_context}"
-                    )
-                    logger.info(
-                        f"🔍 Spotlight prioritaire (RAG score faible {rag_top_score:.2f}): "
-                        f"{len(spotlight_ctx)} chars"
-                    )
-                else:
-                    # RAG de bonne qualité → Spotlight en complément
-                    rag_context = (
-                        f"{rag_context}\n\n"
-                        f"[CONTENU SPOTLIGHT — Documents supplémentaires trouvés]\n"
-                        f"{spotlight_ctx}"
-                    )
-                    logger.info(
-                        f"🔍 Spotlight complémentaire (RAG score {rag_top_score:.2f}): "
-                        f"{len(spotlight_ctx)} chars"
-                    )
-
-        # V10: Vider le contexte RAG si les résultats ne sont pas pertinents
-        # (évite que le LLM réponde "je ne trouve pas" sur un contexte inutile)
-        # Ne PAS vider si Spotlight a contribué du contenu (plus fiable que RAG)
-        if rag_result and getattr(rag_result, 'confidence_label', 'HAUTE') == 'FAIBLE' and not spotlight_ctx:
-            # Vérifier si le top résultat contient des mots-clés
-            if rag_context and len(rag_context) < 3000:
-                # V10 Fix: import re retiré du bloc (module-level line 9)
-                # pour eviter UnboundLocalError sur les chemins qui ne passent pas ici
-                query_words = set(
-                    w.lower() for w in re.findall(r'\w+', query)
-                    if len(w) > 2 and w.lower() not in {
-                        'de', 'la', 'le', 'les', 'du', 'des', 'un', 'une', 'et', 'ou',
-                        'est', 'sont', 'dans', 'sur', 'par', 'pour', 'avec', 'que', 'qui',
-                        'parle', 'moi', 'peux', 'tu', 'je', 'ne', 'pas', 'the', 'a', 'an',
-                    }
-                )
-                if query_words and not any(kw in rag_context.lower() for kw in query_words):
-                    logger.warning(
-                        f"🔇 Contexte RAG vidé: aucun mot-clé trouvé dans {len(rag_context)} chars "
-                        f"(mots-clés: {query_words})"
-                    )
-                    rag_context = ""
-                    result_str = getattr(rag_result, 'confidence_label', '') if rag_result else ''
-
-        # ── 5. Fallback Web si RAG vide ──
-        rag_context, intent = await self._maybe_web_fallback(
-            query, intent, rag_context, rag_result, web_context
+        # V10: Vider le contexte RAG si résultats FAIBLE confiance
+        has_spotlight = bool(spotlight_ctx)
+        rag_context = self.rag_pipeline.clear_low_confidence_context(
+            query, rag_context, rag_result, has_spotlight,
         )
 
-        # ── 5.5 FallbackGuard V2 : bloquer cloud si mots-clés docs + contexte vide (NURU V5) ──
-        # V10.1 : Ne s'applique QUE pour intent RAG — GENERAL/COMPLEX passent librement
-        if intent == "COMPLEX" and not rag_context and not web_context:
-            query_lower = query.lower()
-            from src.semantic_router import RAG_KEYWORDS
-            has_rag_keyword = any(kw in query_lower for kw in RAG_KEYWORDS)
-            if has_rag_keyword:
-                logger.warning(
-                    "🔒 FallbackGuard V2: requête documentaire sans contexte"
-                    " → blocage cloud"
-                )
-                await self.event_bus.emit("query.strict_refused", {"query": query})
-                yield "⚠️ Je n'ai pas trouvé cette information dans vos documents. "
-                yield "Vérifiez que le fichier est indexé ou reformulez votre requête."
-                return
+        # ── 5. Fallback Web si RAG vide ──
+        rag_context, intent = await self.rag_pipeline.maybe_web_fallback(
+            query, intent, rag_context,
+        )
 
-        # ── 5.6 Mode Strict RAG (NURU V5) : refuser si aucun contexte documentaire ──
-        # V10.1 : Ne s'applique QUE pour intent RAG — GENERAL/COMPLEX ne sont jamais refusés
-        if intent == "RAG" and self.response_guard.is_strict and not rag_context.strip():
-            logger.info("🔒 Strict RAG: refus — pas de contexte documentaire")
-            event_data = {"query": query, "intent": intent}
-            await self.event_bus.emit("query.strict_refused", event_data)
-            yield self.response_guard.refuse_message(query)
+        # ── 5.5-5.6 FallbackGuard + Strict RAG ──
+        strict_msg = await self.rag_pipeline.check_strict_blocks(
+            query, intent, rag_context, web_context if 'web_context' in dir() else "",
+        )
+        if strict_msg:
+            await self.event_bus.emit("query.strict_refused", {"query": query})
+            yield strict_msg
             return
 
         # ── 6. Construction prompt ──
@@ -356,7 +256,11 @@ class NuruOrchestrator:
         start_gen = time.time()
 
         try:
-            async for token in self._generate(system_prompt, full_prompt, query, intent, ctx, web_context=web_context, rag_context=rag_context, original_query=original_query):
+            async for token in self.llm_gen.generate(
+                system_prompt, full_prompt, query, intent, ctx,
+                web_context=web_context, rag_context=rag_context,
+                original_query=original_query,
+            ):
                 response_content += token
                 yield token
         except (LLMError, GuardError, RAGError) as e:
@@ -366,108 +270,45 @@ class NuruOrchestrator:
 
         duration = time.time() - start_gen
 
-        # ── 7.5 Vérification des citations post-génération (NURU V5) ──
-        if intent == "RAG" and rag_context and response_content.strip() and "AUCUNE SOURCE" not in rag_context:
-            # Extraire les sources des chunks
-            chunk_sources = []
-            if rag_result and hasattr(rag_result, 'chunks_retrieved'):
-                try:
-                    # Récupérer les sources depuis le résultat RAG
-                    if hasattr(rag_result, 'source_list'):
-                        chunk_sources = rag_result.source_list
-                except (AttributeError, RAGError):
-                    pass
-            if not chunk_sources and rag_context:
-                # Fallback : extraire les [SOURCE N] du contexte
-                chunk_sources = re.findall(r'\[SOURCE \d+\] ([^\n]+)', rag_context)
+        # ── 7.5 Vérification des citations post-génération ──
+        refusal = await self.rag_pipeline.verify_citations(
+            intent, rag_context, response_content, rag_result, query,
+        )
+        if refusal:
+            response_content = refusal
+            await self.event_bus.emit("verification_failed", {
+                "query": query,
+                "reason": "Strict RAG: vérification échouée",
+            })
 
-            vr = self.evidence_verifier.verify(
-                response=response_content,
-                chunk_sources=chunk_sources,
-                rag_context=rag_context,
+        # ── 7.6 Vérificateur de faits Cloud + retry ──
+        should_regenerate, warning_msg = await self.rag_pipeline.fact_check_and_retry(
+            intent, response_content, rag_context, ctx, query,
+            self.cloud_llm, rag_result,
+        )
+        if should_regenerate:
+            ctx = ctx.with_retry().with_fact_checked()
+            yield "\n\n🔄 **Vérification : régénération en cours...**\n"
+            strict_instr = (
+                "\n\n## INSTRUCTION STRICTE\n"
+                "La réponse précédente contenait des affirmations non supportées par les sources.\n"
+                "Cette fois, réponds UNIQUEMENT avec les informations EXACTEMENT présentes "
+                "dans le contexte ci-dessus.\n"
+                "Si une information n'est pas dans les sources, dis-le clairement. N'invente RIEN.\n"
+                "Cite chaque source utilisée.\n"
             )
-            if not vr.valid and self.response_guard.is_strict:
-                logger.warning(
-                    f"🔒 Strict RAG: vérification échouée — {vr.reason}"
-                )
-                # En mode STRICT, remplacer la réponse par un refus
-                response_content = self.response_guard.refuse_message(query)
-                # On ne peut pas revenir en arrière sur les tokens déjà yield,
-                # mais on note pour l'UI que la vérification a échoué
-                await self.event_bus.emit("verification_failed", {
-                    "query": query,
-                    "reason": vr.reason,
-                    "matched": vr.matched_citations,
-                    "missing": vr.missing_citations,
-                })
-
-        # ── 7.6 V8+ Sprint 5 : Vérificateur de faits Cloud + retry ──
-        if intent == "RAG" and response_content.strip() and ctx.is_online and not ctx.already_fact_checked and "AUCUNE SOURCE" not in rag_context:
-            try:
-                from src.rag.fact_checker import FactChecker
-                checker = FactChecker(cloud_llm=self.cloud_llm)
-
-                sources_text = []
-                if rag_result and hasattr(rag_result, 'sources'):
-                    sources_text = [s.get('preview', '') for s in rag_result.sources]
-                if not sources_text and rag_context:
-                    sources_text = [rag_context[:500]]
-
-                if sources_text and len(response_content) > 50:
-                    check = await checker.verify(response_content, sources_text)
-
-                    if not check.verified and check.issues:
-                        logger.info(f"🔍 V8+ FactChecker: {len(check.issues)} problème(s)")
-
-                        if check.needs_regenerate and not ctx.already_retried:
-                            ctx = ctx.with_retry().with_fact_checked()
-                            logger.info("🔄 V8+ Retry: régénération avec instruction stricte")
-                            yield "\n\n🔄 **Vérification : régénération en cours...**\n"
-
-                            # Nouvelle génération avec instruction renforcée
-                            strict_instruction = (
-                                "\n\n## INSTRUCTION STRICTE\n"
-                                "La réponse précédente contenait des affirmations non supportées par les sources.\n"
-                                "Cette fois, réponds UNIQUEMENT avec les informations EXACTEMENT présentes dans le contexte ci-dessus.\n"
-                                "Si une information n'est pas dans les sources, dis-le clairement. N'invente RIEN.\n"
-                                "Cite chaque source utilisée.\n"
-                            )
-                            retry_prompt = full_prompt + strict_instruction
-                            new_response = ""
-                            async for token in self._generate(
-                                system_prompt, retry_prompt, query, intent, ctx,
-                                web_context=web_context, rag_context=rag_context
-                            ):
-                                new_response += token
-                                yield token
-
-                            if new_response:
-                                response_content = new_response
-
-                        # Même sans régénération, avertir l'utilisateur
-                        else:
-                            warning_msg = (
-                                "⚠️ **Avertissement — Vérification des sources**\n\n"
-                                "Certaines informations de cette réponse n'ont **pas pu être vérifiées** "
-                                "contre les sources disponibles.\n\n"
-                                "**Affirmations non vérifiées :**\n"
-                            )
-                            for issue in check.issues[:3]:
-                                warning_msg += f"- {issue[:150]}\n"
-                            warning_msg += (
-                                "\n> *Vérifie ces points dans les documents originaux "
-                                "avant de les utiliser.*\n"
-                            )
-                            yield "\n\n---\n" + warning_msg + "\n---\n"
-
-                            # Émettre un événement pour le dashboard (Sprint 5.6)
-                            self.event_bus.emit_sync("verification_warning", {
-                                "message": warning_msg,
-                                "issues": check.issues[:5],
-                                "query": query,
-                            })
-            except (RAGError, LLMError) as e:
-                logger.debug(f"V8+ FactChecker ignoré: {e}")
+            new_response = ""
+            async for token in self.llm_gen.generate(
+                system_prompt, full_prompt + strict_instr, query, intent, ctx,
+                web_context=web_context, rag_context=rag_context,
+                original_query=original_query,
+            ):
+                new_response += token
+                yield token
+            if new_response:
+                response_content = new_response
+        elif warning_msg:
+            yield "\n\n---\n" + warning_msg + "\n---\n"
 
         # ── 8. Finalisation ──
         result = self._finalize(response_content, duration, intent, rag_result)
@@ -562,7 +403,7 @@ class NuruOrchestrator:
         except (MemoryError, RAGError) as e:
             logger.debug(f"🧠 LTM extrait post-réponse ignoré ({e})")
 
-    # ─── Privées ───
+    # ─── Privées (conservées) ───
 
     def _route_to_intent(self, decision: str) -> str:
         return {
@@ -573,68 +414,7 @@ class NuruOrchestrator:
             "WEB": "COMPLEX",
             "CLARIFICATION": "SIMPLE",
             "SIMPLE": "SIMPLE",
-        }.get(decision, "GENERAL")  # défaut sûr = connaissances générales
-
-    # NURU V5 : Vérification réseau réelle (remplace is_online toujours True)
-    async def _check_connectivity(self) -> bool:
-        """Vérifie la connectivité Internet avec timeout court (2s).
-        Essais multiples : DNS Google, puis HTTP Google.
-        """
-        import socket
-        methods = [
-            ("dns", lambda: asyncio.open_connection("8.8.8.8", 53)),
-            ("http", lambda: asyncio.open_connection("www.google.com", 80)),
-        ]
-        for name, coro_fn in methods:
-            try:
-                _, writer = await asyncio.wait_for(coro_fn(), timeout=1.5)
-                writer.close()
-                await writer.wait_closed()
-                logger.debug(f"🌐 Connectivité vérifiée via {name}")
-                return True
-            except (OSError, asyncio.TimeoutError):
-                continue
-        logger.debug("🌐 Hors-ligne détecté (toutes les sondes ont échoué)")
-        return False
-
-    async def _retrieve_context(self, query: str, intent: str) -> tuple:
-        rag_context, rag_result, web_context = "", None, ""
-        tasks = []
-        # V10.1 : GENERAL ne déclenche AUCUN appel RAG/web (audit §7.2)
-        if intent in ("RAG", "COMPLEX"):
-            tasks.append(self.rag_engine.retrieve(query))
-        if intent == "COMPLEX" and self.web:
-            tasks.append(self.web.search(query))
-        if tasks:
-            for c in await asyncio.gather(*tasks):
-                if isinstance(c, tuple):
-                    rag_context, rag_result = c
-                elif isinstance(c, str):
-                    web_context = c
-        # Stocker pour observabilité UI
-        self.last_rag_result = rag_result
-        return rag_context, rag_result, web_context
-
-    async def _maybe_web_fallback(self, query, intent, rag_context, rag_result, web_context):
-        # NURU V5 : FallbackGuard — pas de cloud si RAG vide + mots-clés docs
-        if intent == "RAG" and not rag_context and len(query.split()) > 3 and self.web:
-            query_lower = query.lower()
-            from src.semantic_router import RAG_KEYWORDS
-            has_rag_keyword = any(kw in query_lower for kw in RAG_KEYWORDS)
-
-            if has_rag_keyword and not rag_context:
-                logger.warning(
-                    "🔒 FallbackGuard: RAG vide + mots-clés documents"
-                    " → refus cloud pour éviter hallucination"
-                )
-                rag_context = "AUCUNE SOURCE DOCUMENTAIRE PERTINENTE TROUVÉE"
-                return rag_context, "RAG"  # Garde intent RAG → message d'absence
-
-            logger.info("RAG vide → fallback Web")
-            web_context = await self.web.search(query)
-            if web_context:
-                intent = "COMPLEX"
-        return rag_context, intent
+        }.get(decision, "GENERAL")
 
     def _build_prompt(self, intent, query, rag_context, web_context, user_facts_str=""):
         full_rag = ""
@@ -704,117 +484,6 @@ class NuruOrchestrator:
         else:
             full_prompt += f"{query}<|end|>\n<|assistant|>\n"
         return system_prompt, full_prompt
-
-    async def _generate(self, system_prompt, full_prompt, query, intent, ctx, web_context="", rag_context="", original_query=""):
-        # NURU V5 : Fallback cloud renforcé — si RAM < 1 Go ET online,
-        # on passe en cloud même pour RAG (évite les hallucinations du petit modèle qui swap)
-        ram_too_low = ctx.ram_free_mb < 1000
-        hybrid = getattr(ctx, 'hybrid_strategy', 'local_only')
-
-        # V10: Temperature basse (0.1) pour RAG avec contexte, standard (0.7) sinon
-        cloud_temp = 0.1 if rag_context.strip() else 0.7
-
-        # V10: Message utilisateur ancré dans le contexte (pas query compressée seule)
-        user_message = original_query or query
-
-        # NURU V6 : Stratégie Archon (RAG local + synthèse cloud)
-        if hybrid == "rag" and intent == "RAG" and ctx.is_online and rag_context.strip():
-            logger.info("☁️ Stratégie Archon: RAG local → synthèse cloud")
-            # V10 Correctif A+B: prompt ancré avec user_message + temperature basse
-            cloud_system = (
-                f"Tu es NURU, assistant IA personnel. Tu dois répondre UNIQUEMENT à partir des documents ci-dessous.\n\n"
-                f"## RÈGLES IMPÉRATIVES (sous peine d'être déconnecté) :\n"
-                f"1. NE RIEN INVENTER — si le contexte ne contient pas l'information, dis exactement :\n"
-                f"   \"Je ne trouve pas cette information dans les documents.\"\n"
-                f"2. NE PAS DÉDUIRE — des projets agricoles dans un contexte ne signifie PAS que la personne est ingénieur agronome.\n"
-                f"3. NE PAS GÉNÉRALISER — ne transforme pas un poste spécifique en \"expérience en gestion de projets\".\n"
-                f"4. FORMAT OBLIGATOIRE — commence chaque fait par [Source: fichier] puis le fait exact trouvé.\n"
-                f"5. Si tu ne peux pas citer un fait avec sa source précise, ne l'écris PAS.\n"
-                f"6. Ne suggère JAMAIS de consulter d'autres documents — réponds avec ce que tu as.\n\n"
-                f"=== DOCUMENTS ===\n"
-                f"{rag_context}\n"
-                f"=== FIN DES DOCUMENTS ===\n\n"
-                f"En te basant EXCLUSIVEMENT sur les DOCUMENTS ci-dessus, "
-                f"réponds à la question suivante : {user_message}\n\n"
-                f"Réponse :"
-            )
-            logger.info(f"☁️ Archon cloud call — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
-            async for token in self.cloud_llm.generate_stream(
-                user_message, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
-            ):
-                yield token
-            return
-
-        # V8+ Sprint 5 : Cloud par défaut pour tous les intents si online
-        use_cloud_first = ctx.is_online or \
-                          self.policy_engine.should_use_cloud(ctx)
-
-        if use_cloud_first or hybrid == "verify":
-            if not ctx.is_online:
-                logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")
-            else:
-                logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB, hybrid={hybrid}, temp={cloud_temp})")
-                # V10 Correctif A+B: prompt ancré + temperature basse
-                cloud_system = (
-                    f"Tu es NURU, assistant personnel de Leblanc. Tu réponds en français.\n\n"
-                )
-                if rag_context.strip():
-                    cloud_system += (
-                        f"## CONTEXTE DE VOS DOCUMENTS (prioritaire, utilise EXCLUSIVEMENT ces informations)\n"
-                        f"Les informations ci-dessous sont extraites de VOS documents personnels. "
-                        f"Elles sont prioritaires sur toute autre source.\n"
-                        f"- N'invente PAS d'information. Utilise UNIQUEMENT ce contexte.\n"
-                        f"- Si l'information n'est pas dans le contexte, dis "
-                        f"\"Je ne trouve pas cette information dans vos documents.\"\n"
-                        f"- Cite tes sources avec [Source: fichier].\n"
-                        f"{rag_context}\n\n"
-                    )
-                if web_context.strip():
-                    cloud_system += (
-                        f"## CONTEXTE DE RECHERCHE WEB\n{web_context}\n\n"
-                    )
-                # V10: message utilisateur ancré dans le contexte
-                anchored_prompt = (
-                    f"En te basant sur le contexte ci-dessus, "
-                    f"réponds à la question suivante : {user_message}"
-                )
-                logger.info(f"☁️ Cloud call — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
-                async for token in self.cloud_llm.generate_stream(
-                    anchored_prompt, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
-                ):
-                    yield token
-                return
-
-        # Fallback local
-        logger.info(f"💻 Local (intent={intent}, hybrid={hybrid})")
-        try:
-            gen = self.local_llm.generate_stream(full_prompt, intent=intent)
-            if self.runtime:
-                async for token in self.runtime.schedule_generator("generation", gen):
-                    yield token
-            else:
-                async for token in gen:
-                    yield token
-        except (LLMError, RAGError) as e:
-            logger.error(f"Local fail: {e}. Fallback Cloud.")
-            yield " [Bascule Cloud...] "
-            # V10: prompt ancré avec user_message + temperature basse
-            cloud_prompt = user_message
-            cloud_sys = system_prompt
-            if rag_context and rag_context.strip() and "AUCUNE SOURCE" not in rag_context:
-                cloud_sys = (
-                    f"{system_prompt}\n\n"
-                    f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag_context.strip()}\n\n"
-                    f"Instructions : utilise EXCLUSIVEMENT le contexte ci-dessus pour répondre. "
-                    f"Si l'information n'y est pas, dis-le clairement.\n\n"
-                    f"Question : {user_message}"
-                )
-                cloud_prompt = user_message
-            logger.info(f"☁️ Local-fail fallback — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
-            async for token in self.cloud_llm.generate_stream(
-                cloud_prompt, intent=intent, system_prompt=cloud_sys, temperature=cloud_temp
-            ):
-                yield token
 
     def _finalize(self, response, duration, intent, rag_result):
         tokens = len(response) // 4
