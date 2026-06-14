@@ -17,6 +17,11 @@ from src.core.query_context import QueryContext, EvidencePack
 from src.core.events import EventBus
 from src.core.policies import PolicyEngine
 from src.core.response_guard import StrictRAGGuard
+from src.core.prompt_guard import (
+    sanitize_for_prompt_injection,
+    sanitize_document_content,
+    build_safe_user_facts_block,
+)
 from src.core.exceptions import (
     OrchestratorError, RAGError, LLMError, MemoryError,
     RouterError, ConfigError, GuardError,
@@ -117,6 +122,11 @@ class NuruOrchestrator:
         # V10.2 : Cache LLM multi-niveau (L1 RAM + L2 SQLite)
         self.llm_cache = LLMCache(self.memory_store)
 
+        # V10.3f : Sessions conversationnelles persistantes
+        from src.session.store import SessionStore
+        self.session_store = SessionStore()
+        self._session_max_context = getattr(config, 'session_max_messages', 10)
+
         # V10.2 : Sous-orchestrateurs
         self.rag_pipeline = RAGOrchestrator(
             rag_engine=self.rag_engine,
@@ -151,7 +161,7 @@ class NuruOrchestrator:
             query, session_id,
             is_online=is_online,
         )
-        # NURU V6 : TokenJuice — compression de la requête avant routage
+        # V10.3f : Enregistrer la question dans l'historique session
         original_query = query
         query = self.token_juice.compress_query(query)
         if query != original_query and len(query) < len(original_query):
@@ -159,6 +169,9 @@ class NuruOrchestrator:
                 f"🧃 TokenJuice: requête compressée "
                 f"{len(original_query)}→{len(query)} chars"
             )
+        # V10.3f : Enregistrer la question utilisateur dans la session
+        self.session_store.create_session(session_id)
+        self.session_store.add_message(session_id, "user", original_query, metadata={"mode": ctx.mode})
         await self.event_bus.emit("query.received", {"query": query})
 
         # ── 2. RAG retrieval (UNE SEULE FOIS — partagé entre routeur et contexte) ──
@@ -243,7 +256,10 @@ class NuruOrchestrator:
             relevant_facts = await self.long_term_memory.get_relevant_facts(query, limit=10)
             if relevant_facts:
                 user_facts_str = self.long_term_memory.format_facts_for_prompt(relevant_facts)
-        system_prompt, full_prompt = self._build_prompt(intent, query, rag_context, web_context, user_facts_str=user_facts_str)
+        system_prompt, full_prompt = self._build_prompt(
+            intent, query, rag_context, web_context,
+            user_facts_str=user_facts_str, session_id=session_id,
+        )
 
         # Action E : Budget token post-template — écrêtage final du prompt complet
         max_safe_chars = config.rag_max_context_tokens * 4  # ~4 chars/token
@@ -317,6 +333,12 @@ class NuruOrchestrator:
                 response_content = new_response
         elif warning_msg:
             yield "\n\n---\n" + warning_msg + "\n---\n"
+
+        # V10.3f : Enregistrer la réponse dans l'historique session
+        self.session_store.add_message(
+            session_id, "assistant", response_content,
+            metadata={"intent": intent, "duration_ms": int(duration * 1000)},
+        )
 
         # ── 8. Finalisation ──
         result = self._finalize(response_content, duration, intent, rag_result)
@@ -424,7 +446,8 @@ class NuruOrchestrator:
             "SIMPLE": "SIMPLE",
         }.get(decision, "GENERAL")
 
-    def _build_prompt(self, intent, query, rag_context, web_context, user_facts_str=""):
+    def _build_prompt(self, intent, query, rag_context, web_context,
+                      user_facts_str="", session_id: Optional[str] = None):
         full_rag = ""
         if intent == "COMPLEX":
             full_rag = web_context + ("\n\n" + rag_context if rag_context else "")
@@ -440,6 +463,16 @@ class NuruOrchestrator:
             )
         else:
             system_prompt = f"Tu es NURU, assistant personnel de Leblanc."
+
+        # V10.3f : Injection contexte conversationnel de session
+        if session_id:
+            try:
+                session_ctx = self.session_store.build_context(
+                    session_id, max_messages=self._session_max_context)
+                if session_ctx:
+                    system_prompt += f"\n\n{session_ctx}"
+            except Exception:
+                logger.debug("SessionStore: erreur injection contexte", exc_info=True)
 
         # NURU V4.5 : Injection des faits utilisateur long terme dans le système
         if user_facts_str:

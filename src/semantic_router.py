@@ -21,13 +21,30 @@ from src.infra.cache import TTLDecisionCache
 logger = logging.getLogger(__name__)
 
 # ── Prompt classification LLM (Passe 2) ───────────────────────────────────
+# AUDIT-2026-06-14 V10.3 — S-001 P0 : sanitisation de la query avant interpolation
+# pour éliminer le risque de prompt-injection via le passage LLM de classification.
+from src.core.prompt_guard import sanitize_for_prompt_injection
+
+_INJECTION_BOUNDARIES = ("Classe cette requête", "Réponse")  # seuls extraits du template, JAMAIS user-influencés
+
 CLASSIFY_PROMPT = """Classe cette requête en UN seul mot :
 - GENERAL : calcul, logique, définition, culture générale, conversation
 - RAG : document personnel, CV, rapport, projet, fichier
 - WEB : actualité, prix, météo, personne en poste
 
-Requête : "{query}"
+Requête : <<QUERY>>
 Réponse (un seul mot) :"""
+
+
+def build_classify_prompt(query: str) -> str:
+    """Construit le prompt de classification LLM avec sanitation V10.3.
+
+    - Tronque la query à 500 caractères (limite rationale : aucun classifieur n'a besoin de plus)
+    - Neutralise les motifs d'injection connus (SYSTEM/INST/Ignore/etc.)
+    - Remplace interroge par des délimiteurs stricts <<QUERY>> autour de la valeur sanitizée
+    - Garantit qu'aucun contenu user ne peut faire sortir le modèle du cadre "un seul mot"
+    """
+    return CLASSIFY_PROMPT.replace("<<QUERY>>", sanitize_for_prompt_injection(query, max_chars=500))
 
 # ── Patterns connaissance générale (Passe 1 — audit §7.1) ─────────────────
 GENERAL_KNOWLEDGE_PATTERNS = [
