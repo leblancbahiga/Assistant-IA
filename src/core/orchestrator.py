@@ -190,9 +190,17 @@ class NuruOrchestrator:
                 return
 
         # ── 4. Récupération contexte (RAGOrchestrator multi-sous-requêtes) ──
-        rag_context, web_context, merged_result = await self.rag_pipeline.retrieve_multi(
-            query, intent, rag_context, rag_result,
-        )
+        if self.response_guard.is_free:
+            # Mode FREE : pas de RAG, pas de web search, conversation libre
+            rag_context = ""
+            web_context = ""
+            merged_result = rag_result  # pylint: disable=possibly-used-before-assignment
+            intent = "SIMPLE"
+            logger.info("🔓 Mode FREE: RAG + web contournés")
+        else:
+            rag_context, web_context, merged_result = await self.rag_pipeline.retrieve_multi(
+                query, intent, rag_context, rag_result,
+            )
         rag_result = merged_result or rag_result
 
         # NURU V6 : TokenJuice — compression du contexte RAG et web
