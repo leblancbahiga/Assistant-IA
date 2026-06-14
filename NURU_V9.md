@@ -1762,3 +1762,55 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 10. Section 7.6 (FactChecker) → `self.rag_pipeline.fact_check_and_retry()` + régénération orchestrateur
 
 **Tests :** 25/25 passent (inchangés)
+
+### V10.3a — 2026-06-14 « Dashboard V10 : métriques cache LLM + file watcher »
+
+**Fichiers modifiés :**
+- `src/ui/dashboard.py` — QFileSystemWatcher + badge notification rechargement
+- `src/ui/components/stats_page.py` — Section Cache LLM multi-niveau (L1 RAM, L2 SQLite)
+
+### V10.3b — 2026-06-14 « Spotlight Search V2 : plein texte, 5 termes, scoring »
+
+**Fichier :** `src/rag/spotlight.py` (réécriture 278 lignes)
+- Recherche plein texte (kMDItemTextContent)
+- 5 termes vs 3 avant
+- Scoring pondéré (nom 0.4 > chemin 0.2 > contenu 0.1)
+- API rétrocompatible vérifiée sur `semantic_router.py`
+
+### V10.3c — 2026-06-14 « Tests d'intégration Orchestrator découplé (13 tests) »
+
+**Fichier :** `tests/test_integration.py` (13 tests, 327 lignes)
+- RAGOrchestrator : retrieve_multi (RAG + COMPLEX), integrate_spotlight, check_strict_blocks, verify_citations
+- LLMGenerator : generate streaming + offline, check_connectivity
+- Pipeline : NuruOrchestrator.process_query (cache + régénération)
+- **38 tests verts** (25 unitaires + 13 intégration)
+
+### V10.3d — 2026-06-14 « Dashboard : 0 placeholders — FeedbackPage + ArchitecturePage »
+
+**Nouveaux fichiers :**
+- `src/ui/components/feedback_page.py` — Widget FeedbackCollector (statistiques + historique retours)
+- `src/ui/components/architecture_page.py` — Aperçu composants NURU (modules, config, test count)
+
+**Modifié :** `src/ui/dashboard.py` — plus de placeholders ; `nuru_brain` → ArchitecturePage, `feedback` → FeedbackPage
+
+### V10.3e — 2026-06-14 « Guardrails : mode FREE opérationnel + audit »
+
+**Modifié :**
+- `src/core/response_guard.py` — épuré, docstrings
+- `src/core/orchestrator.py` — mode FREE contourne RAG + web search, routing SIMPLE
+
+**Audit :** PromptGuard OK (limité requêtes RAG), StrictRAGGuard (`is_free` intégré), FallbackGuard OK, EvidenceVerifier OK
+
+### V10.3f — 2026-06-14 « Sessions conversationnelles persistantes »
+
+**Nouveaux fichiers :**
+- `src/session/store.py` — SessionStore (CRUD sessions + messages SQLite)
+- `tests/test_session.py` — 12 tests unitaires
+
+**Modifié :** `src/core/orchestrator.py`
+- Enregistre user query + assistant response dans la session
+- Injecte `build_context()` dans le prompt système (derniers N messages)
+- Nouveau paramètre `session_id=` dans `_build_prompt`
+
+**Tests :** 50 verts (25 unitaires + 13 intégration + 12 session)
+
