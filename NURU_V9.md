@@ -1822,3 +1822,13 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 
 **Tests :** 50 verts (25 unitaires + 13 intégration + 12 session)
 
+### V10.3h — 2026-06-14 « ArchonRefiner : auto‑correction post‑génération »
+
+**Nouveau :**
+- `src/ai/archon_refiner.py` — agent LLM dédié qui vérifie les réponses contre le contexte RAG et les corrige si besoin
+
+**Modifié :**
+- `src/core/orchestrator.py` — intégré après génération, avant enregistrement session. Marqueur 🔮 si corrigé
+
+**Tests :** 10 tests unitaires. 60 verts total.
+
