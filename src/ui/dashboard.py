@@ -113,6 +113,14 @@ try:
     from src.ui.components.task_list import TaskListWidget
 except ImportError:
     TaskListWidget = None
+try:
+    from src.ui.components.feedback_page import FeedbackPage
+except ImportError:
+    FeedbackPage = None
+try:
+    from src.ui.components.architecture_page import ArchitecturePage
+except ImportError:
+    ArchitecturePage = None
 
 # ── V10 Component imports ────────────────────────────────────────────────
 try:
@@ -603,6 +611,8 @@ class CyberDashboard(QMainWindow):
                 cls = SystemPage
             elif slug == "diagnostics":
                 cls = DiagnosticsPage
+            elif slug == "nuru_brain":
+                cls = ArchitecturePage
             else:
                 cls = None  # nuru_brain, stats_v10, tools_v10 → placeholder / V10/V9
 
@@ -626,7 +636,7 @@ class CyberDashboard(QMainWindow):
             ("agent",     "Agent",     "Supervision de l'agent ReAct en temps réel", AgentStatusWidget),
             ("memory_v9", "Mémoire V9", "Explorateur des 6 types de mémoire", MemoryExplorer),
             ("tasks",     "Tâches",    "Tâches en cours, terminées et interrompues", TaskListWidget),
-            ("feedback",  "Feedback",  "Historique des retours utilisateur", None),
+            ("feedback",  "Feedback",  "Historique des retours utilisateur", FeedbackPage),
         ]
         for slug, title, desc, cls in v9_entries:
             if cls is not None:
