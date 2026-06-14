@@ -15,7 +15,7 @@ nuru_brain_watch_enabled: false
 rag_k: 5
 rag_max_context_tokens: 2000
 rag_score_fallback: 0.25
-rag_score_threshold: 0.30
+rag_score_threshold: 0.3
 response_mode: hybrid
 session_window: 5
 stt_model: small

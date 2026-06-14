@@ -631,9 +631,9 @@ class RAGEngine:
         result.top_score = top1_score
         result.all_scores = [r.score for r in ms_results]
 
-        MIN_ABSOLUTE_SCORE = config.rag_score_threshold   # 0.40
-        FALLBACK_THRESHOLD = config.rag_score_fallback     # 0.25
-        RAG_MIN_USABLE_SCORE = 0.20  # Seuil en dessous duquel le contexte est vidé
+        MIN_ABSOLUTE_SCORE = config.rag_score_threshold   # V10.2: 0.30
+        FALLBACK_THRESHOLD = config.rag_score_fallback     # V10.2: 0.25
+        RAG_MIN_USABLE_SCORE = config.rag_min_usable_score # V10.2: 0.20 (ex hardcodé)
 
         if top1_score >= MIN_ABSOLUTE_SCORE:
             confidence_label = "HAUTE"

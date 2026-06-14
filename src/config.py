@@ -44,6 +44,8 @@ class Config(BaseSettings):
     rag_k: int = 5
     rag_score_threshold: float = 0.30  # V10.1: abaissé (audit: 0.50→0.30)
     rag_score_fallback: float = 0.15   # V10.1: abaissé (audit: 0.40→0.15)
+    rag_min_usable_score: float = 0.20  # V10.2: seuil vidage contexte (ex-hardcodé RAG_MIN_USABLE)
+    rag_router_min_score: float = 0.15  # V10.2: seuil routeur pour considérer RAG trouvé
     rag_max_context_tokens: int = 1500
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 

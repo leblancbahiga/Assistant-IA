@@ -77,7 +77,9 @@ TRIVIAL_PATTERNS = {
 }
 
 # ── Seuils RAG (audit §7.1) ───────────────────────────────────────────────
-RAG_SCORE_THRESHOLD = 0.15  # Sous ce score, le RAG n'est PAS considéré comme "trouvé" (audit: 0.40→0.15)
+# V10.2: centralisé dans config.rag_router_min_score (0.15)
+from src.config import config as _nuru_config
+RAG_SCORE_THRESHOLD = _nuru_config.rag_router_min_score
 
 
 @dataclass
