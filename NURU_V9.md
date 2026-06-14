@@ -1814,3 +1814,11 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 
 **Tests :** 50 verts (25 unitaires + 13 intégration + 12 session)
 
+### V10.3g — 2026-06-14 « SessionsPage reliée à SessionStore + auto-titrage »
+
+**Modifié :**
+- `src/ui/components/sessions_page.py` — `load_sessions()` utilise SessionStore en priorité (fallback memory_store), `session_selected` passe en `str`, nouvelle `_session_to_dict()` statique
+- `src/core/orchestrator.py` — auto-titrage : premier message utilisateur devient titre de session
+
+**Tests :** 50 verts (25 unitaires + 13 intégration + 12 session)
+
