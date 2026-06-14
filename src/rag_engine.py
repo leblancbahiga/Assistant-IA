@@ -618,6 +618,7 @@ class RAGEngine:
             diag.log_strategy(strat, count, 0.0, count > 0, 0)
 
         if not ms_results:
+            result.confidence_label = "ABSENT"  # V10.2: forcer ABSENT sur recherche vide
             diag.set_verdict("VIDE (aucun résultat)")
             diag.stop()
             result.diagnostic = diag.to_dict()
