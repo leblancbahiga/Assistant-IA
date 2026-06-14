@@ -423,6 +423,33 @@ class StatsPage(QScrollArea):
 
         layout.addWidget(self._rag_panel)
 
+        # ── Métriques Cache LLM (V10.2) ──
+        layout.addWidget(SectionHeader("💾 Cache LLM — Multi-niveau (L1 RAM + L2 SQLite)", "💾", ACCENT_BLUE))
+
+        self._cache_panel = QFrame()
+        self._cache_panel.setStyleSheet(PANEL_STYLE)
+        cache_layout = QVBoxLayout(self._cache_panel)
+        cache_layout.setContentsMargins(14, 10, 14, 10)
+        cache_layout.setSpacing(6)
+
+        cache_grid = QGridLayout()
+        cache_grid.setSpacing(12)
+
+        self._cache_hit_card = StatCard("Hit Rate L1", "🎯", "—", ACCENT_GREEN)
+        cache_grid.addWidget(self._cache_hit_card, 0, 0)
+
+        self._cache_size_card = StatCard("L1 Size", "📦", "—", ACCENT_BLUE)
+        cache_grid.addWidget(self._cache_size_card, 0, 1)
+
+        self._cache_miss_card = StatCard("Miss L1", "❌", "—", ACCENT_RED)
+        cache_grid.addWidget(self._cache_miss_card, 0, 2)
+
+        self._cache_expired_card = StatCard("Expired TTL", "⏳", "—", ACCENT_ORANGE)
+        cache_grid.addWidget(self._cache_expired_card, 0, 3)
+
+        cache_layout.addLayout(cache_grid)
+        layout.addWidget(self._cache_panel)
+
         # ── Métriques Réponse ──
         layout.addWidget(SectionHeader("⚡ Réponse — Génération", "⚡", ACCENT_ORANGE))
 
@@ -514,6 +541,7 @@ class StatsPage(QScrollArea):
         """Rafraîchit toutes les métriques depuis les backends."""
         self._update_ram()
         self._update_rag()
+        self._update_cache()
         self._update_response()
         self._update_agent()
         self._update_feedback()
@@ -569,6 +597,34 @@ class StatsPage(QScrollArea):
             self._rag_hyde_bar.set_value(hyde_rate, _format_pct(hyde_rate))
         except Exception as e:
             logger.debug("StatsPage RAG: %s", e)
+
+    def _update_cache(self) -> None:
+        """Met à jour les métriques du cache LLM multi-niveau."""
+        try:
+            from src.cache.llm_cache import LLMCache
+            from src.memory_store import MemoryStore
+
+            ms = MemoryStore()
+            cache = LLMCache(ms)
+            stats = cache.get_stats()
+
+            hr = stats["l1_hit_rate"]
+            self._cache_hit_card.set_value(
+                f"{hr * 100:.1f}%",
+                ACCENT_GREEN if hr >= 0.7 else ACCENT_ORANGE if hr >= 0.4 else ACCENT_RED,
+            )
+            self._cache_size_card.set_value(
+                f"{stats['l1_size']} / {stats['l1_maxsize']}",
+                ACCENT_GREEN if stats['l1_size'] < stats['l1_maxsize'] * 0.8 else ACCENT_ORANGE,
+            )
+            self._cache_miss_card.set_value(
+                str(stats["l1_misses"]), ACCENT_RED if stats["l1_misses"] > stats["l1_hits"] * 2 else ACCENT_ORANGE,
+            )
+            self._cache_expired_card.set_value(
+                str(stats["l1_expired"]), ACCENT_ORANGE if stats["l1_expired"] > 10 else TEXT_SECONDARY,
+            )
+        except Exception as e:
+            logger.debug("StatsPage Cache: %s", e)
 
     def _update_response(self) -> None:
         """Met à jour les métriques de réponse."""

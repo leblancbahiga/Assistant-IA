@@ -20,7 +20,7 @@ from pathlib import Path
 
 import psutil
 
-from PySide6.QtCore import Qt, QTimer, Signal, QSize, QThreadPool
+from PySide6.QtCore import Qt, QTimer, Signal, QSize, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
 
 # ── Path setup ────────────────────────────────────────────────────────────
@@ -376,6 +376,18 @@ class NavSidebar(QWidget):
         self._model_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._model_label)
 
+        # Badge rechargement (apparaît quand le code source change)
+        self._reload_badge = QLabel("🔄 Code modifié — redémarrez le Dashboard")
+        self._reload_badge.setObjectName("ReloadBadge")
+        self._reload_badge.setAlignment(Qt.AlignCenter)
+        self._reload_badge.hide()
+        layout.addWidget(self._reload_badge)
+
+    def set_reload_badge(self, visible: bool) -> None:
+        self._reload_badge.setVisible(visible)
+        if visible:
+            logger.info("🔁 Code source modifié — redémarrez le Dashboard")
+
     def set_model_info(self, model: str, status: str, queries: int = 0) -> None:
         """Met à jour les infos modèle dans le footer."""
         self._model_label.setText(f"{model}  •  {status}")
@@ -728,6 +740,24 @@ class CyberDashboard(QMainWindow):
         self._v9_timer.setInterval(5000)  # 5 s
         self._v9_timer.timeout.connect(self._update_v9_pages)
         self._v9_timer.start()
+
+        # File watcher (dev) — notification si code source modifié
+        self._setup_file_watcher()
+
+    def _setup_file_watcher(self) -> None:
+        """Surveille les modifications du code source pour notifier le redémarrage."""
+        try:
+            ui_dir = Path(__file__).parent
+            self._watcher = QFileSystemWatcher(self)
+            for py_file in ui_dir.rglob("*.py"):
+                self._watcher.addPath(str(py_file))
+            self._watcher.fileChanged.connect(self._on_source_changed)
+        except Exception as e:
+            logger.debug("FileWatcher: %s", e)
+
+    def _on_source_changed(self, path: str) -> None:
+        """Affiche un badge 'Recharger' dans le footer quand le code change."""
+        self._sidebar.set_reload_badge(True)
 
     # ══════════════════════════════════════════════════════════════════════
     #  V9 PAGES — DATA LOADING
