@@ -1715,3 +1715,20 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
   4. `rag_router_min_score` (0.15) — Routeur
 
 **Commits :** 1cd9e03
+
+### V10.2e — 2026-06-14 « Cache LLM multi-niveau (L1 RAM + L2 SQLite) »
+
+**Architecture :** `src/cache/llm_cache.py`
+- **L1 (RAM)** : `OrderedDict` + hash MD5 (O(1)) + TTL 300s + LRU 256 max
+- **L2 (Disque)** : Wrapper vers `memory_store.semantic_cache` (SQLite vec0, cos ≥ 0.92)
+- Promotion automatique L2→L1 sur hit
+- Stats exposées : hit/miss/expired/size
+
+**Intégration orchestrator :**
+- `self.llm_cache = LLMCache(self.memory_store)` dans le constructeur
+- `get_cache()` → `llm_cache.get()` (L1→L2→miss)
+- `set_cache()` → `llm_cache.set()` (L1+L2 atomique)
+
+**Tests :** 7/7 — miss, L2→L1 promotion, L1 hit, purge, TTL, stats, set/get
+
+**Commits :** 80dcee8

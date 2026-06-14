@@ -129,7 +129,7 @@ Le routeur classifie la requête **avant** tout appel d'outil :
 | 10 | **Race condition cache sémantique** | `asyncio.Lock()` sur `get_cache()`/`set_cache()` | #2, #4 |
 | 11 | **Pas de cache RAM LLM** — chaque requête identique refait une recherche sémantique SQLite | Cache multi-niveau : L1 RAM (hash+T...[truncated]
 
-**Constats des 7 experts auditeurs :** consensus 7/7 — NURU sécurisé et stabilisé. Code mort V8 (`audio_tts.py`, `sqlite_compat.py`) déjà nettoyé. Modules V8 (MultiSearchOrchestrator, FactChecker, HyDE, decomposer) confirmés actifs.
+**Constats des 7 experts auditeurs :** consensus 7/7 — NURU sécurisé et stabilisé. Cache LLM multi-niveau ajouté (L1 RAM). Code mort V8 (`audio_tts.py`, `sqlite_compat.py`) déjà nettoyé. Modules V8 (MultiSearchOrchestrator, FactChecker, HyDE, decomposer) confirmés actifs.
 
 ## 🐛 Corrections V10.1
 
