@@ -1,5 +1,10 @@
 # NURU V5 : pysqlite3 avec support d'extensions (nécessaire pour sqlite-vec sur macOS)
-import pysqlite3 as sqlite3
+try:
+    import pysqlite3 as sqlite3
+except ImportError:
+    import sqlite3  # fallback standard (sans support extensions)
+    import logging
+    logging.getLogger(__name__).warning("pysqlite3-binary non trouvé, utilisation sqlite3 standard (extensions désactivées)")
 import sqlite_vec
 import asyncio
 import logging
@@ -18,6 +23,62 @@ from src.reranker import CrossEncoderReranker
 from src.llm_cloud import CloudLLM
 
 logger = logging.getLogger(__name__)
+
+
+# ── PromptGuard V10.2 : Protection anti-injection RAG ──
+_INJECTION_PATTERNS = [
+    "Tu es NURU", "Tu es maintenant", "Ignore les instructions",
+    "Ignore toutes", "Ignorez", "[SYSTEM]", "[INST]",
+    "<<SYS>>", "<|im_start|>system", "<|im_start|>user",
+    "<|im_start|>assistant", "<|assistant|>",
+]
+
+
+def sanitize_rag_query(query: str, max_chars: int = 10_000) -> str:
+    """Nettoie une requête RAG contre l'injection de prompt.
+
+    - Troncature à ``max_chars`` caractères
+    - Échappement des délimiteurs de contexte RAG (===)
+    - Échappement des blocs de code (```)
+    - Neutralisation douce des motifs d'instruction système
+    """
+    if not query:
+        return ""
+
+    # 1. Troncature
+    query = query[:max_chars]
+
+    # 2. Échappement des délimiteurs de contexte RAG
+    query = query.replace("===", "(triple égal)")
+
+    # 3. Échappement des blocs de code (empêche la fermeture prématurée du format)
+    query = query.replace("```", "(code block)")
+
+    # 4. Neutralisation des motifs d'injection système
+    #    Remplacement par homoglyphes pour casser la reconnaissance sans perdre le sens
+    for pattern in _INJECTION_PATTERNS:
+        if pattern in query:
+            safe = pattern.replace("I", "Ī").replace("i", "ī")
+            query = query.replace(pattern, safe)
+
+    return query.strip()
+
+
+def sanitize_chunk_content(content: str, max_chars: int = 4000) -> str:
+    """Nettoie le contenu d'un chunk RAG avant injection dans le contexte.
+
+    - Troncature
+    - Échappement des marqueurs de début/fin de contexte
+    """
+    if not content:
+        return ""
+
+    content = content[:max_chars]
+    content = content.replace("=== DÉBUT DU CONTEXTE ===", "(début contexte)")
+    content = content.replace("=== FIN DU CONTEXTE ===", "(fin contexte)")
+    content = content.replace("```", "(code block)")
+
+    return content.strip()
 
 
 @dataclass
@@ -516,9 +577,16 @@ class RAGEngine:
         logger.info(f"🗑️ Métadonnées supprimées : {source}")
 
     async def retrieve(self, query: str, k: int = None) -> Tuple[str, RAGResult]:
-        """Recherche hybride avec confidence gate dynamique V4.
-        Retourne (contexte_formaté, RAGResult) pour le dashboard."""
+        '''Recherche hybride avec confidence gate dynamique V4.
+        Retourne (contexte_formaté, RAGResult) pour le dashboard.'''
         t_start = time.time()
+
+        # V10.2 PromptGuard : Sanitization anti-injection
+        raw_query = query
+        query = sanitize_rag_query(query)
+        if query != raw_query:
+            logger.info(f'🔒 PromptGuard: requête sanitizée ({len(raw_query)}→{len(query)} chars)')
+
         if k is None:
             k = config.rag_k
 
@@ -850,12 +918,12 @@ class RAGEngine:
         return sorted(scored, key=lambda x: -x[2])[:top_k]
 
     def _format_context(self, results: List[Tuple]) -> str:
-        """Formate les résultats avec marqueurs CONTEXTE clairs pour forcer le grounding."""
+        '''Formate les résultats avec marqueurs CONTEXTE clairs pour forcer le grounding.'''
         context_parts = []
         for i, (content, source, score) in enumerate(results, 1):
             context_parts.append(
                 f"[SOURCE {i}] {source}\n"
-                f"{content.strip()}\n"
+                f"{sanitize_chunk_content(content)}\n"
             )
         return "=== DÉBUT DU CONTEXTE ===\n" + "\n".join(context_parts) + "\n=== FIN DU CONTEXTE ==="
 

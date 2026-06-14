@@ -10,7 +10,7 @@ dependencies = [
     "mlx-whisper",
     "mlx-embeddings",
     "sqlite-vec",
-    "pysqlite3",
+    "pysqlite3-binary",
     "pyside6",
     "qasync",
     "psutil",

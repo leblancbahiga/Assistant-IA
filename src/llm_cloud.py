@@ -39,7 +39,7 @@ class CloudLLM:
             url = "https://api.deepseek.com/v1/chat/completions"
             api_key = config.deepseek_key
         elif provider == "openrouter":
-            url = "https://api.openrouter.ai/api/v1/chat/completions"
+            url = "https://openrouter.ai/api/v1/chat/completions"
             api_key = config.openrouter_key
         else:
             raise ValueError(f"Provider Cloud inconnu pour generate() synchrone : {provider}")

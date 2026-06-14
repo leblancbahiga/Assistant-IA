@@ -5,6 +5,7 @@ Accès via le singleton `config`.
 """
 
 import os
+import logging
 from pathlib import Path
 from typing import Optional, ClassVar
 from pydantic_settings import BaseSettings, SettingsConfigDict

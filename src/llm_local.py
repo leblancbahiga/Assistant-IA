@@ -184,6 +184,7 @@ class LocalLLM:
 
             except Exception as e:
                 logger.error(f"Erreur durant l'inférence MLX : {e}")
+                self.unload()  # V10.2: Nettoyage mémoire GPU en cas d'erreur (prévention fuite MLX)
                 raise
 
     def warmup(self):
