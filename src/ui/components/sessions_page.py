@@ -544,6 +544,10 @@ class SessionsPage(QWidget):
         )
         if ok and new_title.strip():
             s["title"] = new_title.strip()
+            # Persister dans SessionStore
+            if self._session_store:
+                session_id = s.get("id", "")
+                self._session_store.update_title(str(session_id), s["title"])
             self._apply_filters()
 
     def duplicate_session(self, session_id) -> bool:
@@ -691,6 +695,10 @@ class SessionsPage(QWidget):
         )
         if reply == QMessageBox.Yes:
             try:
+                # Supprimer du SessionStore si disponible
+                if self._session_store:
+                    session_id = s.get("id", "")
+                    self._session_store.delete_session(str(session_id))
                 self._sessions.remove(s)
                 self._apply_filters()
             except ValueError:
