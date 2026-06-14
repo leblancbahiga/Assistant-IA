@@ -127,6 +127,7 @@ Le routeur classifie la requête **avant** tout appel d'outil :
 | 8 | **Fenêtre contextuelle bridée** (4096 tokens, Phi-4-mini 32K) | `max_prompt_tokens=8192`, `reserved_response=2048` | #A |
 | 9 | **`except Exception` génériques** dans le pipeline | Hiérarchie `OrchestratorError` → `RAGError/LLMError/MemoryError` | #1, #2, #A |
 | 10 | **Race condition cache sémantique** | `asyncio.Lock()` sur `get_cache()`/`set_cache()` | #2, #4 |
+| 11 | **Pas de cache RAM LLM** — chaque requête identique refait une recherche sémantique SQLite | Cache multi-niveau : L1 RAM (hash+T...[truncated]
 
 **Constats des 7 experts auditeurs :** consensus 7/7 — NURU sécurisé et stabilisé. Code mort V8 (`audio_tts.py`, `sqlite_compat.py`) déjà nettoyé. Modules V8 (MultiSearchOrchestrator, FactChecker, HyDE, decomposer) confirmés actifs.
 
@@ -185,6 +186,9 @@ src/
 │       ├── v6_system_page.py # État modules V10
 │       ├── agent_status.py   # Widget agent
 │       └── stats_page.py     # Statistiques V10
+├── cache/
+│   ├── __init__.py            # Package cache V10.2
+│   └── llm_cache.py           # Cache multi-niveau (L1 RAM + L2 SQLite)
 ├── semantic_router.py        # Routeur intent-first (Passe 1 + LLM)
 ├── long_term_memory.py       # Adaptateur MemoryBridge → orchestrator
 ├── memory_bridge.py          # Pont V5+V9

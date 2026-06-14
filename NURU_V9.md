@@ -1702,3 +1702,16 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 - Découplage complet = ~4h, à planifier séparément
 
 **Commits :** 331f467
+
+### V10.2d — 2026-06-14 « Unification seuils RAG dupliqués »
+
+**Changements :**
+- `rag_min_usable_score=0.20` ajouté à `config.py` (ex `RAG_MIN_USABLE_SCORE` hardcodé dans `rag_engine.py`)
+- `rag_router_min_score=0.15` ajouté à `config.py` (ex `RAG_SCORE_THRESHOLD` hardcodé dans `semantic_router.py`)
+- Les 4 seuils RAG sont maintenant centralisés dans `Config` :
+  1. `rag_score_threshold` (0.30) — Acceptation
+  2. `rag_score_fallback` (0.25) — Moyenne confiance
+  3. `rag_min_usable_score` (0.20) — Vidage contexte
+  4. `rag_router_min_score` (0.15) — Routeur
+
+**Commits :** 1cd9e03

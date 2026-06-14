@@ -24,6 +24,7 @@ from src.core.exceptions import (
 from src.ai.verifier import EvidenceVerifier
 from src.token_juice import TokenJuice
 from src.learning.trace_collector import TraceCollector
+from src.cache.llm_cache import LLMCache
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,9 @@ class NuruOrchestrator:
         # Suivi du dernier résultat RAG pour l'observabilité UI
         self.last_rag_result = None
 
+        # V10.2 : Cache LLM multi-niveau (L1 RAM + L2 SQLite)
+        self.llm_cache = LLMCache(self.memory_store)
+
     async def process_query(
         self,
         query: str,
@@ -163,9 +167,9 @@ class NuruOrchestrator:
             f"(conf: {route_result.confidence:.2f})"
         )
 
-        # ── 3. Cache sémantique ──
+        # ── 3. Cache sémantique (L1 RAM → L2 SQLite) ──
         if intent != "COMPLEX":
-            cached, cached_diag = await self.memory_store.get_cache(query)
+            cached, cached_diag = await self.llm_cache.get(query)
             if cached:
                 await self.event_bus.emit("cache_hit", {"query": query})
                 if use_tts and audio_engine:
@@ -510,7 +514,7 @@ class NuruOrchestrator:
 
         # ── 10. Mémoire ──
         if intent != "COMPLEX":
-            await self.memory_store.set_cache(query, response_content)
+            await self.llm_cache.set(query, response_content)
         self.memory_store.add_message("user", query)
         self.memory_store.add_message("assistant", response_content)
 
