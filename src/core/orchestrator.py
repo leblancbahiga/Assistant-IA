@@ -172,6 +172,10 @@ class NuruOrchestrator:
         # V10.3f : Enregistrer la question utilisateur dans la session
         self.session_store.create_session(session_id)
         self.session_store.add_message(session_id, "user", original_query, metadata={"mode": ctx.mode})
+        # Auto-titrage : premier message → titre de session
+        if not self.session_store.get_or_create(session_id).title:
+            title = original_query[:60] + ("..." if len(original_query) > 60 else "")
+            self.session_store.update_title(session_id, title)
         await self.event_bus.emit("query.received", {"query": query})
 
         # ── 2. RAG retrieval (UNE SEULE FOIS — partagé entre routeur et contexte) ──

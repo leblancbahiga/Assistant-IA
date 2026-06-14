@@ -70,13 +70,19 @@ class FormatDialog(QDialog):
 
 
 class SessionsPage(QWidget):
-    session_selected = Signal(int)  # émis quand une session est chargée
+    session_selected = Signal(str)  # émis quand une session est chargée (session_id)
 
     def __init__(self, memory_store=None, parent=None):
         super().__init__(parent)
         self.memory_store = memory_store
         self._sessions = []  # liste de dicts représentant les sessions
         self._filtered_sessions = []
+        self._session_store = None
+        try:
+            from src.session.store import SessionStore
+            self._session_store = SessionStore()
+        except Exception:
+            pass
         self.setup_ui()
 
     def setup_ui(self):
@@ -192,11 +198,27 @@ class SessionsPage(QWidget):
         self._loaded = True
 
     def load_sessions(self):
-        """Charge l'historique depuis memory_store et construit des sessions."""
+        """Charge les sessions depuis SessionStore (puis memory_store en fallback)."""
         self._sessions.clear()
 
+        # Essayer SessionStore d'abord
+        if self._session_store is not None:
+            try:
+                raw = self._session_store.list_sessions(limit=100)
+                for entry in raw:
+                    session = self._session_store.get_or_create(entry["id"])
+                    normalized = self._session_to_dict(session, entry)
+                    self._sessions.append(normalized)
+                self._apply_filters()
+                if not self._sessions:
+                    self._show_empty_state()
+                return
+            except Exception as e:
+                logger.error("SessionStore: %s", e)
+
+        # Fallback : memory_store
         if not self.memory_store:
-            self._show_empty_state("⚠️ MemoryStore non connecté")
+            self._show_empty_state("⚠️ Aucune source de données")
             return
 
         try:
@@ -204,15 +226,43 @@ class SessionsPage(QWidget):
             if not history:
                 self._show_empty_state()
                 return
-
-            # Grouper les messages par date approximative en sessions factices
             sessions = self._group_into_sessions(history)
             self._sessions = sessions
             self._apply_filters()
-
         except Exception as e:
             logger.error(f"Erreur chargement sessions: {e}")
             self._show_empty_state(f"Erreur : {str(e)}")
+
+    @staticmethod
+    def _session_to_dict(session, entry: dict) -> dict:
+        """Convertit un objet Session en dict pour le tableau."""
+        from datetime import datetime
+        created = datetime.fromtimestamp(session.created_at)
+        date_str = created.strftime("%d/%m/%Y %H:%M")
+
+        content_lines = []
+        for m in session.messages:
+            role = "Utilisateur" if m.role == "user" else "NURU"
+            content_lines.append(f"{role}: {m.content}")
+        full_text = "\n\n".join(content_lines)
+
+        model = "—"
+        msgs = session.messages
+        if msgs and msgs[-1].metadata and "intent" in msgs[-1].metadata:
+            model = msgs[-1].metadata.get("intent", "—")
+
+        return {
+            "title": session.title or (msgs[0].content[:80] + "…" if msgs and msgs[0].content else "Sans titre"),
+            "date": date_str,
+            "datetime": created,
+            "messages": [{"role": m.role, "content": m.content, "timestamp": m.timestamp} for m in msgs],
+            "msg_count": entry.get("message_count", len(msgs)),
+            "model": model,
+            "avg_time": 0.0,
+            "time_str": "—",
+            "full_text": full_text,
+            "session_id": session.id,
+        }
 
     def _group_into_sessions(self, history: list) -> list:
         """Groupe les messages en sessions basées sur l'ordre et le temps."""
