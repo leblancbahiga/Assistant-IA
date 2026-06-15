@@ -1848,3 +1848,48 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 
 **Tests :** 60 verts (inchangés)
 
+### V10.4 — 2026-06-15 « Correction des 9 bugs du dashboard »
+
+**Bugfix sprint — aucune fonctionnalité nouvelle, uniquement des correctifs**
+
+**Problèmes corrigés :**
+
+1. **🔁 Doublage du prompt** — `console_page.py`, `dashboard.py`
+   - Suppression du `show_typing()` en double dans le mode démo
+   - `Qt.UniqueConnection` pour prévenir le double-wiring du signal
+
+2. **🕐 Sessions vides** — `sessions_page.py`, `dashboard.py`
+   - Fallback `memory_store.get_recent_history()` débloqué (return précoce supprimé)
+   - Sauvegarde automatique des messages utilisateur/assistant dans SessionStore
+
+3. **🧠 Mémoire inaccessible** — `memory_page.py` (rewrite 218→460 lignes)
+   - États fallback : store None (panneau explicatif), DB vide (chemin+taille+guidance)
+   - Auto-rafraîchissement toutes les 15s, gestion d'erreurs robuste
+
+4. **💬 Feedback vide** — `feedback_page.py`
+   - Création auto de `~/.nuru/` au constructeur
+   - Messages d'état vide + erreur explicites
+
+5. **🎛️ État V10 inactif** — `v6_system_page.py`
+   - Mapping des noms de modules V10 vers les vrais attributs Config
+   - `config=None` → affiche "N/A", cases désactivées
+
+6. **📋 Logs figés (09/06)** — `logs_page.py`
+   - Détection de vétusté : `⚠️ 09/06 13:16 (vieux de 6j)` en orange
+   - Rechargement complet depuis le début
+
+7. **📊 Stats non fonctionnelles** — `stats_page.py`
+   - Bannière orange quand PerformanceTracker indisponible
+   - `⏳ En attente...` au lieu de cartes vides, RAM toujours affichée
+
+8. **🔧 Outils V10** — `tool_tester.py`
+   - Badges 🟢/🔴 pour chaque backend
+   - Erreurs différentiées : jaune (module manquant) vs rouge (runtime)
+
+9. **📄 Documents récents** — `dashboard.py`
+   - `DOC_MOCK` (4 entrées factices) remplacé par scan réel de 3 dossiers
+   - 54 documents trouvés, 12 plus récents affichés
+
+**Fichiers modifiés :** 9 fichiers, +1175/−236 lignes
+**Tests :** 381 passés, 0 régression
+
