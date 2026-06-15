@@ -1893,3 +1893,20 @@ Semaine 15-20 ── V12 : Maturité, tests, optimisation, release
 **Fichiers modifiés :** 9 fichiers, +1175/−236 lignes
 **Tests :** 381 passés, 0 régression
 
+### V10.4b — 2026-06-15 « Pipeline PerformanceTracker opérationnel (métriques NURU → dashboard) »
+
+**Correctif :** les métriques du dashboard (Stats V10) restaient figées sur « En attente de données » même après utilisation de NURU, car `PerformanceTracker` n'était jamais appelé.
+
+**Modifié :**
+- `src/core/inference_worker.py` — instrumentation : enregistre `rag_recall@5`, `avg_score`, réponse tokens après chaque génération dans `~/.nuru/performance.db`
+- `src/ui/dashboard.py` — nouveaux handlers `_on_feedback_positive`/`_on_feedback_negative` qui sauvent dans FeedbackCollector + PerformanceTracker
+
+**Pipeline complet :**
+```
+Utilisateur → conversation → InferenceWorker → performance.db
+Utilisateur → 👍/👎 → FeedbackCollector → performance.db
+StatsPage (timer 5s) → lit performance.db → affiche métriques
+```
+
+**Fichiers modifiés :** 2, +84/−2
+**Tests :** 381 passés, 0 régression
