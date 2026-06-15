@@ -169,6 +169,7 @@ class RAGEngine:
                     "WHERE embedding MATCH ? ORDER BY distance LIMIT 15",
                     [qvec]
                 ).fetchall()
+                results = [(r[0], r[1], float(r[2])) for r in rows]
             else:  # fts
                 from src.query_rewriter import STOP_WORDS
                 # `re` est importé au niveau module (ligne 7)
@@ -176,12 +177,33 @@ class RAGEngine:
                 if not words:
                     words = re.findall(r'\w{3,}', query.lower())
                 fts_q = " OR ".join(f'"{w}"' for w in words)
-                rows = conn.execute(
-                    "SELECT content, source, 1.0 as score FROM chunks_fts "
-                    "WHERE content MATCH ? LIMIT 15",
-                    [fts_q]
-                ).fetchall()
-            return [(r[0], r[1], float(r[2])) for r in rows]
+                # V2.1 FIX : utiliser BM25 (colonne 'rank' FTS5) au lieu du score 1.0 factice.
+                # rank FTS5 : négatif → plus négatif = meilleur match.
+                # Conversion score = -rank / (1 + -rank) → [0, 0.95] pour matches, 0 sinon.
+                try:
+                    rows = conn.execute(
+                        "SELECT content, source, rank FROM chunks_fts "
+                        "WHERE content MATCH ? ORDER BY rank LIMIT 15",
+                        [fts_q]
+                    ).fetchall()
+                except Exception:
+                    # Fallback : rank indisponible → tri par rang
+                    rows = conn.execute(
+                        "SELECT content, source, 0.0 as score FROM chunks_fts "
+                        "WHERE content MATCH ? LIMIT 15",
+                        [fts_q]
+                    ).fetchall()
+                    results = [(r[0], r[1], max(0.0, 1.0 - i * 0.07)) for i, r in enumerate(rows)]
+                    return results
+                results = []
+                for r in rows:
+                    raw = float(r[2])
+                    if raw < 0:
+                        score = -raw / (1.0 + -raw)
+                    else:
+                        score = 0.0
+                    results.append((r[0], r[1], score))
+            return results
         except Exception as e:
             logger.warning(f"⚠️ _ms_vector_search({search_type}) a échoué: {e}")
             return []

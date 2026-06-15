@@ -124,19 +124,21 @@ class IngestionEngine:
                 primary_chunks = v2_chunks if v2_chunks else semantic_chunks
 
                 chunks = []
-                for c in primary_chunks:
-                    # V2 : le contenu inclut déjà le contexte (résumé, section, importance)
-                    content = c.to_dict()["content"]
-                    # On embed le texte enrichi
-                    embedding = await self.embedder.embed(content, is_query=False)
-                    chunks.append({
-                        "content": content,
-                        "source": os.path.basename(filepath),
-                        "embedding": embedding[0],
-                        "date": "",
-                        "title": c.section_title or c.doc_title,
-                        "level": c.level,
-                    })
+                # V10.3l FIX : BATCH embedding — tous les chunks en un appel MLX
+                # Au lieu de N appels séquentiels (N×1s), un seul appel (1×N)
+                chunk_dicts = [c.to_dict() for c in primary_chunks]
+                contents = [d["content"] for d in chunk_dicts]
+                if contents:
+                    embeddings = await self.embedder.embed(contents, is_query=False)
+                    for i, c in enumerate(primary_chunks):
+                        chunks.append({
+                            "content": contents[i],
+                            "source": os.path.basename(filepath),
+                            "embedding": embeddings[i] if embeddings is not None and i < len(embeddings) else None,
+                            "date": "",
+                            "title": c.section_title or c.doc_title,
+                            "level": c.level,
+                        })
 
                 self.rag.add_chunks(chunks)
                 self.rag.mark_file_indexed(filepath, 0, file_hash)

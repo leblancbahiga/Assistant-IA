@@ -25,6 +25,25 @@ from src.core.exceptions import LLMError, RAGError
 logger = logging.getLogger(__name__)
 
 
+def _extract_user_facts(system_prompt: str) -> str:
+    """Extrait la section 'Ce que tu sais sur Leblanc' du system_prompt.
+
+    Retourne une chaîne vide si la section est absente.
+    """
+    marker = "## Ce que tu sais sur Leblanc"
+    start = system_prompt.find(marker)
+    if start == -1:
+        return ""
+    # Lire jusqu'au prochain '##' ou fin de chaîne
+    after = start + len(marker)
+    end = system_prompt.find("\n## ", after)
+    if end == -1:
+        section = system_prompt[start:]
+    else:
+        section = system_prompt[start:end]
+    return section.strip()
+
+
 class LLMGenerator:
     """Sous-orchestrateur de génération LLM : cloud/local streaming + fallback."""
 
@@ -84,6 +103,7 @@ class LLMGenerator:
         # ── Stratégie Archon ──
         if hybrid == "rag" and intent == "RAG" and ctx.is_online and rag_context.strip():
             logger.info("☁️ Stratégie Archon: RAG local → synthèse cloud")
+            user_facts_section = _extract_user_facts(system_prompt)
             cloud_system = (
                 f"Tu es NURU, assistant IA personnel. Tu dois répondre UNIQUEMENT à partir des documents ci-dessous.\n\n"
                 f"## RÈGLES IMPÉRATIVES (sous peine d'être déconnecté) :\n"
@@ -101,6 +121,8 @@ class LLMGenerator:
                 f"réponds à la question suivante : {user_message}\n\n"
                 f"Réponse :"
             )
+            if user_facts_section:
+                cloud_system += f"\n\n{user_facts_section}"
             logger.info(f"☁️ Archon cloud call — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
             async for token in self.cloud_llm.generate_stream(
                 user_message, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
@@ -116,6 +138,7 @@ class LLMGenerator:
                 logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")
             else:
                 logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB, hybrid={hybrid}, temp={cloud_temp})")
+                user_facts_section = _extract_user_facts(system_prompt)
                 cloud_system = "Tu es NURU, assistant personnel de Leblanc. Tu réponds en français.\n\n"
                 if rag_context.strip():
                     cloud_system += (
@@ -130,6 +153,8 @@ class LLMGenerator:
                     )
                 if web_context.strip():
                     cloud_system += f"## CONTEXTE DE RECHERCHE WEB\n{web_context}\n\n"
+                if user_facts_section:
+                    cloud_system += f"\n{user_facts_section}\n"
                 anchored_prompt = (
                     f"En te basant sur le contexte ci-dessus, "
                     f"réponds à la question suivante : {user_message}"

@@ -210,15 +210,32 @@ class HierarchicalChunkerV2:
         """Accumule les paragraphes d'une section jusqu'à MAX_SECTION_CHARS."""
         paragraphs = self._split_paragraphs(text)
         if not paragraphs:
-            # Fallback : la section entière en un chunk
-            return [ChunkV2(
-                content=text.strip(),
-                source=source, doc_title=doc_title,
-                section_title=section_title,
-                level="section", importance=importance,
-                char_count=len(text), word_count=len(text.split()),
-                chunk_index=start_index,
-            )]
+            # V2.1 FIX : texte continu (pas de \n\n) → split par caractères avec overlap
+            chunks = []
+            start = 0
+            idx = start_index
+            while start < len(text):
+                end = min(start + self.max_section_chars, len(text))
+                if end < len(text):
+                    # Essayer de couper à une frontière de phrase
+                    for bc in ('. ', '! ', '? ', '\n'):
+                        pos = text.rfind(bc, start, end)
+                        if pos > start:
+                            end = pos + len(bc)
+                            break
+                chunk_text = text[start:end].strip()
+                if chunk_text:
+                    chunks.append(ChunkV2(
+                        content=chunk_text,
+                        source=source, doc_title=doc_title,
+                        section_title=section_title,
+                        level="section", importance=importance,
+                        char_count=len(chunk_text), word_count=len(chunk_text.split()),
+                        chunk_index=idx,
+                    ))
+                    idx += 1
+                start = end - self.overlap_chars
+            return chunks
 
         chunks = []
         buffer = ""
@@ -306,9 +323,21 @@ class HierarchicalChunkerV2:
         return result
 
     def _split_paragraphs(self, text: str) -> list[str]:
-        """Paragraphes par doubles sauts de ligne, filtre les micro-chunks."""
-        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text)]
-        return [p for p in paragraphs if len(p) >= self.min_chunk_chars]
+        """Paragraphes par doubles sauts de ligne, fusion des micro-chunks.
+
+        Au lieu de JETER les paragraphes < min_chunk_chars (ancien bug),
+        on les fusionne au paragraphe précédent pour ne perdre aucun contenu.
+        """
+        raw = [p.strip() for p in re.split(r'\n\s*\n', text)]
+        merged: list[str] = []
+        for p in raw:
+            if not p:
+                continue
+            if merged and len(p) < self.min_chunk_chars:
+                merged[-1] += "\n\n" + p
+            else:
+                merged.append(p)
+        return merged
 
     def _detect_importance(self, text: str) -> str:
         text_lower = text.lower()

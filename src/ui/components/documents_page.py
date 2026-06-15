@@ -297,9 +297,8 @@ class DocumentsPage(QWidget):
     def showEvent(self, event):
         """Charge les documents quand la page devient visible."""
         super().showEvent(event)
-        if self.rag_engine is not None and hasattr(self, '_loaded'):
+        if self.rag_engine is not None:
             self.load_documents()
-        self._loaded = True
 
     def load_documents(self):
         """Charge la liste des documents depuis la base RAG et met à jour le tableau."""
@@ -808,7 +807,5 @@ class DocumentsPage(QWidget):
             event.ignore()
 
     # ─────────── SHOW EVENT ───────────
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.load_documents()
+    # showEvent est défini plus haut (après la section LOAD DOCUMENTS)
+    # pour rester proche de load_documents(). Pas de doublon ici.
