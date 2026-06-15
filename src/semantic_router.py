@@ -153,9 +153,30 @@ class SemanticRouter:
         has_rag_kw = any(kw in query_lower for kw in RAG_KEYWORDS)
         has_gk = any(re.search(p, query_lower) for p in GENERAL_KNOWLEDGE_PATTERNS)
         has_web = any(re.search(p, query_lower) for p in WEB_SEARCH_PATTERNS)
+        # AUDIT V10.3k — B-Routing-QuiEst : "Qui est [Nom Propre] ?" matchait GENERAL_KNOWLEDGE
+        # via le pattern "qui est", même quand la requête cible l'identité de l'utilisateur
+        # (Leblanc, etc.). On détecte spécifiquement "qui est" (en query_lower pour matcher
+        # la casse, suivi d'un Mot capitalized DANS LA user_query ORIGINALE — pas lowercased —
+        # pour identifier un nom propre. Si oui → RAG probable (identité personnelle).
+        m_gk = re.search(r"qui est\s+(\S+)", query_lower)
+        is_identity_query = False
+        if m_gk:
+            next_word_lower = m_gk.group(1).rstrip("?!.,;:")  # sans ponctuation
+            # Trouver ce mot dans la user_query ORIGINALE pour récupérer sa casse
+            pattern_next = re.escape(next_word_lower[:min(4, len(next_word_lower))])
+            m_orig = re.search(pattern_next, user_query, re.IGNORECASE)
+            if m_orig and m_orig.start() >= 4:  # bien après "qui est"
+                next_word_original = m_orig.group(0)
+                if next_word_original[0].isupper():
+                    is_identity_query = True
+        # Si on a matché un nom propre, override GENERAL → RAG
+        if has_gk and is_identity_query and not has_rag_kw:
+            has_gk_unless_identity = False
+        else:
+            has_gk_unless_identity = has_gk
 
         # 2a : Connaissance générale évidente SANS référent documentaire
-        if has_gk and not has_rag_kw:
+        if has_gk_unless_identity and not has_rag_kw:
             result.decision = "GENERAL_KNOWLEDGE"
             result.confidence = 0.9
             result.reasoning = "Pattern connaissance générale"
@@ -164,10 +185,12 @@ class SemanticRouter:
             return result
 
         # 2b : Document keyword → RAG direct
-        if has_rag_kw:
+        if has_rag_kw or is_identity_query:
             result.decision = "DOCUMENT_KEYWORD"
             result.confidence = 0.9
-            result.reasoning = "Document keyword"
+            result.reasoning = (
+                "Document keyword OR identity query (Qui est [Nom])"
+            )
             result.processing_time_ms = (time.time() - t_start) * 1000
             self._cache.set(cache_key, result)
             return result

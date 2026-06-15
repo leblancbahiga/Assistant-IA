@@ -80,8 +80,13 @@ class RAGOrchestrator:
         web_contexts: list[str] = []
 
         for i, sq in enumerate(sub_queries):
-            if i == 0 and primary_rag_context is not None:
-                rag_ctx, result = primary_rag_context, primary_rag_result
+            if i == 0 and primary_rag_context:
+                # V10.3k — AUDIT BUG-FIX : retrieve_primary retourne (context_str, result)
+                # AVANT : unpacking `rag_ctx, result = primary_rag_context` qui récursait
+                # sur la string du context et tronquait silencieusement à 2 chars.
+                # Conséquence : RAG complètement invisible pour le LLM downstream.
+                rag_ctx = primary_rag_context
+                result = primary_rag_result
                 web = ""
                 if intent == "COMPLEX" and self.web:
                     web = await self.web.search(sq)
