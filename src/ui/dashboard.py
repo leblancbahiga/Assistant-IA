@@ -577,6 +577,7 @@ class CyberDashboard(QMainWindow):
         self._rag_sources_diversity: list[int] = []
         self._current_bubble = None
         self._current_query = ""
+        self._current_response = ""
         self._current_strict = False
         self._is_processing = False
         self._total_tokens_received = 0
@@ -754,6 +755,15 @@ class CyberDashboard(QMainWindow):
         except Exception as e:
             logger.warning("FeedbackCollector non disponible: %s", e)
 
+        # ── PerformanceTracker (métriques de performance) ──
+        self._performance_tracker = None
+        try:
+            from src.learning.tracker import PerformanceTracker
+            self._performance_tracker = PerformanceTracker()
+            logger.info("PerformanceTracker initialisé")
+        except Exception as e:
+            logger.warning("PerformanceTracker non disponible: %s", e)
+
         try:
             from src.agent.orchestrator import AgentOrchestrator
             self._v9_orchestrator = AgentOrchestrator(
@@ -793,10 +803,10 @@ class CyberDashboard(QMainWindow):
                 self.citation_clicked.emit
             )
             self.console_page.feedback_positive.connect(
-                self.feedback_positive.emit
+                self._on_feedback_positive
             )
             self.console_page.feedback_negative.connect(
-                self.feedback_negative.emit
+                self._on_feedback_negative
             )
             self.console_page.new_chat.connect(self.new_chat.emit)
             self.console_page.voice_toggled.connect(self.voice_toggled.emit)
@@ -1124,6 +1134,8 @@ class CyberDashboard(QMainWindow):
             QThreadPool.globalInstance().start(worker)
         else:
             # ── Mode démo / fallback ──
+            self._current_query = text
+            self._current_strict = strict_mode
             # Note: console_page._on_query a déjà appelé show_typing()
             # Ne PAS le refaire ici pour éviter le doublage du typing.
             QTimer.singleShot(800, lambda: self._demo_response(text))
@@ -1223,6 +1235,7 @@ class CyberDashboard(QMainWindow):
         """Fin de génération."""
         self.console_page.messages.hide_typing()
         self._is_processing = False
+        self._current_response = full_response
 
         # Sauvegarder la réponse assistant dans SessionStore
         if self._session_store is not None:
@@ -1275,6 +1288,45 @@ class CyberDashboard(QMainWindow):
                 break
 
         self.console_page.messages.add_message(text=reply, role="assistant")
+        self._current_response = reply
+
+    def _on_feedback_positive(self, message_id: str) -> None:
+        """Enregistre un feedback positif (👍) dans FeedbackCollector + PerformanceTracker."""
+        logger.debug("Feedback positif reçu pour %s", message_id)
+        if self._v9_feedback_collector:
+            try:
+                self._v9_feedback_collector.record_thumbs(
+                    query=self._current_query,
+                    response=self._current_response if hasattr(self, '_current_response') else "",
+                    is_positive=True,
+                )
+            except Exception as e:
+                logger.warning("FeedbackCollector thumbs_up: %s", e)
+        if self._performance_tracker:
+            try:
+                self._performance_tracker.record_feedback_metrics(thumbs_up=True)
+            except Exception as e:
+                logger.debug("PerformanceTracker feedback: %s", e)
+        self.feedback_positive.emit(message_id)
+
+    def _on_feedback_negative(self, message_id: str) -> None:
+        """Enregistre un feedback négatif (👎) dans FeedbackCollector + PerformanceTracker."""
+        logger.debug("Feedback négatif reçu pour %s", message_id)
+        if self._v9_feedback_collector:
+            try:
+                self._v9_feedback_collector.record_thumbs(
+                    query=self._current_query,
+                    response=self._current_response if hasattr(self, '_current_response') else "",
+                    is_positive=False,
+                )
+            except Exception as e:
+                logger.warning("FeedbackCollector thumbs_down: %s", e)
+        if self._performance_tracker:
+            try:
+                self._performance_tracker.record_feedback_metrics(thumbs_down=True)
+            except Exception as e:
+                logger.debug("PerformanceTracker feedback: %s", e)
+        self.feedback_negative.emit(message_id)
 
     def _on_console_clear(self) -> None:
         """Réinitialise la console après nettoyage."""

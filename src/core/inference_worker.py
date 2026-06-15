@@ -31,6 +31,13 @@ class InferenceWorker(QRunnable):
         self.query = query
         self.signals = WorkerSignals()
         self.setAutoDelete(True)
+        # Initialiser le PerformanceTracker une fois par instance
+        self._tracker = None
+        try:
+            from src.learning.tracker import PerformanceTracker
+            self._tracker = PerformanceTracker()
+        except Exception:
+            pass
 
     def run(self):
         """Point d'entrée du QRunnable — exécuté dans un thread du pool."""
@@ -54,12 +61,35 @@ class InferenceWorker(QRunnable):
                     self.signals.token_received.emit(f"\n[Erreur: {e}]")
 
                 # Récupérer les données RAG depuis le core après la génération
+                rag_data = {}
                 try:
                     rag_data = self._get_rag_data()
                     if rag_data:
                         self.signals.rag_data.emit(rag_data)
                 except Exception as e:
                     logger.debug(f"RAG data retrieval: {e}")
+
+                # Enregistrer les métriques dans PerformanceTracker
+                if self._tracker is not None:
+                    try:
+                        # Métriques RAG
+                        rag_score = rag_data.get('top_score', 0) if rag_data else 0
+                        recall5 = rag_data.get('chunks_retrieved', 0) if rag_data else 0
+                        self._tracker.record_rag_result(
+                            query=self.query,
+                            recall5=recall5,
+                            avg_score=rag_score,
+                            empty=(rag_score == 0),
+                        )
+                        # Métriques réponse
+                        self._tracker.record_response_metrics(
+                            response_time_ms=0,  # mesuré dans dashboard via timestamps
+                            tokens=len(full_response.split()),
+                            hallucination=False,
+                            has_citation="[Source" in full_response or "source" in full_response.lower(),
+                        )
+                    except Exception as e:
+                        logger.debug(f"PerformanceTracker record: {e}")
 
             loop.run_until_complete(stream())
             loop.close()
