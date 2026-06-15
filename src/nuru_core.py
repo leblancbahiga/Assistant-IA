@@ -130,9 +130,10 @@ class NuruCore:
         self.ingestion = IngestionEngine()
         
         # V4 : Monitoring RAM actif
+        # V10.3k — audit Option C : seuils lus depuis Config (surchargeables via YAML/env)
         self.ram_monitor = RAMMonitor(
-            warning_threshold_gb=2.0,
-            critical_threshold_gb=1.0
+            warning_threshold_gb=getattr(config, "ram_warning_threshold_gb", 1.0),
+            critical_threshold_gb=getattr(config, "ram_critical_threshold_gb", 0.5),
         )
         # Connecte le déchargement du reranker au RAMMonitor
         self.ram_monitor.register_callback(self.rag.clear_reranker)
@@ -165,7 +166,15 @@ class NuruCore:
 
         # V4.5 : Extracteur post-session (profil utilisateur)
         self._extractor = PostSessionExtractor()
-        
+
+        # V10.3k — AUDIT BUG-FIX B-Task-Destroyed : ensemble des background tasks.
+        # Sans garde, asyncio crée la task → pas de référence → garbage collection
+        # à la fermeture de la loop → ERROR "Task was destroyed but it is pending!"
+        # seen in user logs at every query termination.
+        # Le bookkeeping : self._bg_tasks.add(t) (garde la ref) + add_done_callback(discard)
+        # nettoie automatiquement quand la task finit.
+        self._bg_tasks: set = set()
+
     def _is_online(self) -> bool:
         """Vérifie rapidement si le fournisseur Cloud est accessible.
         
@@ -291,7 +300,20 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
         ):
             yield token
 
-        # Extraction post-session déportée en background (évite freeze UI)
+        # Extraction post-session déportée en background.
+        # V10.3k : utilise le bookkeeping _bg_tasks pour éviter
+        # "Task was destroyed but it is pending!" à la fermeture de loop.
+        await self._schedule_background_extraction()
+
+    async def _schedule_background_extraction(self) -> None:
+        """Planifie l'extraction post-session en arrière-plan.
+
+        Crée une task asyncio, la garde en référence via self._bg_tasks
+        pour éviter la destruction par le GC quand l'event loop se ferme,
+        et l'enlève automatiquement du set quand elle se termine.
+
+        Voir AUDIT B-Task-Destroyed (Top 20 #9).
+        """
         async def background_extraction():
             try:
                 history = self.memory.get_recent_history(limit=20)
@@ -300,7 +322,11 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
                     self.memory.add_fact(fact, category="user_profile")
             except Exception as e:
                 logger.debug(f"Extraction post-session: {e}")
-        asyncio.create_task(background_extraction())
+
+        task = asyncio.create_task(background_extraction())
+        self._bg_tasks.add(task)
+        # Auto-cleanup quand la task finit (évite accumulation)
+        task.add_done_callback(self._bg_tasks.discard)
 
     def warmup(self):
         """Initialisation préventive des modèles."""
@@ -318,13 +344,6 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
         ):
             yield token
 
-        # Correction 8 : Extraction post-session déportée en background (évite freeze UI)
-        async def background_extraction():
-            try:
-                history = self.memory.get_recent_history(limit=20)
-                facts = await asyncio.to_thread(self._extractor.extract, history)
-                for fact in facts:
-                    self.memory.add_fact(fact, category="user_profile")
-            except Exception as e:
-                logger.debug(f"Extraction post-session: {e}")
-        asyncio.create_task(background_extraction())
+        # V10.3k — même correctif B-Task-Destroyed via _schedule_background_extraction
+        await self._schedule_background_extraction()
+

@@ -19,6 +19,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
+from src.config import config
 from src.rag.types import SearchResult
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,11 @@ logger = logging.getLogger(__name__)
 # Constantes
 # ──────────────────────────────────────────
 
-MIN_RAM_FOR_HEAVY_SEARCH_MB = 2000     # 2 Go libre pour grep/HyDE
+# V10.3k — audit Option C : seuil RAM configurable via Config.
+# Défaut historique 2000 inadapté à M1 8 Go (1.1 Go dispo réelle).
+MIN_RAM_FOR_HEAVY_SEARCH_MB = getattr(
+    config, "heavy_search_min_ram_mb", 1000
+)
 RRF_K = 60                              # Constante RRF standard
 EARLY_STOP_SCORE = 0.75                 # Score FTS/Vectoriel > 0.75 → skip grep/HyDE
 DEDUP_COSINE_THRESHOLD = 0.90           # Seuil de déduplication sémantique

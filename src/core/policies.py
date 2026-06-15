@@ -6,6 +6,7 @@ dispersées dans semantic_router.py et rag_engine.py.
 import logging
 from typing import Optional
 from src.core.query_context import QueryContext
+from src.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,11 @@ class PolicyEngine:
     """Décisions basées sur l'état système (RAM, score, connectivité).
 
     Centralise les seuils pour éviter les dérives entre modules.
+
+    V10.3k — audit Option C : seuils RAM lus depuis `src.config.Config`
+    (surchargeable via config/settings.yaml et env NURU_*) au lieu d'être
+    hardcodés. Les constantes de classe restent comme DEFAULT_FALLBACK
+    si jamais Config n'est pas dispo (CI, tests).
     """
 
     # Seuils de confiance RAG
@@ -25,12 +31,31 @@ class PolicyEngine:
     RERANK_MIN_SCORE = 0.40
     RERANK_MAX_SCORE = 0.75
 
-    # RAM
-    RERANK_MIN_RAM_MB = 1500
-    CLOUD_FALLBACK_RAM_GB = 1.5
+    # RAM — DEFAULT_FALLBACK (utilisés si Config indisponible)
+    RERANK_MIN_RAM_MB = 800                  # Ancien: 1500 — inadapté M1 8 Go
+    CLOUD_FALLBACK_RAM_GB = 1.0               # Ancien: 1.5 — abaissé
 
     def __init__(self):
-        logger.info("⚙️ PolicyEngine initialisé")
+        # Synchroniser avec config (peut être None en environment dégradé)
+        try:
+            self.RERANK_MIN_RAM_MB = config.rerank_min_ram_mb
+        except Exception:
+            pass  # Garde le default fallback
+        try:
+            rt = getattr(config, "cloud_fallback_ram_gb", None)
+            if rt is not None:
+                self.CLOUD_FALLBACK_RAM_GB = rt
+        except Exception:
+            pass
+        try:
+            self.CLOUD_FALLBACK_RAM_GB  # type: ignore[misc]
+        except Exception:
+            pass
+        logger.info(
+            f"⚙️ PolicyEngine initialisé "
+            f"(RERANK_MIN_RAM_MB={self.RERANK_MIN_RAM_MB}, "
+            f"CLOUD_FALLBACK_RAM_GB={self.CLOUD_FALLBACK_RAM_GB})"
+        )
 
     # ─── Routage ───
 

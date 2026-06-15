@@ -49,6 +49,17 @@ class Config(BaseSettings):
     rag_max_context_tokens: int = 1500
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
+    # ── Seuils RAM (audit V10.3k — Option C) ───────────────────────────
+    # Hardcodés historiquement (1500 + 2000 + 2.0 + 1.0) inadaptés à M1 8 Go
+    # où la RAM réellement disponible après PySide6 + Python ≈ 1.1 Go.
+    # Sur 8 Go, les anciens seuils désactivaient TOUTES les optimisations RAG
+    # en permanence. Ces défauts sont pensés pour 8 Go et scalent naturellement :
+    # sur 16+ Go, le user override via settings.yaml.
+    rerank_min_ram_mb: int = 800        # Cross-encoder demande ~400 Mo
+    heavy_search_min_ram_mb: int = 1000 # grep + HyDE ≈ 300 Mo
+    ram_warning_threshold_gb: float = 1.0
+    ram_critical_threshold_gb: float = 0.5
+
     # ── Cache ──
     cache_ttl_seconds: int = 300
     cache_maxsize: int = 256

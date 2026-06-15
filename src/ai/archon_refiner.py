@@ -102,18 +102,37 @@ class ArchonRefiner:
         t0 = time.monotonic()
         self._stats["runs"] += 1
         try:
-            refined = await llm.generate(
-                system=REFINER_SYSTEM_PROMPT,
-                prompt=(
-                    f"## CONTEXTE\n{context_chunk}\n\n"
-                    f"## RÉPONSE À VÉRIFIER\n{response}\n\n"
-                    f"## TÂCHE\nVérifie la réponse ci‑dessus contre le contexte. "
-                    f"Corrige si nécessaire. Si tout est correct, retourne la réponse "
-                    f"originale inchangée."
-                ),
-                max_tokens=min(len(response) + 500, 2048),
-                temperature=0.1,
+            # V10.3k — AUDIT BUG-FIX B-Archon : ArchonRefiner appelait
+            # llm.generate(system=..., prompt=..., max_tokens=..., temperature=...)
+            # mais CloudLLM.generate(prompt, timeout, model) n'accepte pas ces kwargs.
+            # Crash réel vu dans les logs :
+            #   "ArchonRefiner: erreur CloudLLM.generate() got an unexpected
+            #    keyword argument 'system'"
+            # Le refiner était silencieusement désactivé. On utilise maintenant
+            # generate_stream (signature correcte, system_prompt + temperature)
+            # qui correspond à CloudLLM.generate_stream().
+            full_prompt = (
+                f"## CONTEXTE\n{context_chunk}\n\n"
+                f"## RÉPONSE À VÉRIFIER\n{response}\n\n"
+                f"## TÂCHE\nVérifie la réponse ci‑dessus contre le contexte. "
+                f"Corrige si nécessaire. Si tout est correct, retourne la réponse "
+                f"originale inchangée."
             )
+            refined_parts = []
+            try:
+                # Cas normal : LLM avec generate_stream (CloudLLM, LocalLLM MLX)
+                async for token in llm.generate_stream(
+                    prompt=full_prompt,
+                    intent="RAG",
+                    system_prompt=REFINER_SYSTEM_PROMPT,
+                    temperature=0.1,
+                ):
+                    refined_parts.append(token)
+                refined = "".join(refined_parts)
+            except AttributeError:
+                # Fallback : LLM simple (méthode .generate synchrone)
+                logger.debug("ArchonRefiner: generate_stream absent, fallback .generate()")
+                refined = llm.generate(full_prompt, timeout=30.0)
             elapsed = int((time.monotonic() - t0) * 1000)
             self._stats["total_ms"] += elapsed
 

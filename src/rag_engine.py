@@ -114,9 +114,12 @@ class RAGEngine:
         self.last_top_score = 0.0
         self._init_db()
         # V4.5 Phase 0 : seuils configurés pour reranker conditionnel
+        # V10.3k — audit Option C : seuil RAM lu depuis Config (surchargeable via yaml)
         self._rerank_min_score = 0.40   # En dessous : pas la peine
         self._rerank_max_score = 0.75   # Au dessus : déjà suffisant
-        self._rerank_min_ram_mb = 1500  # RAM minimale pour activer le cross-encoder
+        self._rerank_min_ram_mb = getattr(
+            config, "rerank_min_ram_mb", 800
+        )  # RAM minimale pour activer le cross-encoder
         # V8+ Sprint 4 : Orchestrateur multi-stratégie (initialisé paresseusement)
         self._multi_search = None
 
@@ -148,9 +151,19 @@ class RAGEngine:
                 # Embed la requête et chercher par vecteur
                 import sqlite_vec
                 embed = self.embedder.embed_sync(query, is_query=True)
-                if not embed or not embed[0]:
+                # AUDIT V10.3k — B-Embed : le code testé `if not embed` sur np.ndarray 2D
+                # ce qui lève ValueError "truth value of array with more than one element
+                # is ambiguous" et fait silencieusement retomber _ms_vector_search à []
+                # → RAG vectoriel complètement cassé pour cet appel, sans message
+                # d'erreur clair.
+                # Fix : tester embed.size (méthode sûre np) au lieu de truthiness.
+                if embed is None or getattr(embed, 'size', 0) == 0 or len(embed) == 0:
                     return []
-                qvec = sqlite_vec.serialize_float32(embed[0])
+                # embed est typiquement shape (1, 768) — index [0] est le vecteur
+                if embed.ndim >= 2:
+                    qvec = sqlite_vec.serialize_float32(embed[0])
+                else:
+                    qvec = sqlite_vec.serialize_float32(embed)
                 rows = conn.execute(
                     "SELECT content, source, 1 - distance as score FROM chunks "
                     "WHERE embedding MATCH ? ORDER BY distance LIMIT 15",

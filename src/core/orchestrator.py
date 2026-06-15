@@ -122,6 +122,12 @@ class NuruOrchestrator:
         # V10.2 : Cache LLM multi-niveau (L1 RAM + L2 SQLite)
         self.llm_cache = LLMCache(self.memory_store)
 
+        # V10.3j — AUDIT BUG-FIX : `rag_pipeline` est référencé par ResearchArchon.
+        # Avant ce fix, `self.rag_pipeline` n'était défini nulle part → crash au démarrage.
+        # Sémantique : rag_pipeline = point d'entrée du pipeline RAG (retrieve + chunks).
+        # On l'aliase sur rag_engine car ce dernier est déjà DI-é depuis NuruCore.
+        self.rag_pipeline = rag_engine
+
         # V10.3f : Sessions conversationnelles persistantes
         from src.session.store import SessionStore
         self.session_store = SessionStore()
@@ -132,6 +138,14 @@ class NuruOrchestrator:
         self.archon_refiner = ArchonRefiner(
             cloud_llm=self.cloud_llm,
             enabled=getattr(config, 'archon_enabled', True),
+        )
+
+        # V10.3j : ResearchArchon — recherche multi‑agent pour COMPLEX
+        from src.ai.archon_research import ResearchArchon
+        self.research_archon = ResearchArchon(
+            cloud_llm=self.cloud_llm,
+            rag_pipeline=self.rag_pipeline,
+            enabled=getattr(config, 'research_archon_enabled', True),
         )
 
         # V10.2 : Sous-orchestrateurs
