@@ -193,9 +193,13 @@ class SessionsPage(QWidget):
     def showEvent(self, event):
         """Charge les sessions quand la page devient visible."""
         super().showEvent(event)
-        if self.memory_store is not None and hasattr(self, '_loaded'):
+        if not hasattr(self, '_loaded'):
+            self._loaded = True
+            # Premier affichage : charger immédiatement
             self.load_sessions()
-        self._loaded = True
+        elif self.memory_store is not None:
+            # Affichages suivants : recharger si le store est dispo
+            self.load_sessions()
 
     def load_sessions(self):
         """Charge les sessions depuis SessionStore (puis memory_store en fallback)."""
@@ -209,12 +213,13 @@ class SessionsPage(QWidget):
                     session = self._session_store.get_or_create(entry["id"])
                     normalized = self._session_to_dict(session, entry)
                     self._sessions.append(normalized)
-                self._apply_filters()
-                if not self._sessions:
-                    self._show_empty_state()
-                return
             except Exception as e:
                 logger.error("SessionStore: %s", e)
+
+        # SessionStore a trouvé des données → les utiliser
+        if self._sessions:
+            self._apply_filters()
+            return
 
         # Fallback : memory_store
         if not self.memory_store:

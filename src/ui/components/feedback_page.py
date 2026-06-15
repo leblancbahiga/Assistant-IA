@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
@@ -108,6 +108,11 @@ class FeedbackPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._collector: Optional[FeedbackCollector] = None
+        # Ensure the data directory exists
+        try:
+            (Path.home() / ".nuru").mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.warning("Impossible de créer ~/.nuru/: %s", e)
         try:
             db_path = str(Path.home() / ".nuru" / "feedback.db")
             self._collector = FeedbackCollector(db_path=db_path)
@@ -175,10 +180,61 @@ class FeedbackPage(QWidget):
 
         self._refresh()
 
+        # Auto-refresh toutes les 10s
+        self._feedback_timer = QTimer(self)
+        self._feedback_timer.timeout.connect(self._refresh)
+        self._feedback_timer.start(10000)
+
+    def set_data(self, data: dict) -> None:
+        """API V9 : reçoit stats + recent du dashboard (alternative au collector interne)."""
+        stats = data.get("stats", {})
+        recent = data.get("recent", [])
+        up = stats.get("thumbs_up", 0)
+        down = stats.get("thumbs_down", 0)
+        corr = stats.get("corrections", 0)
+        rating_count = stats.get("rating_count", 0)
+        rating_avg = stats.get("rating_avg", 0.0)
+        self._update_card(self._card_up, str(up))
+        self._update_card(self._card_down, str(down))
+        self._update_card(self._card_corrections, str(corr))
+        avg_text = f"{rating_avg:.1f}★" if rating_count > 0 else f"{rating_count}"
+        self._update_card(self._card_ratings, avg_text)
+
+        self._clear_feed()
+        for entry in recent:
+            row = FeedbackRow(entry)
+            self._feed_layout.insertWidget(self._feed_layout.count() - 1, row)
+        if not recent:
+            label = QLabel("Aucun feedback enregistré. Le feedback est collecté "
+               "automatiquement pendant vos conversations.")
+            label.setStyleSheet("color:#64748b;font-size:13px;padding:20px")
+            label.setAlignment(Qt.AlignCenter)
+            self._feed_layout.insertWidget(0, label)
+
     def _refresh(self):
         """Rafraîchit stats + flux depuis FeedbackCollector."""
         if not self._collector:
-            self._card_up.findChild(QLabel).setText("⚠️")
+            # Clear stats cards
+            self._update_card(self._card_up, "—")
+            self._update_card(self._card_down, "—")
+            self._update_card(self._card_corrections, "—")
+            self._update_card(self._card_ratings, "—")
+            # Show explanation in the feed
+            self._clear_feed()
+            msg = QLabel(
+                "⚠️ Collecteur de feedback non disponible\n\n"
+                "Le module FeedbackCollector n'a pas pu être chargé ou la base "
+                "de données n'a pas pu être ouverte. Vérifiez que la dépendance "
+                "src.learning.feedback est correctement installée et que le "
+                "répertoire ~/.nuru/ est accessible."
+            )
+            msg.setWordWrap(True)
+            msg.setAlignment(Qt.AlignCenter)
+            msg.setStyleSheet(
+                "color:#f87171;font-size:13px;padding:30px;"
+                "background:rgba(248,113,113,0.08);border-radius:8px;"
+            )
+            self._feed_layout.insertWidget(0, msg)
             return
 
         try:
@@ -212,7 +268,8 @@ class FeedbackPage(QWidget):
             self._feed_layout.insertWidget(self._feed_layout.count() - 1, row)
 
         if not recent:
-            label = QLabel("Aucun feedback enregistré.")
+            label = QLabel("Aucun feedback enregistré. Le feedback est collecté "
+               "automatiquement pendant vos conversations.")
             label.setStyleSheet("color:#64748b;font-size:13px;padding:20px")
             label.setAlignment(Qt.AlignCenter)
             self._feed_layout.insertWidget(0, label)

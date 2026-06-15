@@ -11,6 +11,10 @@ Design Aether Dashboard V7 :
 
 from typing import Optional
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
@@ -151,6 +155,12 @@ class MessagesArea(QScrollArea):
         # Dernière bulle assistant (pour backward compat et mise à jour RAG)
         self._last_assistant_row: MessageRow | None = None
 
+        # Compteur de messages ajoutés (debug doublage)
+        self._message_add_count: int = 0
+
+        # Dernier texte utilisateur ajouté (pour détection de doublage)
+        self._last_user_text: str = ""
+
     # ── API publique ──
 
     def add_message(
@@ -178,6 +188,15 @@ class MessagesArea(QScrollArea):
         MessageRow
             Le widget message ajouté (API compatible ChatBubble).
         """
+        logger.debug("MessagesArea.add_message: role=%s, text_len=%d, visible=%s, total=%d",
+                     role, len(text), self._typing.isVisible(), self._message_add_count)
+
+        # Détection de doublage : comparer avec le dernier message utilisateur
+        if role == "user" and self._last_user_text and self._last_user_text == text:
+            logger.warning("DUPLICATE USER MESSAGE DETECTED: text=%s (count=%d)",
+                           text[:60], self._message_add_count)
+
+        self._message_add_count += 1
         row = MessageRow(
             text=text,
             role=role,
@@ -191,6 +210,8 @@ class MessagesArea(QScrollArea):
             row.feedback_positive.connect(self._on_feedback_positive)
             row.feedback_negative.connect(self._on_feedback_negative)
             self._last_assistant_row = row
+        else:
+            self._last_user_text = text
 
         # Insérer avant le stretch (avant-dernière position)
         idx = self._layout.count() - 1  # just before stretch
@@ -234,6 +255,8 @@ class MessagesArea(QScrollArea):
                 self._layout.addWidget(self._stretch)
                 break
         self._last_assistant_row = None
+        self._last_user_text = ""
+        self._message_add_count = 0
 
     # ── Internes ──
 

@@ -158,6 +158,28 @@ class V10ControlPanel(QFrame):
 
     toggled = Signal(str, bool)  # module_name, enabled
 
+    # Map V10 module names to actual Config attribute names
+    _CONFIG_ATTR_MAP = {
+        "memory": "learning_enabled",
+        "agent": "nuru_brain_enabled",
+        "feedback": "learning_enabled",
+        "reasoning": "nuru_brain_enabled",
+        "tools": "token_juice_enabled",
+        "web_research": "auto_fetch_enabled",
+        "dashboard": "hybrid_enabled",
+    }
+
+    # Map V10 module names to Config.set_module_enabled() keys (MODULE_ATTR_MAP keys)
+    _CONFIG_MODULE_KEY_MAP = {
+        "memory": "learning",
+        "agent": "nuru_brain",
+        "feedback": "learning",
+        "reasoning": "nuru_brain",
+        "tools": "token_juice",
+        "web_research": "auto_fetch",
+        "dashboard": "hybrid",
+    }
+
     def __init__(self, config=None, parent=None):
         super().__init__(parent)
         self.config = config
@@ -204,7 +226,11 @@ class V10ControlPanel(QFrame):
 
             cb = QCheckBox()
             initial = self._get_module_state(name)
-            cb.setChecked(initial)
+            if initial is None:
+                cb.setEnabled(False)
+                cb.setChecked(False)
+            else:
+                cb.setChecked(initial)
             self._update_status_icon(name, initial)
             cb.setStyleSheet("""
                 QCheckBox::indicator {
@@ -215,6 +241,10 @@ class V10ControlPanel(QFrame):
                 }
                 QCheckBox::indicator:checked {
                     background-color: #39FF14;
+                }
+                QCheckBox::indicator:disabled {
+                    border: 2px solid #6b7280;
+                    background-color: transparent;
                 }
             """)
             cb.toggled.connect(lambda checked, n=name: self.toggled.emit(n, checked))
@@ -258,26 +288,53 @@ class V10ControlPanel(QFrame):
         strategy_row.addStretch()
         layout.addLayout(strategy_row)
 
-    def _get_module_state(self, name: str) -> bool:
-        """Lit l'état d'un module depuis la config."""
+    def _get_module_state(self, name: str):
+        """Lit l'état d'un module depuis la config.
+        
+        Returns:
+            bool: True si activé, False si désactivé
+            None: si la config n'est pas disponible (afficher N/A)
+        """
         if self.config is None:
-            return False
+            return None
+        # 1) Try V10-specific attr mapping
+        attr_name = self._CONFIG_ATTR_MAP.get(name)
+        if attr_name and hasattr(self.config, attr_name):
+            return getattr(self.config, attr_name)
+        # 2) Try {name}_enabled directly
+        direct = f"{name}_enabled"
+        if hasattr(self.config, direct):
+            return getattr(self.config, direct)
+        # 3) Try via Config.MODULE_ATTR_MAP as fallback
         attr = getattr(self.config, 'MODULE_ATTR_MAP', {}).get(name)
         if attr and hasattr(self.config, attr):
             return getattr(self.config, attr)
         return False
 
-    def _update_status_icon(self, name: str, enabled: bool):
+    def _update_status_icon(self, name: str, enabled):
         """Met à jour l'icône d'état visuel."""
         icon = self.status_icons.get(name)
         if icon:
-            icon.setText("✅" if enabled else "❌")
+            if enabled is None:
+                icon.setText("N/A")
+                icon.setStyleSheet("color: #6b7280; font-size: 11px;")
+            elif enabled:
+                icon.setText("✅")
+                icon.setStyleSheet("font-size: 14px;")
+            else:
+                icon.setText("❌")
+                icon.setStyleSheet("font-size: 14px;")
 
     def update_from_config(self):
         """Synchronise tous les toggles avec la config (après changement externe)."""
         for name, cb in self.toggles.items():
             state = self._get_module_state(name)
-            cb.setChecked(state)
+            if state is None:
+                cb.setEnabled(False)
+                cb.setChecked(False)
+            else:
+                cb.setEnabled(True)
+                cb.setChecked(state)
             self._update_status_icon(name, state)
 
     def _on_strategy_changed(self, text: str):
@@ -414,13 +471,22 @@ class SystemPage(QWidget):
         """Persiste le changement d'état d'un module V10 dans settings.yaml."""
         logger.info(f"Module {name} → {'ON' if enabled else 'OFF'}")
 
-        if self.config and hasattr(self.config, 'set_module_enabled'):
-            success = self.config.set_module_enabled(name, enabled)
+        if self.config is None:
+            logger.warning("⚠️ Config non disponible — impossible de persister le changement")
+            cb = self.control_panel.toggles.get(name)
+            if cb:
+                cb.setChecked(not enabled)
+            return
+
+        if hasattr(self.config, 'set_module_enabled'):
+            # Map V10 module name to config module key
+            config_key = V10ControlPanel._CONFIG_MODULE_KEY_MAP.get(name, name)
+            success = self.config.set_module_enabled(config_key, enabled)
             if success:
                 self.control_panel._update_status_icon(name, enabled)
-                logger.info(f"Module {name} persistant → {'✅' if enabled else '❌'}")
+                logger.info(f"Module {config_key} persistant → {'✅' if enabled else '❌'}")
             else:
-                logger.error(f"Échec de la persistance pour {name}")
+                logger.error(f"Échec de la persistance pour {name} (config_key={config_key})")
                 cb = self.control_panel.toggles.get(name)
                 if cb:
                     cb.setChecked(not enabled)

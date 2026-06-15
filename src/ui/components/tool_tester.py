@@ -10,6 +10,7 @@ Design cyberpunk NURU : bg #0D1117, accent #00A3FF.
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import time
 from pathlib import Path
@@ -44,6 +45,7 @@ ACCENT_GREEN = "#39FF14"
 ACCENT_RED = "#FF3333"
 ACCENT_ORANGE = "#FF8C00"
 ACCENT_PURPLE = "#A78BFA"
+ACCENT_YELLOW = "#FFD700"
 TEXT_PRIMARY = "#E6EDF3"
 TEXT_SECONDARY = "#8B949E"
 BORDER_COLOR = "rgba(255,255,255,0.08)"
@@ -125,6 +127,28 @@ COMBO_STYLE = f"""
 """
 
 
+# ── Helpers de vérification des modules ────────────────────────────────────
+
+
+def _module_available(module_path: str) -> bool:
+    """Vérifie si un module Python existe (importlib)."""
+    spec = importlib.util.find_spec(module_path)
+    return spec is not None
+
+
+# Vérifications au niveau module (calculées une fois au chargement)
+DOC_GEN_AVAILABLE: bool = _module_available("src.tools.document")
+WEB_RESEARCH_AVAILABLE: bool = _module_available("src.research.web")
+REGISTRY_AVAILABLE: bool = _module_available("src.tools.registry")
+
+
+def _status_badge(available: bool, label: str) -> str:
+    """Retourne une pastille de statut HTML."""
+    if available:
+        return f'<span style="color:{ACCENT_GREEN};font-weight:bold;">🟢 {label}</span>'
+    return f'<span style="color:{ACCENT_RED};font-weight:bold;">🔴 {label} (non disponible)</span>'
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  ToolTester — page de test des outils
 # ══════════════════════════════════════════════════════════════════════════
@@ -166,6 +190,40 @@ class ToolTester(QScrollArea):
         subtitle.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 12px; background: transparent;")
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
+
+        # ── Barre de statut des outils ─────────────────────────────────
+        status_panel = QFrame()
+        status_panel.setStyleSheet(f"""
+            background-color: {BG_PANEL};
+            border: 1px solid {BORDER_COLOR};
+            border-radius: 6px;
+            padding: 10px 14px;
+        """)
+        status_layout = QHBoxLayout(status_panel)
+        status_layout.setContentsMargins(14, 8, 14, 8)
+        status_layout.setSpacing(20)
+
+        status_label = QLabel("📡 Statut des outils :")
+        status_label.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 11px; font-weight: bold; background: transparent;")
+        status_layout.addWidget(status_label)
+
+        self._doc_status = QLabel("")
+        self._doc_status.setStyleSheet("background: transparent;")
+        status_layout.addWidget(self._doc_status)
+
+        self._web_status = QLabel("")
+        self._web_status.setStyleSheet("background: transparent;")
+        status_layout.addWidget(self._web_status)
+
+        self._reg_status = QLabel("")
+        self._reg_status.setStyleSheet("background: transparent;")
+        status_layout.addWidget(self._reg_status)
+
+        status_layout.addStretch()
+        layout.addWidget(status_panel)
+
+        # Mise à jour des statuts
+        self._update_status_indicators()
 
         # ════════════════════════════════════════════════════════════════
         #  Section 1 : Document Generator
@@ -363,6 +421,16 @@ class ToolTester(QScrollArea):
 
         layout.addStretch()
 
+    # ── Indicateurs de statut ──────────────────────────────────────────────
+
+    def _update_status_indicators(self) -> None:
+        """Met à jour les pastilles de statut pour chaque module."""
+        self._doc_status.setText(_status_badge(DOC_GEN_AVAILABLE, "DocumentGenerator"))
+        self._web_status.setText(_status_badge(WEB_RESEARCH_AVAILABLE, "WebResearcher"))
+        self._reg_status.setText(_status_badge(REGISTRY_AVAILABLE, "ToolRegistry"))
+
+    # ── Helpers ────────────────────────────────────────────────────────────
+
     def _get_format_enum(self) -> str:
         """Retourne le format sélectionné en chaîne."""
         mapping = {
@@ -385,6 +453,8 @@ class ToolTester(QScrollArea):
         }
         return mapping.get(self._get_format_enum(), ".docx")
 
+    # ── Génération de document ─────────────────────────────────────────────
+
     def _generate_document(self) -> None:
         """Génère un document réel en utilisant DocumentGenerator."""
         self._generate_btn.setEnabled(False)
@@ -393,6 +463,20 @@ class ToolTester(QScrollArea):
         self._doc_result.setText("Génération en cours...")
 
         try:
+            # Vérification explicite de la disponibilité du module
+            if not DOC_GEN_AVAILABLE:
+                raise ImportError(
+                    "Le module 'src.tools.document' est introuvable.\n\n"
+                    "Le backend DocumentGenerator n'a pas encore été implémenté.\n"
+                    "Pour l'ajouter :\n"
+                    "  1. Créez src/tools/document.py avec les classes DocumentGenerator,\n"
+                    "     DocumentSpec, DocSection, DocFormat\n"
+                    "  2. Implémentez generate(spec, output_path) pour produire des fichiers\n"
+                    "     aux formats Word, PDF, PPTX, XLSX et Markdown.\n\n"
+                    "Le formulaire ci-dessus reste fonctionnel — remplissez les champs,\n"
+                    "puis cliquez sur Générer une fois le backend ajouté."
+                )
+
             from src.tools.document import DocumentGenerator, DocumentSpec, DocSection, DocFormat
 
             # Parser les sections
@@ -456,6 +540,11 @@ class ToolTester(QScrollArea):
                 f"   📦 {size_str}  |  ⏱️ {duration:.0f} ms  |  📄 {len(sections)} section(s)"
             )
 
+        except ImportError as e:
+            logger.warning("DocumentGenerator non disponible: %s", e)
+            self._doc_result.setStyleSheet(f"color: {ACCENT_YELLOW}; font-size: 11px; background: transparent;")
+            self._doc_result.setText(f"⚠️ Module DocumentGenerator non disponible\n\n{e}")
+
         except Exception as e:
             logger.error("Échec génération document: %s", e)
             self._doc_result.setStyleSheet(f"color: {ACCENT_RED}; font-size: 11px; background: transparent;")
@@ -465,58 +554,111 @@ class ToolTester(QScrollArea):
             self._generate_btn.setEnabled(True)
             self._generate_btn.setText("🚀 Générer le document")
 
+    # ── Test de recherche web ──────────────────────────────────────────────
+
     def _test_web_search(self) -> None:
-        """Teste le scoring et le filtrage du WebResearcher."""
+        """Teste le scoring et le filtrage du WebResearcher.
+
+        Tente une recherche réelle via WebResearcher.search().
+        Si le backend n'est pas intégré (retourne []), passe en mode
+        démo avec des données générées dynamiquement par score_relevance
+        pour valider la pipeline scoring → dédup → classement → filtrage.
+        """
         self._web_test_btn.setEnabled(False)
         self._web_result.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 11px; background: transparent;")
         self._web_result.setText("Test en cours...")
 
         try:
-            from src.research.web import WebResearcher, ResearchQuery, SearchResult
+            # Vérification explicite de la disponibilité du module
+            if not WEB_RESEARCH_AVAILABLE:
+                raise ImportError(
+                    "Le module 'src.research.web' est introuvable.\n\n"
+                    "Le backend WebResearcher n'a pas encore été implémenté.\n"
+                    "Pour l'ajouter, créez src/research/web.py avec les classes\n"
+                    "WebResearcher, SearchResult, ResearchQuery.\n\n"
+                    "Le formulaire reste fonctionnel dès que le backend est présent."
+                )
+
+            from src.research.web import WebResearcher, SearchResult, ResearchQuery
 
             researcher = WebResearcher()
             query_text = self._web_query_input.text().strip() or "test"
 
-            # Simuler quelques résultats avec scores
-            mock_results = [
-                SearchResult(
-                    url="https://example.com/rapport-agricole-2024",
-                    title="Rapport agricole RDC 2024 — Ministère de l'Agriculture",
-                    snippet="Le rapport annuel 2024 présente les résultats de la campagne agricole en République Démocratique du Congo.",
-                    relevance_score=researcher.score_relevance(query_text, "Rapport agricole RDC 2024", "campagne agricole RDC"),
-                ),
-                SearchResult(
-                    url="https://example.org/agronomie-tropicale",
-                    title="Agronomie tropicale : cultures et rendements",
-                    snippet="Étude des rendements des cultures tropicales en Afrique centrale, avec focus sur la RDC.",
-                    relevance_score=researcher.score_relevance(query_text, "Agronomie tropicale", "rendements cultures Afrique centrale RDC"),
-                ),
-                SearchResult(
-                    url="https://example.net/economie-rdc",
-                    title="Situation économique de la RDC en 2024",
-                    snippet="Analyse de la croissance économique congolaise et des investissements dans le secteur agricole.",
-                    relevance_score=researcher.score_relevance(query_text, "Situation économique RDC 2024", "croissance économique secteur agricole"),
-                ),
-            ]
+            # 1) Tentative de recherche réelle
+            rq = ResearchQuery(query=query_text, max_results=5, min_relevance=0.1)
+            real_results = researcher.search(rq)
 
-            # Filtrer et classer
-            deduped = researcher.deduplicate(mock_results)
-            ranked = researcher.rank_results(deduped)
-            filtered = researcher.filter_by_relevance(ranked, 0.1)
+            if real_results:
+                # Résultats réels — on applique la pipeline sur ceux-ci
+                deduped = researcher.deduplicate(real_results)
+                ranked = researcher.rank_results(deduped)
+                filtered = researcher.filter_by_relevance(ranked, rq.min_relevance)
 
-            lines = [
-                f"🔍 Requête : \"{query_text}\"",
-                f"📊 Résultats simulés : {len(mock_results)}",
-                f"   Après dédup : {len(deduped)}",
-                f"   Après filtrage : {len(filtered)}",
-                "",
-            ]
-            for i, r in enumerate(filtered, 1):
-                lines.append(f"  {i}. {r.title}")
-                lines.append(f"     Score : {r.relevance_score:.2f}  |  {r.url}")
+                lines = [
+                    f"🔍 Requête : \"{rq.query}\"",
+                    f"🌐 Source : recherche réelle",
+                    f"📊 Résultats bruts : {len(real_results)}",
+                    f"   Après dédup : {len(deduped)}",
+                    f"   Après classement : {len(ranked)}",
+                    f"   Après filtrage (≥{rq.min_relevance}) : {len(filtered)}",
+                    "",
+                ]
+                for i, r in enumerate(filtered, 1):
+                    lines.append(f"  {i}. {r.title}")
+                    lines.append(f"     Score : {r.relevance_score:.2f}  |  {r.url}")
+
+            else:
+                # 2) Mode démo — pas de backend recherche disponible
+                #    Génère des résultats d'exemple dynamiquement pour
+                #    valider la pipeline complète (scoring → dédup →
+                #    classement → filtrage).
+                demo_sources = [
+                    (f"{query_text} — Rapport de synthèse",
+                     f"Analyse détaillée de {query_text} avec données récentes."),
+                    (f"Analyse : {query_text} — Perspectives 2025",
+                     f"Étude prospective sur le thème {query_text}."),
+                    (f"{query_text} — Étude comparative",
+                     f"Comparaison des approches existantes autour de {query_text}."),
+                ]
+                demo_results = []
+                for title, snippet in demo_sources:
+                    score = researcher.score_relevance(query_text, title, snippet)
+                    url_title = title.lower().replace(" ", "-")[:30]
+                    demo_results.append(SearchResult(
+                        url=f"https://demo.nuru.local/{url_title}",
+                        title=title,
+                        snippet=snippet,
+                        relevance_score=score,
+                    ))
+
+                deduped = researcher.deduplicate(demo_results)
+                ranked = researcher.rank_results(deduped)
+                filtered = researcher.filter_by_relevance(ranked, 0.1)
+
+                lines = [
+                    f"🔍 Requête : \"{query_text}\"",
+                    f"🧪 Mode DÉMO — backend recherche web non intégré",
+                    f"   (WebResearcher.search() nécessite un adaptateur",
+                    f"    Firecrawl / SerpAPI / Tavily — ajouter dans",
+                    f"    src/research/web.py si besoin)",
+                    "",
+                    f"📊 Résultats démo : {len(demo_results)}",
+                    f"   Après dédup : {len(deduped)}",
+                    f"   Après classement : {len(ranked)}",
+                    f"   Après filtrage (≥0.1) : {len(filtered)}",
+                    "",
+                ]
+                for i, r in enumerate(filtered, 1):
+                    lines.append(f"  {i}. {r.title}")
+                    lines.append(f"     Score : {r.relevance_score:.2f}  |  {r.url}")
 
             self._web_result.setStyleSheet(f"color: {ACCENT_GREEN}; font-size: 11px; background: transparent;")
             self._web_result.setText("\n".join(lines))
+
+        except ImportError as e:
+            logger.warning("WebResearcher non disponible: %s", e)
+            self._web_result.setStyleSheet(f"color: {ACCENT_YELLOW}; font-size: 11px; background: transparent;")
+            self._web_result.setText(f"⚠️ Module WebResearcher non disponible\n\n{e}")
 
         except Exception as e:
             logger.error("Échec test web: %s", e)
@@ -526,9 +668,21 @@ class ToolTester(QScrollArea):
         finally:
             self._web_test_btn.setEnabled(True)
 
+    # ── Registre des outils ────────────────────────────────────────────────
+
     def _refresh_registry(self) -> None:
         """Affiche les outils enregistrés dans ToolRegistry."""
         try:
+            # Vérification explicite de la disponibilité du module
+            if not REGISTRY_AVAILABLE:
+                raise ImportError(
+                    "Le module 'src.tools.registry' est introuvable.\n\n"
+                    "Le backend ToolRegistry n'a pas encore été implémenté.\n"
+                    "Pour l'ajouter, créez src/tools/registry.py avec la classe\n"
+                    "ToolRegistry et sa méthode list_tools().\n\n"
+                    "Le bouton Actualiser reste fonctionnel dès que le backend est présent."
+                )
+
             from src.tools.registry import ToolRegistry
 
             registry = ToolRegistry()
@@ -551,6 +705,11 @@ class ToolTester(QScrollArea):
 
             self._reg_info.setText("\n".join(lines))
             self._reg_info.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 11px; background: transparent;")
+
+        except ImportError as e:
+            logger.warning("ToolRegistry non disponible: %s", e)
+            self._reg_info.setStyleSheet(f"color: {ACCENT_YELLOW}; font-size: 11px; background: transparent;")
+            self._reg_info.setText(f"⚠️ Module ToolRegistry non disponible\n\n{e}")
 
         except Exception as e:
             logger.error("Échec refresh registry: %s", e)

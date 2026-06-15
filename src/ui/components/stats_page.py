@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 # ── Couleurs du thème ──────────────────────────────────────────────────────
 
 BG_DARK = "#0D1117"
+WAITING_DATA_COLOR = "#555555"
 BG_PANEL = "#161b22"
 ACCENT_BLUE = "#00A3FF"
 ACCENT_GREEN = "#39FF14"
@@ -292,6 +293,15 @@ class StatsPage(QScrollArea):
             except Exception as e:
                 logger.warning("StatsPage: PerformanceTracker non disponible: %s", e)
 
+        # ── Indique si le tracker contient des données ──
+        self._tracker_has_data = False
+
+        # ── Bannière d'état pour données manquantes ──
+        self._no_data_banner: Optional[QLabel] = None
+
+        # ── Cache LLMCache instance (persistant, pas recréé à chaque refresh) ──
+        self._cache_instance = None
+
         self._period_hours = 24
         self._build_ui()
 
@@ -359,6 +369,21 @@ class StatsPage(QScrollArea):
         header.addWidget(self._period_combo)
 
         layout.addLayout(header)
+
+        # ── Bannière d'état ──
+        self._no_data_banner = QLabel()
+        self._no_data_banner.setStyleSheet(f"""
+            background-color: rgba(255, 140, 0, 0.15);
+            border: 1px solid {ACCENT_ORANGE};
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: {ACCENT_ORANGE};
+            font-weight: bold;
+        """)
+        self._no_data_banner.setWordWrap(True)
+        self._no_data_banner.setVisible(False)
+        layout.addWidget(self._no_data_banner)
 
         # ── Grille de cartes principales (haute priorité) ──
         self._card_grid = QGridLayout()
@@ -539,12 +564,89 @@ class StatsPage(QScrollArea):
 
     def refresh(self) -> None:
         """Rafraîchit toutes les métriques depuis les backends."""
+        self._check_tracker_data()
+
+        # Toujours mettre à jour la RAM (indépendante du tracker)
         self._update_ram()
-        self._update_rag()
+
+        if self._tracker is not None and self._tracker_has_data:
+            # Tracker disponible avec données → mise à jour normale
+            self._hide_no_data_banner()
+            self._update_rag()
+            self._update_cache()
+            self._update_response()
+            self._update_agent()
+            self._update_feedback()
+        else:
+            # Tracker non disponible ou vide → afficher l'état 'En attente'
+            self._show_pending_state()
+
+    def _show_pending_state(self) -> None:
+        """Affiche un état 'En attente de données' sur tous les panneaux dépendant du tracker."""
+        # Bannière
+        if self._tracker is None:
+            self._no_data_banner.setText(
+                "⚠️  PerformanceTracker non disponible — le module NURU n'a pas encore été utilisé. "
+                "Utilisez NURU pour générer des données de performance, ou vérifiez que "
+                "~/.nuru/performance.db existe."
+            )
+        else:
+            self._no_data_banner.setText(
+                "⏳  En attente de données de performance — utilisez NURU pour générer des "
+                "interactions (RAG, réponses, feedback) qui seront automatiquement tracées ici."
+            )
+        self._no_data_banner.setVisible(True)
+
+        # Cartes principales (ligne du haut)
+        waiting_value = "⏳ En attente..."
+        self._rag_recall_card.set_value(waiting_value, WAITING_DATA_COLOR)
+        self._hallu_card.set_value(waiting_value, WAITING_DATA_COLOR)
+        self._agent_card.set_value(waiting_value, WAITING_DATA_COLOR)
+
+        # Panneau RAG détaillé
+        self._rag_recall_bar.set_value(0, "—")
+        self._rag_score_bar.set_value(0, "—")
+        self._rag_empty_bar.set_value(0, "—")
+        self._rag_hyde_bar.set_value(0, "—")
+
+        # Panneau Réponse
+        self._resp_time_card.set_value(waiting_value, WAITING_DATA_COLOR)
+        self._resp_tokens_card.set_value(waiting_value, WAITING_DATA_COLOR)
+        self._resp_hallu_card.set_value(waiting_value, WAITING_DATA_COLOR)
+        self._resp_cite_card.set_value(waiting_value, WAITING_DATA_COLOR)
+
+        # Panneau Agent
+        self._agent_success_bar.set_value(0, "—")
+        self._agent_steps_bar.set_value(0, "—")
+        self._agent_recovery_bar.set_value(0, "—")
+
+        # Panneau Feedback
+        self._fb_up_card.set_value(waiting_value, WAITING_DATA_COLOR)
+        self._fb_down_card.set_value(waiting_value, WAITING_DATA_COLOR)
+        self._fb_correction_card.set_value(waiting_value, WAITING_DATA_COLOR)
+        self._fb_rating_card.set_value(waiting_value, WAITING_DATA_COLOR)
+
+        # Footer
+        self._footer_lbl.setText("⏳ En attente de données de performance...")
+
+        # Cache : tentative de mise à jour même en mode pending
         self._update_cache()
-        self._update_response()
-        self._update_agent()
-        self._update_feedback()
+
+    def _hide_no_data_banner(self) -> None:
+        """Masque la bannière d'état."""
+        if self._no_data_banner is not None:
+            self._no_data_banner.setVisible(False)
+
+    def _check_tracker_data(self) -> None:
+        """Vérifie si le PerformanceTracker contient des données réelles."""
+        if self._tracker is None:
+            self._tracker_has_data = False
+            return
+        try:
+            count = getattr(self._tracker, 'count', lambda: 0)()
+            self._tracker_has_data = count > 0
+        except Exception:
+            self._tracker_has_data = False
 
     def _update_ram(self) -> None:
         """Met à jour les métriques RAM."""
@@ -579,112 +681,190 @@ class StatsPage(QScrollArea):
 
     def _update_rag(self) -> None:
         """Met à jour les métriques RAG via PerformanceTracker."""
-        if not self._tracker:
+        if not self._tracker or not self._tracker_has_data:
             return
         try:
             avgs = self._tracker.get_averages(category="rag", since_hours=self._period_hours)
-            recall = avgs.get("rag_recall@5", 0.0)
-            avg_score = avgs.get("rag_avg_score", 0.0)
-            empty_rate = avgs.get("rag_empty", 0.0)
-            hyde_rate = avgs.get("rag_hyde_trigger", 0.0)
+            recall = avgs.get("rag_recall@5", None)
+            avg_score = avgs.get("rag_avg_score", None)
+            empty_rate = avgs.get("rag_empty", None)
+            hyde_rate = avgs.get("rag_hyde_trigger", None)
 
-            self._rag_recall_card.set_value(
-                _format_pct(recall), _bool_color(recall))
-            self._rag_recall_bar.set_value(recall, _format_pct(recall))
-
-            self._rag_score_bar.set_value(avg_score, f"{avg_score:.2f}")
-            self._rag_empty_bar.set_value(1.0 - empty_rate, _format_pct(1.0 - empty_rate))
-            self._rag_hyde_bar.set_value(hyde_rate, _format_pct(hyde_rate))
+            if recall is not None:
+                self._rag_recall_card.set_value(
+                    _format_pct(recall), _bool_color(recall))
+                self._rag_recall_bar.set_value(recall, _format_pct(recall))
+            if avg_score is not None:
+                self._rag_score_bar.set_value(avg_score, f"{avg_score:.2f}")
+            if empty_rate is not None:
+                self._rag_empty_bar.set_value(1.0 - empty_rate, _format_pct(1.0 - empty_rate))
+            if hyde_rate is not None:
+                self._rag_hyde_bar.set_value(hyde_rate, _format_pct(hyde_rate))
         except Exception as e:
             logger.debug("StatsPage RAG: %s", e)
 
     def _update_cache(self) -> None:
-        """Met à jour les métriques du cache LLM multi-niveau."""
+        """Met à jour les métriques du cache LLM multi-niveau.
+
+        Utilise une instance persistante de LLMCache (créée une seule fois)
+        pour que les compteurs L1 (hits, misses, expired) s'accumulent.
+        Fallback vers MemoryStore.get_cache_stats() si LLMCache indisponible.
+        Affiche 'En attente...' si aucun backend n'est disponible.
+        """
         try:
-            from src.cache.llm_cache import LLMCache
-            from src.memory_store import MemoryStore
+            stats = None
 
-            ms = MemoryStore()
-            cache = LLMCache(ms)
-            stats = cache.get_stats()
+            # Essayer via l'instance LLMCache persistante
+            if self._cache_instance is not None:
+                stats = self._cache_instance.get_stats()
+            else:
+                # Tentative de création de l'instance persistante
+                try:
+                    from src.cache.llm_cache import LLMCache
+                    from src.memory_store import MemoryStore
 
-            hr = stats["l1_hit_rate"]
-            self._cache_hit_card.set_value(
-                f"{hr * 100:.1f}%",
-                ACCENT_GREEN if hr >= 0.7 else ACCENT_ORANGE if hr >= 0.4 else ACCENT_RED,
-            )
-            self._cache_size_card.set_value(
-                f"{stats['l1_size']} / {stats['l1_maxsize']}",
-                ACCENT_GREEN if stats['l1_size'] < stats['l1_maxsize'] * 0.8 else ACCENT_ORANGE,
-            )
-            self._cache_miss_card.set_value(
-                str(stats["l1_misses"]), ACCENT_RED if stats["l1_misses"] > stats["l1_hits"] * 2 else ACCENT_ORANGE,
-            )
-            self._cache_expired_card.set_value(
-                str(stats["l1_expired"]), ACCENT_ORANGE if stats["l1_expired"] > 10 else TEXT_SECONDARY,
-            )
+                    ms = MemoryStore()
+                    self._cache_instance = LLMCache(ms)
+                    stats = self._cache_instance.get_stats()
+                    logger.info("StatsPage: LLMCache instance créée")
+                except ImportError:
+                    logger.debug("StatsPage: LLMCache/MemoryStore non disponible")
+                except Exception as e:
+                    logger.debug("StatsPage: LLMCache init error: %s", e)
+
+            # Fallback: MemoryStore.get_cache_stats()
+            if stats is None:
+                try:
+                    from src.memory_store import MemoryStore
+                    ms = MemoryStore()
+                    stats = ms.get_cache_stats()
+                except ImportError:
+                    logger.debug("StatsPage: MemoryStore non disponible")
+                except Exception as e:
+                    logger.debug("StatsPage: MemoryStore cache stats error: %s", e)
+
+            if stats and any(v not in (None, 0, 0.0) for k, v in stats.items() if isinstance(v, (int, float))):
+                # Appliquer les stats si disponibles
+                hr = stats.get("l1_hit_rate", 0.0)
+                self._cache_hit_card.set_value(
+                    f"{hr * 100:.1f}%" if "l1_hit_rate" in stats else "—",
+                    ACCENT_GREEN if hr >= 0.7 else ACCENT_ORANGE if hr >= 0.4 else ACCENT_RED,
+                )
+                l1_size = stats.get("l1_size", None)
+                l1_maxsize = stats.get("l1_maxsize", None)
+                if l1_size is not None and l1_maxsize is not None:
+                    self._cache_size_card.set_value(
+                        f"{l1_size} / {l1_maxsize}",
+                        ACCENT_GREEN if l1_size < l1_maxsize * 0.8 else ACCENT_ORANGE,
+                    )
+                else:
+                    # Fallback pour get_cache_stats() de MemoryStore
+                    total = stats.get("total_entries", 0)
+                    self._cache_size_card.set_value(
+                        str(total), ACCENT_BLUE,
+                    )
+                misses = stats.get("l1_misses", None)
+                if misses is not None:
+                    hits = stats.get("l1_hits", 0)
+                    self._cache_miss_card.set_value(
+                        str(misses), ACCENT_RED if misses > hits * 2 else ACCENT_ORANGE,
+                    )
+                expired = stats.get("l1_expired", None)
+                if expired is not None:
+                    self._cache_expired_card.set_value(
+                        str(expired), ACCENT_ORANGE if expired > 10 else TEXT_SECONDARY,
+                    )
+            elif stats:
+                # Stats existent mais vides (toutes à 0) → montrer 0 mais pas "En attente"
+                self._cache_hit_card.set_value("0.0%", TEXT_SECONDARY)
+                self._cache_size_card.set_value("0", TEXT_SECONDARY)
+                self._cache_miss_card.set_value("0", TEXT_SECONDARY)
+                self._cache_expired_card.set_value("0", TEXT_SECONDARY)
+            else:
+                # Aucun backend disponible
+                no_cache_msg = "⏳ Non disponible"
+                self._cache_hit_card.set_value(no_cache_msg, WAITING_DATA_COLOR)
+                self._cache_size_card.set_value(no_cache_msg, WAITING_DATA_COLOR)
+                self._cache_miss_card.set_value(no_cache_msg, WAITING_DATA_COLOR)
+                self._cache_expired_card.set_value(no_cache_msg, WAITING_DATA_COLOR)
         except Exception as e:
             logger.debug("StatsPage Cache: %s", e)
 
     def _update_response(self) -> None:
         """Met à jour les métriques de réponse."""
-        if not self._tracker:
+        if not self._tracker or not self._tracker_has_data:
             return
         try:
             avgs = self._tracker.get_averages(category="response", since_hours=self._period_hours)
-            time_ms = avgs.get("response_time_ms", 0.0)
-            tokens = avgs.get("response_tokens", 0.0)
-            hallu = avgs.get("response_hallucination", 0.0)
-            cite = avgs.get("response_citation", 0.0)
+            time_ms = avgs.get("response_time_ms", None)
+            tokens = avgs.get("response_tokens", None)
+            hallu = avgs.get("response_hallucination", None)
+            cite = avgs.get("response_citation", None)
 
-            self._resp_time_card.set_value(_format_ms(time_ms), _bool_color(time_ms / 10000, ideal_high=False))
-            self._resp_tokens_card.set_value(f"{tokens:.0f}", ACCENT_ORANGE)
-            self._resp_hallu_card.set_value(_format_pct(hallu), _bool_color(1.0 - hallu))
-            self._resp_cite_card.set_value(_format_pct(cite), _bool_color(cite))
+            if time_ms is not None:
+                self._resp_time_card.set_value(_format_ms(time_ms), _bool_color(time_ms / 10000, ideal_high=False))
+            if tokens is not None:
+                self._resp_tokens_card.set_value(f"{tokens:.0f}", ACCENT_ORANGE)
+            if hallu is not None:
+                self._resp_hallu_card.set_value(_format_pct(hallu), _bool_color(1.0 - hallu))
+            if cite is not None:
+                self._resp_cite_card.set_value(_format_pct(cite), _bool_color(cite))
         except Exception as e:
             logger.debug("StatsPage Response: %s", e)
 
     def _update_agent(self) -> None:
         """Met à jour les métriques Agent."""
-        if not self._tracker:
+        if not self._tracker or not self._tracker_has_data:
             return
         try:
             avgs = self._tracker.get_averages(category="agent", since_hours=self._period_hours)
-            success = avgs.get("agent_task_success", 0.0)
-            steps = avgs.get("agent_steps", 0.0)
-            recovery = avgs.get("agent_recovery", 0.0)
+            success = avgs.get("agent_task_success", None)
+            steps = avgs.get("agent_steps", None)
+            recovery = avgs.get("agent_recovery", None)
 
-            self._agent_card.set_value(_format_pct(success), _bool_color(success))
-            self._agent_success_bar.set_value(success, _format_pct(success))
-            self._agent_steps_bar.set_value(steps, f"{steps:.1f}")
-            self._agent_recovery_bar.set_value(recovery, _format_pct(recovery))
+            if success is not None:
+                self._agent_card.set_value(_format_pct(success), _bool_color(success))
+                self._agent_success_bar.set_value(success, _format_pct(success))
+            if steps is not None:
+                self._agent_steps_bar.set_value(steps, f"{steps:.1f}")
+            if recovery is not None:
+                self._agent_recovery_bar.set_value(recovery, _format_pct(recovery))
         except Exception as e:
             logger.debug("StatsPage Agent: %s", e)
 
     def _update_feedback(self) -> None:
         """Met à jour les métriques Feedback."""
-        if not self._tracker:
+        if not self._tracker or not self._tracker_has_data:
             return
         try:
             avgs = self._tracker.get_averages(category="feedback", since_hours=self._period_hours)
-            up = avgs.get("feedback_thumbs_up", 0.0)
-            down = avgs.get("feedback_thumbs_down", 0.0)
-            correction = avgs.get("feedback_correction", 0.0)
-            rating = avgs.get("feedback_rating", 0.0)
+            up = avgs.get("feedback_thumbs_up", None)
+            down = avgs.get("feedback_thumbs_down", None)
+            correction = avgs.get("feedback_correction", None)
+            rating = avgs.get("feedback_rating", None)
 
-            self._fb_up_card.set_value(_format_pct(up), _bool_color(up))
-            self._fb_down_card.set_value(_format_pct(down), _bool_color(1.0 - down, ideal_high=False))
-            self._fb_correction_card.set_value(_format_pct(correction), _bool_color(1.0 - correction, ideal_high=False))
-            self._fb_rating_card.set_value(
-                f"{rating:.1f} / 5" if rating > 0 else "—",
-                ACCENT_PURPLE if rating >= 3.5 else ACCENT_ORANGE if rating > 0 else TEXT_SECONDARY,
-            )
+            if up is not None:
+                self._fb_up_card.set_value(_format_pct(up), _bool_color(up))
+            if down is not None:
+                self._fb_down_card.set_value(_format_pct(down), _bool_color(1.0 - down, ideal_high=False))
+            if correction is not None:
+                self._fb_correction_card.set_value(_format_pct(correction), _bool_color(1.0 - correction, ideal_high=False))
+            if rating is not None and rating > 0:
+                self._fb_rating_card.set_value(
+                    f"{rating:.1f} / 5",
+                    ACCENT_PURPLE if rating >= 3.5 else ACCENT_ORANGE,
+                )
 
-            # Footer
+            # Footer — affiche le nombre de points de données
             total = getattr(self._tracker, 'count', lambda: 0)()
-            self._footer_lbl.setText(
-                f"🧮 {total} points de données  •  Période : {self._period_hours}h"
-            )
+            if total > 0:
+                self._footer_lbl.setText(
+                    f"🧮 {total} points de données  •  Période : {self._period_hours}h"
+                )
+            else:
+                self._footer_lbl.setText(
+                    "⏳ En attente de données de performance..."
+                )
         except Exception as e:
             logger.debug("StatsPage Feedback: %s", e)
 

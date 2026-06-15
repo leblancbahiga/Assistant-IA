@@ -16,6 +16,7 @@ import datetime
 import logging
 import os
 import sys
+import uuid
 from pathlib import Path
 
 import psutil
@@ -203,15 +204,66 @@ class RecentDocuments(QWidget):
     """Liste des documents récents dans la sidebar.
 
     Chaque doc : icône + nom + dot de statut (indexed=#1E6B3A, partial=#6B4E1E).
-    Données mock pour l'instant.
+    Scanne automatiquement les fichiers docs/.pdf/.docx/.xlsx/.pptx du projet
+    et des dossiers Downloads/Documents, triés par date (plus récent en premier).
     """
 
-    DOC_MOCK = [
-        ("📄", "CV_Leblanc_2024.pdf", True),
-        ("📄", "Rapport_Lubero.pdf", True),
-        ("📄", "PUA-CI_Avenant.docx", False),   # partial
-        ("📄", "Rendements_riz.xlsx", True),
+    # Icônes par extension
+    EXT_ICONS = {
+        ".pdf": "📄",
+        ".docx": "📄",
+        ".doc": "📄",
+        ".xlsx": "📊",
+        ".xls": "📊",
+        ".pptx": "📑",
+        ".ppt": "📑",
+        ".md": "📝",
+        ".txt": "📝",
+    }
+
+    # Chemins à scanner (flat uniquement, pas de récursion dans les sous-dossiers)
+    SCAN_PATHS = [
+        project_root / "docs",
+        Path.home() / "Downloads",
+        Path.home() / "Documents",
     ]
+
+    MAX_DOCS = 12
+
+    @staticmethod
+    def scan_recent_documents(max_docs: int = MAX_DOCS) -> list[tuple[str, str, bool]]:
+        """Scanne les dossiers configurés et retourne les N docs les plus récents.
+
+        Returns
+        -------
+        list of (icon_char, file_name, indexed)
+        """
+        supported = {".pdf", ".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt", ".md", ".txt"}
+        found: list[tuple[str, str, bool, float]] = []
+
+        for scan_dir in RecentDocuments.SCAN_PATHS:
+            if not scan_dir.is_dir():
+                continue
+            try:
+                entries = list(scan_dir.iterdir())
+            except PermissionError:
+                continue
+            for entry in entries:
+                if not entry.is_file():
+                    continue
+                ext = entry.suffix.lower()
+                if ext not in supported or entry.name.startswith("~$"):
+                    continue
+                try:
+                    mtime = entry.stat().st_mtime
+                except OSError:
+                    continue
+                icon = RecentDocuments.EXT_ICONS.get(ext, "📄")
+                found.append((icon, entry.name, True, mtime))
+
+        # Trier du plus récent au plus ancien
+        found.sort(key=lambda x: x[3], reverse=True)
+        return [(icon, name, indexed) for icon, name, indexed, _ in found[:max_docs]]
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -225,7 +277,7 @@ class RecentDocuments(QWidget):
         label.setObjectName("NavSectionLabel")
         layout.addWidget(label)
 
-        for icon_char, name, indexed in self.DOC_MOCK:
+        for icon_char, name, indexed in self.scan_recent_documents():
             item = QWidget()
             item.setObjectName("RecentDocItem")
             item_layout = QHBoxLayout(item)
@@ -531,6 +583,17 @@ class CyberDashboard(QMainWindow):
         self._token_timestamps: list[float] = []
         self._last_llm_update = 0.0
 
+        # ── SessionStore pour persistance des conversations ──
+        self._session_id = str(uuid.uuid4())
+        self._session_store: "SessionStore | None" = None
+        try:
+            from src.session.store import SessionStore
+            self._session_store = SessionStore()
+            self._session_store.create_session(self._session_id)
+            logger.info("SessionStore initialisé (session_id=%s)", self._session_id)
+        except Exception as e:
+            logger.warning("SessionStore non disponible: %s", e)
+
         self._build_window()
         self._build_ui()
         self._wire_signals()
@@ -541,7 +604,7 @@ class CyberDashboard(QMainWindow):
         # Message de bienvenue
         self.console_page.clear_chat()
         self.console_page.messages.add_message(
-            text="Bonjour, je suis NURU V8+. Comment puis-je vous aider ?",
+            text="Bonjour, je suis NURU V10. Comment puis-je vous aider ?",
             role="assistant",
         )
 
@@ -724,7 +787,8 @@ class CyberDashboard(QMainWindow):
 
         # Console → signaux dashboard
         if hasattr(self.console_page, "query_submitted"):
-            self.console_page.query_submitted.connect(self._on_query)
+            self.console_page.query_submitted.connect(self._on_query,
+                                                      Qt.UniqueConnection)
             self.console_page.citation_clicked.connect(
                 self.citation_clicked.emit
             )
@@ -793,21 +857,45 @@ class CyberDashboard(QMainWindow):
                 except Exception:
                     pass
 
+                semantic_entries = []
+                try:
+                    semantic = self._v9_memory_manager.semantic
+                    if hasattr(semantic, 'recall'):
+                        semantic_entries = semantic.recall("") or []
+                except Exception:
+                    pass
+
                 data = {
                     "episodic": [
-                        {"text": str(e.get("content", e)) if isinstance(e, dict) else str(e), "timestamp": str(e.get("timestamp", "")) if isinstance(e, dict) else ""}
+                        {
+                            "summary": str(e.get("content", e)) if isinstance(e, dict) else str(e),
+                            "content": str(e.get("content", e)) if isinstance(e, dict) else str(e),
+                            "timestamp": str(e.get("timestamp", "")) if isinstance(e, dict) else "",
+                            "category": e.get("category", "") if isinstance(e, dict) else "",
+                        }
                         for e in episodic_entries
                     ],
-                    "semantic": [],
+                    "semantic": [
+                        {
+                            "summary": str(e.get("content", e)) if isinstance(e, dict) else str(e),
+                            "content": str(e.get("content", e)) if isinstance(e, dict) else str(e),
+                            "category": e.get("category", "semantic") if isinstance(e, dict) else "semantic",
+                        }
+                        for e in semantic_entries
+                    ],
                     "user": [
-                        {"key": f.get("key", ""), "value": f.get("value", "")}
+                        {
+                            "summary": f"👤 {f.get('key', '')}: {f.get('value', '')}",
+                            "content": f.get("value", ""),
+                            "category": "user",
+                        }
                         for f in user_facts
                     ],
                     "error": [],
                 }
                 page.set_data(data)
 
-            elif slug == "tasks" and hasattr(page, "set_tasks"):
+            if slug == "tasks" and hasattr(page, "set_tasks"):
                 import json
                 import sqlite3 as _sqlite3
                 db_path = Path.home() / ".nuru" / "task_states.db"
@@ -1013,9 +1101,19 @@ class CyberDashboard(QMainWindow):
             self._current_query = text
             self._current_strict = strict_mode
 
-            # Ajouter le message utilisateur + bulle assistant vide
-            self.console_page.messages.add_message(text=text, role="user")
-            self.console_page.messages.show_typing()
+            # Note: le message utilisateur + typing sont déjà gérés par console_page._on_query
+            # Ne PAS les ajouter ici pour éviter le doublage.
+
+            # Sauvegarder le message utilisateur dans SessionStore
+            if self._session_store is not None:
+                try:
+                    self._session_store.add_message(
+                        session_id=self._session_id,
+                        role="user",
+                        content=text,
+                    )
+                except Exception as e:
+                    logger.debug("SessionStore save user msg: %s", e)
 
             # Créer et lancer le worker
             worker = InferenceWorker(self._core, text)
@@ -1026,7 +1124,8 @@ class CyberDashboard(QMainWindow):
             QThreadPool.globalInstance().start(worker)
         else:
             # ── Mode démo / fallback ──
-            self.console_page.messages.show_typing()
+            # Note: console_page._on_query a déjà appelé show_typing()
+            # Ne PAS le refaire ici pour éviter le doublage du typing.
             QTimer.singleShot(800, lambda: self._demo_response(text))
 
     def _on_token(self, token: str) -> None:
@@ -1124,6 +1223,17 @@ class CyberDashboard(QMainWindow):
         """Fin de génération."""
         self.console_page.messages.hide_typing()
         self._is_processing = False
+
+        # Sauvegarder la réponse assistant dans SessionStore
+        if self._session_store is not None:
+            try:
+                self._session_store.add_message(
+                    session_id=self._session_id,
+                    role="assistant",
+                    content=full_response,
+                )
+            except Exception as e:
+                logger.debug("SessionStore save assistant msg: %s", e)
 
         # Mettre à jour métrique LLM finale
         if self._total_tokens_received > 0 and self._token_timestamps:
