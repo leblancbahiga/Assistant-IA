@@ -65,6 +65,9 @@ QWidget { background-color: transparent; color: #E8EAF0; font-family: "SF Pro Te
 /* Messages Area */
 #MessagesArea { background-color: #0A0E14; border: none; }
 #MessagesArea > QWidget { background-color: #0A0E14; }
+
+/* P0-K V11.1 (R3) — largeur max chat centrée pour lisibilité 15-16" */
+#ChatContent { max-width: 768px; margin: 0px auto; }
 QScrollBar:vertical { background-color: transparent; width: 6px; border: none; }
 QScrollBar::handle:vertical { background-color: #1A2332; border-radius: 3px; min-height: 24px; }
 QScrollBar::handle:vertical:hover { background-color: #3D5266; }

@@ -133,8 +133,9 @@ class MessagesArea(QScrollArea):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setObjectName("MessagesArea")
 
-        # Conteneur interne
+        # Conteneur interne (P0-K : objectName pour max-width chat R3)
         self._container = QWidget()
+        self._container.setObjectName("ChatContent")
         self._layout = QVBoxLayout(self._container)
         self._layout.setContentsMargins(20, 10, 20, 10)
         self._layout.setSpacing(12)

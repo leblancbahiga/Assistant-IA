@@ -107,10 +107,6 @@ try:
 except ImportError:
     MemoryExplorer = None
 try:
-    from src.ui.components.feedback_bar import FeedbackBar
-except ImportError:
-    FeedbackBar = None
-try:
     from src.ui.components.task_list import TaskListWidget
 except ImportError:
     TaskListWidget = None
@@ -138,45 +134,44 @@ except ImportError:
 #  CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════
 
+# V11.1 (P0-B) — Sidebar renommée : logique user au lieu de "V9/V10/dev"
 NAV_GROUPS = [
     {
-        "label": "Principal",
+        "label": "🏠 Accueil",
         "items": [
-            ("💬 Console", "console"),
-            ("🕒 Sessions", "sessions"),
-            ("📊 Diagnostics", "diagnostics"),
+            ("💬 Nouvelle conversation", "console"),
         ],
     },
     {
-        "label": "Connaissances",
+        "label": "💬 Discussions",
+        "items": [
+            ("📂 Toutes les conversations", "sessions"),
+        ],
+    },
+    {
+        "label": "📚 Connaissances",
         "items": [
             ("📄 Documents", "documents"),
             ("🧠 Mémoire", "memory"),
-            ("🌲 Nuru Brain", "nuru_brain"),
+            ("🔍 Recherche dans les docs", "diagnostics"),
         ],
     },
     {
-        "label": "NURU V9",
+        "label": "🤖 Assistant",
         "items": [
-            ("🤖 Agent", "agent"),
-            ("🧠 Mémoire V9", "memory_v9"),
+            ("⚡ Agent en direct", "agent"),
+            ("📊 Performances", "stats_v10"),
+        ],
+    },
+    {
+        "label": "⚙️ Plus",
+        "items": [
+            ("🧩 Outils & Debug", "tools_v10"),
+            ("🧠 Mémoire V9 (avancé)", "memory_v9"),
             ("📋 Tâches", "tasks"),
             ("💬 Feedback", "feedback"),
-        ],
-    },
-    {
-        "label": "Système",
-        "items": [
-            ("⚙️ État V10", "v6_system"),
             ("⚙️ Paramètres", "settings"),
             ("📋 Logs", "logs"),
-        ],
-    },
-    {
-        "label": "NURU V10",
-        "items": [
-            ("📈 Stats V10", "stats_v10"),
-            ("🔧 Outils V10", "tools_v10"),
         ],
     },
 ]

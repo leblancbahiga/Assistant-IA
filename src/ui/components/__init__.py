@@ -1,6 +1,6 @@
 # Package UI Components
+# V11.1 (P0-F) — guides_page archivé (jamais instancié). Réintégrable depuis _archive/ui_orphelins_v11_2026-06-15/
 
-from src.ui.components.guides_page import GuidesPage, GuideDetailDialog
 from src.ui.components.chat_bubble import ChatBubble, MessageRow
 from src.ui.components.nuru_widgets import (
     ConfidenceWidget,
