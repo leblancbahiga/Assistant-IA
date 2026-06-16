@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFrame,
@@ -854,7 +854,11 @@ class RightPanelDiagnostic(QWidget):
 
     + Nouvelle API :
       - update_from_events() : draine EventBus et met à jour les widgets
+
+    V11.1 (P0-I) : signal collapse_requested() émis au clic sur le bouton close.
     """
+
+    collapse_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -886,6 +890,21 @@ class RightPanelDiagnostic(QWidget):
             "font-size: 14px; color: #2D4052; background: transparent;"
         )
         header_layout.addWidget(refresh_icon)
+
+        # V11.1 (P0-I) — Bouton pour replier le right panel
+        from PySide6.QtWidgets import QPushButton  # local import pour éviter cycle
+        self._close_btn = QPushButton("›")
+        self._close_btn.setObjectName("CloseRightPanelBtn")
+        self._close_btn.setToolTip("Masquer le panneau (Cmd+/)")
+        self._close_btn.setCursor(Qt.PointingHandCursor)
+        self._close_btn.setFixedSize(22, 22)
+        self._close_btn.setStyleSheet(
+            "background: transparent; color: #4A6A8A; font-size: 16px;"
+            " border: 1px solid #1A2332; border-radius: 4px;"
+        )
+        self._close_btn.clicked.connect(self.collapse_requested.emit)
+        header_layout.addWidget(self._close_btn)
+
         layout.addWidget(header)
 
         # ── Tab row ──

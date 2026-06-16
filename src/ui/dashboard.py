@@ -21,7 +21,7 @@ from pathlib import Path
 
 import psutil
 
-from PySide6.QtCore import Qt, QTimer, Signal, QSize, QThreadPool, QFileSystemWatcher
+from PySide6.QtCore import Qt, QTimer, QSettings, Signal, QSize, QThreadPool, QFileSystemWatcher
 from PySide6.QtGui import QFont
 
 # ── Path setup ────────────────────────────────────────────────────────────
@@ -359,9 +359,13 @@ class NavSidebar(QWidget):
     Signaux
     -------
     page_changed(str) : slug de la page sélectionnée
+    collapse_requested() : demande au dashboard de masquer la sidebar
+    expand_requested() : demande au dashboard de restaurer la sidebar
     """
 
     page_changed = Signal(str)
+    collapse_requested = Signal()
+    expand_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -380,7 +384,7 @@ class NavSidebar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── Header : logo + label + badge ──
+        # ── Header : logo + label + badge + bouton collapse ──
         header = QWidget()
         header.setObjectName("SidebarHeader")
         header_layout = QHBoxLayout(header)
@@ -400,6 +404,15 @@ class NavSidebar(QWidget):
         badge = QLabel("V10")
         badge.setObjectName("VersionBadge")
         header_layout.addWidget(badge)
+
+        # V11.1 (P0-C) — Bouton collapse sidebar
+        self._collapse_sidebar_btn = QPushButton("‹")
+        self._collapse_sidebar_btn.setObjectName("CollapseSidebarBtn")
+        self._collapse_sidebar_btn.setToolTip("Masquer la sidebar (Cmd+\\)")
+        self._collapse_sidebar_btn.setCursor(Qt.PointingHandCursor)
+        self._collapse_sidebar_btn.setFixedSize(22, 22)
+        self._collapse_sidebar_btn.clicked.connect(self.collapse_requested.emit)
+        header_layout.addWidget(self._collapse_sidebar_btn)
 
         layout.addWidget(header)
 
@@ -623,6 +636,19 @@ class CyberDashboard(QMainWindow):
 
         # V11.1 (P0-J) — câbler le store conversations dans la sidebar
         self._sidebar.set_session_store(self._session_store)
+
+        # V11.1 (P0-C+I) — câbler les signaux collapse/expand
+        self._sidebar.collapse_requested.connect(self._collapse_sidebar)
+        self._sidebar.expand_requested.connect(self._expand_sidebar)
+        # Right panel collapse (V11.1 P0-I)
+        if hasattr(self._metrics, "collapse_requested"):
+            self._metrics.collapse_requested.connect(self._collapse_right_panel)
+        # Restaurer l'état persistant
+        self._settings = QSettings("Hermes-Agent", "NURU")
+        if self._settings.value("ui/sidebar_collapsed", False, type=bool):
+            self._collapse_sidebar()
+        if self._settings.value("ui/rightpanel_collapsed", False, type=bool):
+            self._collapse_right_panel()
         self._wire_signals()
         self._init_timers()
         self.load_styles()
@@ -815,6 +841,53 @@ class CyberDashboard(QMainWindow):
         if RAGDiagnosticViewModel is not None:
             self._rag_diagnostic_vm = RAGDiagnosticViewModel()
             self._rag_diagnostic_vm.updated.connect(self._on_rag_vm_updated)
+
+    # ── V11.1 (P0-C+I) — Collapse / Expand des panels ──
+    def _collapse_sidebar(self) -> None:
+        """Masque la sidebar et affiche un mini-bouton pour la restaurer."""
+        if not hasattr(self, "_sidebar_expand_btn") or self._sidebar_expand_btn is None:
+            self._sidebar_expand_btn = QPushButton("›")
+            self._sidebar_expand_btn.setObjectName("ExpandSidebarBtn")
+            self._sidebar_expand_btn.setToolTip("Afficher la sidebar (Cmd+\\)")
+            self._sidebar_expand_btn.setCursor(Qt.PointingHandCursor)
+            self._sidebar_expand_btn.setFixedSize(20, 60)
+            self._sidebar_expand_btn.clicked.connect(self._expand_sidebar)
+            self._main_layout.insertWidget(0, self._sidebar_expand_btn)
+        self._sidebar.hide()
+        self._sidebar_expand_btn.show()
+        if hasattr(self, "_settings"):
+            self._settings.setValue("ui/sidebar_collapsed", True)
+
+    def _expand_sidebar(self) -> None:
+        """Restaure la sidebar et cache le bouton d'expansion."""
+        if hasattr(self, "_sidebar_expand_btn") and self._sidebar_expand_btn is not None:
+            self._sidebar_expand_btn.hide()
+        self._sidebar.show()
+        if hasattr(self, "_settings"):
+            self._settings.setValue("ui/sidebar_collapsed", False)
+
+    def _collapse_right_panel(self) -> None:
+        """Masque le right panel et affiche un bouton pour le restaurer."""
+        if not hasattr(self, "_right_expand_btn") or self._right_expand_btn is None:
+            self._right_expand_btn = QPushButton("‹")
+            self._right_expand_btn.setObjectName("ExpandRightPanelBtn")
+            self._right_expand_btn.setToolTip("Afficher les diagnostics (Cmd+/)")
+            self._right_expand_btn.setCursor(Qt.PointingHandCursor)
+            self._right_expand_btn.setFixedSize(20, 60)
+            self._right_expand_btn.clicked.connect(self._expand_right_panel)
+            self._main_layout.addWidget(self._right_expand_btn)
+        self._metrics.hide()
+        self._right_expand_btn.show()
+        if hasattr(self, "_settings"):
+            self._settings.setValue("ui/rightpanel_collapsed", True)
+
+    def _expand_right_panel(self) -> None:
+        """Restaure le right panel."""
+        if hasattr(self, "_right_expand_btn") and self._right_expand_btn is not None:
+            self._right_expand_btn.hide()
+        self._metrics.show()
+        if hasattr(self, "_settings"):
+            self._settings.setValue("ui/rightpanel_collapsed", False)
 
     def _wire_signals(self) -> None:
         """Connecte les signaux entre composants."""
