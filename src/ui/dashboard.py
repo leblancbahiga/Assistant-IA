@@ -111,6 +111,11 @@ try:
 except ImportError:
     TaskListWidget = None
 try:
+    # V11.1 (P0-J) — ConversationList : liste des sessions en sidebar
+    from src.ui.components.conversation_list import ConversationList
+except ImportError:
+    ConversationList = None  # type: ignore[misc]
+try:
     from src.ui.components.feedback_page import FeedbackPage
 except ImportError:
     FeedbackPage = None
@@ -417,6 +422,20 @@ class NavSidebar(QWidget):
 
         layout.addStretch()
 
+        # ── V11.1 (P0-J) — Liste des conversations récentes ──
+        if ConversationList is not None:
+            self._conv_list = ConversationList(session_store=None)
+            # Clic "Nouvelle conversation" → on bascule vers le chat.
+            self._conv_list.new_conversation_requested.connect(
+                lambda: self.page_changed.emit("console")
+            )
+            # NOTE V11.2 : session_selected → restauration ConsolePage
+            # (nécessite d'ajouter ConsolePage.load_session()).
+            # Pour Day-2 on expose juste la mécanique, sans restauration.
+            layout.addWidget(self._conv_list)
+        else:
+            self._conv_list = None
+
         # ── Documents récents (Module 2) ──
         self._recent_docs = RecentDocuments()
         layout.addWidget(self._recent_docs)
@@ -446,6 +465,15 @@ class NavSidebar(QWidget):
     def set_model_info(self, model: str, status: str, queries: int = 0) -> None:
         """Met à jour les infos modèle dans le footer."""
         self._model_label.setText(f"{model}  •  {status}")
+
+    def set_session_store(self, store) -> None:
+        """V11.1 (P0-J) — Injecte le SessionStore et rafraîchit la liste.
+
+        Le store peut être None en cas de DB indisponible.
+        """
+        if self._conv_list is None:
+            return
+        self._conv_list.set_session_store(store)
 
     def set_cloud_model(self, model_name: str) -> None:
         """Met à jour le CloudStatusBadge."""
@@ -592,6 +620,9 @@ class CyberDashboard(QMainWindow):
 
         self._build_window()
         self._build_ui()
+
+        # V11.1 (P0-J) — câbler le store conversations dans la sidebar
+        self._sidebar.set_session_store(self._session_store)
         self._wire_signals()
         self._init_timers()
         self.load_styles()
