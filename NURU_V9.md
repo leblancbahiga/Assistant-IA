@@ -1910,3 +1910,20 @@ StatsPage (timer 5s) → lit performance.db → affiche métriques
 
 **Fichiers modifiés :** 2, +84/−2
 **Tests :** 381 passés, 0 régression
+
+### V11.1 — 2026-06-15 « Dashboard P0 — Quick Wins + Architecture agentique »
+
+**Sprint V11.1 : corriger les 4 P0 des audits experts + unifier le dashboard.**
+
+| Jour | Commit | Livrable | Tests |
+|------|--------|----------|-------|
+| **J1** | `62376a6` | Quick Wins P0 : 4 audits experts → `NURU_AUDIT_SYNTHESE.md`, hooks dashboard P0-C+I+P0-J+P0-H | — |
+| **J2** | `c7b1175` | ConversationList sidebar (8 tests), P0-C+I collapsibles, spec experts dashboard (519 lignes) | ✅ 8/8 ConversationList |
+| **J3** | `d4e38db` | `ConsolePage.load_session()` + `set_session_store()`, bugfix permanent `MessagesArea` signaux regenerate/edit | ✅ 6/6 load_session + 8/8 ConversationList |
+
+**Tags :** `V11.1-J1`, `V11.1-J2`, `V11.1-J3`
+
+**Reste V11.1 (J4+) :**
+- P0-N Routeur footer de bulle
+- P0-E Model switcher header
+- P0-G Unifier StatCard (sidebar + dashboard)
