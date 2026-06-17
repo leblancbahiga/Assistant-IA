@@ -66,7 +66,7 @@ V10_MODULES = [
         "modules": [
             {"name": "AgentStatusWidget", "import": "src.ui.components.agent_status", "desc": "Widget état agent — statut et progression"},
             {"name": "MemoryExplorer", "import": "src.ui.components.memory_explorer", "desc": "Explorateur mémoire — visualisation mémoire"},
-            # V11.1 (P0-F) — FeedbackBar archivé (jamais instancié). Réintégrable depuis _archive/ui_orphelins_v11_2026-06-15/
+            # V11.1 (P0-F) — FeedbackBar archivé dans _archive/ui_orphelins_v11_2026-06-15/
             {"name": "TaskListWidget", "import": "src.ui.components.task_list", "desc": "Liste tâches — historique et suivi"},
         ],
     },

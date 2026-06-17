@@ -644,60 +644,13 @@ class ConsolePage(QWidget):
             role="assistant",
         )
 
-    # ── Legacy API (backward compat CyberDashboard) ──
-
-    def add_message(
-        self,
-        sender: str,
-        text: str,
-        is_user: bool = False,
-        rag_score: float | None = None,
-    ) -> ChatBubble:
-        """Ancienne API — ajoute un message dans la zone de chat.
-
-        Retourne une ChatBubble pour compatibilité avec le code legacy
-        qui appelle ``.append_text()`` et ``.feedback_given``.
-        """
-        role = "user" if is_user else "assistant"
-        row = self.messages.add_message(
-            text=text,
-            role=role,
-            confidence=rag_score,
-        )
-        # Retourner la ChatBubble sous-jacente pour compatibilité
-        return row
+    # ── Legacy API (backward compat CyberDashboard) — V11.1 P0-F réduite ──
 
     def clear_chat(self) -> None:
-        """Ancienne API — supprime tous les messages."""
+        """Supprime tous les messages (V6 compat, appelé par _on_new_chat)."""
         self.messages.clear()
         self.header.reset()
         self.clear_requested.emit()
-
-    def update_last_assistant_rag(self, rag_score: float) -> None:
-        """Met à jour le score RAG sur la dernière bulle assistant."""
-        if self.messages._last_assistant_row:
-            self.messages._last_assistant_row.set_rag_score(rag_score)
-
-    def get_last_assistant_bubble(self):
-        """Retourne la dernière bulle assistant (pour mise à jour streaming)."""
-        return self.messages._last_assistant_row
-
-    def set_sources(self, sources: list) -> None:
-        """Ancienne API — définit les sources. Compatibilité uniquement."""
-        self._sources = sources
-
-    def set_listening(self, active: bool) -> None:
-        """Ancienne API — état du micro."""
-        self.input_area.set_mic_active(active)
-        self.input_area.set_listening_visible(active)
-
-    def set_confidence(self, score: float) -> None:
-        """Met à jour la confiance dans le header."""
-        self.header.set_confidence(score)
-
-    def scroll_to_bottom(self) -> None:
-        """Défiler vers le bas (callé par dashboard si besoin)."""
-        self.messages._scroll_to_bottom()
 
     # ── V11.1 JOUR 3 (P0-J) — Restauration de session depuis sidebar ────
 
@@ -778,7 +731,7 @@ class ConsolePage(QWidget):
             rendered,
             len(session.messages),
         )
-        self.scroll_to_bottom()
+        self.messages._scroll_to_bottom()
         self.session_loaded.emit(session_id)
 
     def set_session_store(self, store) -> None:
