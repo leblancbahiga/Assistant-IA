@@ -1924,6 +1924,9 @@ StatsPage (timer 5s) → lit performance.db → affiche métriques
 | **P0-F** | `6724018` | **Suppression code mort** — 1063 lignes (111 live + 952 archivées) | ✅ 30/30 verts |
 | **Redesign** | `d256481` | **Thème "Midnight Indigo"** — refonte complète design system (palette indigo, arrondis 6-12px, QSS 378 lignes) | ✅ 30/30 verts |
 
-**Tags :** `V11.1-J1`, `V11.1-J2`, `V11.1-J3`, `V11.1-J4`, `V11.1-P0F`, `V11.1-REDESIGN`
+| **P0-O** | `06ea71a` | **FactChecker status badge** — indicateur vert/orange/rouge dans bulle assistant (verified/issues/error) | ✅ 41/41 (11 nouveaux P0-O/P0-M) |
+| **P0-M** | `06ea71a` | **Citations [N] cliquables inline** — [1][2] convertis en hyperliens, menu contextuel au clic | ✅ 41/41 |
 
-**✅ P0-F + Redesign livrés.** Reste V11.1 (J5+) : P0-O status FactChecker, P0-M citations inline.
+**Tags :** `V11.1-J1`, `V11.1-J2`, `V11.1-J3`, `V11.1-J4`, `V11.1-P0F`, `V11.1-REDESIGN`, `V11.1-P0O-P0M`
+
+**✅ V11.1 sprint complet — 41/41 tests verts.**
