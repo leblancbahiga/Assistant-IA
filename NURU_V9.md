@@ -1922,8 +1922,8 @@ StatsPage (timer 5s) → lit performance.db → affiche métriques
 | **J3** | `d4e38db` | `ConsolePage.load_session()` + `set_session_store()`, bugfix permanent `MessagesArea` signaux regenerate/edit | ✅ 6/6 load_session + 8/8 ConversationList |
 | **J4** | `360619b` | **P0-N** Routeur footer bulle · **P0-E** Model switcher header · **P0-G** StatCard unifié (`stat_card.py`) | ✅ 30/30 (5 P0-N + 5 P0-E + 6 P0-G + 14 legacy) |
 | **P0-F** | `6724018` | **Suppression code mort** — 1063 lignes (111 live + 952 archivées) | ✅ 30/30 verts |
+| **Redesign** | `d256481` | **Thème "Midnight Indigo"** — refonte complète design system (palette indigo, arrondis 6-12px, QSS 378 lignes) | ✅ 30/30 verts |
 
-**Tags :** `V11.1-J1`, `V11.1-J2`, `V11.1-J3`, `V11.1-J4`, `V11.1-P0F`
+**Tags :** `V11.1-J1`, `V11.1-J2`, `V11.1-J3`, `V11.1-J4`, `V11.1-P0F`, `V11.1-REDESIGN`
 
-**✅ P0-F livré :** 1 063 lignes de code mort legacy supprimées/archivées.
-Reste V11.1 (J5+) : P0-O status FactChecker, P0-M citations inline.
+**✅ P0-F + Redesign livrés.** Reste V11.1 (J5+) : P0-O status FactChecker, P0-M citations inline.
