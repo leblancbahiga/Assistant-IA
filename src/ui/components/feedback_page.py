@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
     QStyle, QVBoxLayout, QWidget,
 )
 
+from src.ui.components.stat_card import StatCard
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -31,33 +33,8 @@ except ImportError:
 # ── Widgets réutilisables ─────────────────────────────────────────────────
 
 
-class StatCard(QFrame):
-    """Carte de statistique unique (titre, valeur, icône)."""
-
-    def __init__(self, title: str, value: str, icon: str = "📊",
-                 color: str = "#60a5fa", parent=None):
-        super().__init__(parent)
-        self._color = color
-        self.setObjectName("StatCard")
-        self.setStyleSheet(f"""
-            StatCard {{
-                background: rgba(30, 40, 60, 0.8);
-                border: 1px solid {color}40;
-                border-radius: 8px;
-                padding: 12px;
-            }}
-        """)
-        layout = QVBoxLayout(self)
-        layout.setSpacing(4)
-        top = QHBoxLayout()
-        top.addWidget(QLabel(f"<span style='font-size:18px'>{icon}</span>"))
-        top.addStretch()
-        layout.addLayout(top)
-        self._value_label = QLabel(
-            f"<span style='font-size:26px;font-weight:700;color:{color}'>{value}</span>")
-        layout.addWidget(self._value_label)
-        layout.addWidget(QLabel(
-            f"<span style='color:#8899b0;font-size:12px'>{title}</span>"))
+# ── StatCard unifié — importé de stat_card.py (V11.1 P0-G) ──
+# La classe locale a été migrée vers src/ui/components/stat_card.py
 
 
 class FeedbackRow(QFrame):
@@ -135,10 +112,10 @@ class FeedbackPage(QWidget):
         self._stats_grid = QHBoxLayout()
         self._stats_grid.setSpacing(12)
 
-        self._card_up = StatCard("👍 Thumbs Up", "—", "👍", "#34d399")
-        self._card_down = StatCard("👎 Thumbs Down", "—", "👎", "#f87171")
-        self._card_corrections = StatCard("✏️ Corrections", "—", "✏️", "#60a5fa")
-        self._card_ratings = StatCard("⭐ Notes", "—", "⭐", "#fbbf24")
+        self._card_up = StatCard("👍 Thumbs Up", "👍", "—", "#34d399")
+        self._card_down = StatCard("👎 Thumbs Down", "👎", "—", "#f87171")
+        self._card_corrections = StatCard("✏️ Corrections", "✏️", "—", "#60a5fa")
+        self._card_ratings = StatCard("⭐ Notes", "⭐", "—", "#fbbf24")
 
         self._stats_grid.addWidget(self._card_up)
         self._stats_grid.addWidget(self._card_down)
@@ -276,9 +253,8 @@ class FeedbackPage(QWidget):
 
     @staticmethod
     def _update_card(card: StatCard, value: str):
-        """Met à jour la valeur d'une StatCard."""
-        card._value_label.setText(
-            f"<span style='font-size:26px;font-weight:700;color:{card._color}'>{value}</span>")
+        """Met à jour la valeur d'une StatCard (API publique)."""
+        card.set_value(value)
 
     def _clear_feed(self):
         """Vide le flux (garde le stretch final)."""

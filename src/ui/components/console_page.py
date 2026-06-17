@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -38,14 +39,24 @@ from .chat_bubble import MessageRow, ChatBubble
 
 
 class ChatHeader(QWidget):
-    """Header du chat : titre, modes, confiance, bouton Nouveau Chat.
+    """Header du chat : titre, model switcher, modes, confiance, bouton Nouveau Chat.
 
     Signaux
     -------
     new_chat_clicked : émis quand l'utilisateur clique sur le bouton "+"
+    model_changed(str) : émis quand l'utilisateur choisit un modèle dans le
+        combobox (V11.1 P0-E)
     """
 
     new_chat_clicked = Signal()
+    model_changed = Signal(str)  # V11.1 P0-E — nouveau modèle sélectionné
+
+    MODELS = [
+        "phi-4-mini (local)",
+        "llama-3.3-70b (groq)",
+        "deepseek-chat",
+        "openrouter-auto",
+    ]
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -59,6 +70,16 @@ class ChatHeader(QWidget):
         self._title_label = QLabel("Nouvelle conversation")
         self._title_label.setObjectName("ChatHeaderTitle")
         layout.addWidget(self._title_label)
+
+        # ── Model Switcher (P0-E) ──
+        self._model_combo = QComboBox()
+        self._model_combo.setObjectName("ModelSwitcher")
+        self._model_combo.addItems(self.MODELS)
+        self._model_combo.setCurrentIndex(0)
+        self._model_combo.setFixedWidth(200)
+        self._model_combo.setToolTip("Modèle actif")
+        self._model_combo.currentTextChanged.connect(self._on_model_changed)
+        layout.addWidget(self._model_combo)
 
         layout.addSpacing(8)
 
@@ -102,12 +123,29 @@ class ChatHeader(QWidget):
         """Met à jour la barre de confiance (0.0 → 1.0)."""
         self._confidence.set_score(score)
 
+    def set_model(self, model_name: str) -> None:
+        """V11.1 P0-E — Sélectionne un modèle dans le combobox."""
+        idx = self._model_combo.findText(model_name)
+        if idx >= 0:
+            self._model_combo.setCurrentIndex(idx)
+
+    @property
+    def current_model(self) -> str:
+        """V11.1 P0-E — Modèle actuellement sélectionné."""
+        return self._model_combo.currentText()
+
     def reset(self) -> None:
         """Réinitialise le header à l'état par défaut."""
         self._title_label.setText("Nouvelle conversation")
         self._mode_primary.set_mode("LOCAL")
         self._mode_secondary.set_mode("RAG")
         self._confidence.set_score(0.0)
+
+    # ── Internes ──
+
+    def _on_model_changed(self, model_name: str) -> None:
+        """Relaye le changement de modèle."""
+        self.model_changed.emit(model_name)
 
 
 # ── 2. MessagesArea ──────────────────────────────────────────────────────
@@ -175,6 +213,8 @@ class MessagesArea(QScrollArea):
         role: str = "user",
         sources: list | None = None,
         confidence: float | None = None,
+        mode: str = "",               # V11.1 P0-N
+        model_name: str = "",         # V11.1 P0-N
     ) -> MessageRow:
         """Ajoute un message dans la zone de chat.
 
@@ -208,6 +248,8 @@ class MessagesArea(QScrollArea):
             role=role,
             sources=sources,
             confidence=confidence,
+            mode=mode,                # V11.1 P0-N
+            model_name=model_name,    # V11.1 P0-N
             parent=self._container,
         )
 
@@ -484,6 +526,8 @@ class ConsolePage(QWidget):
     edit_requested = Signal(str)        # message_id user ou assistant
     # V11.1 JOUR 3 (P0-J)
     session_loaded = Signal(str)        # session_id restaurée depuis sidebar
+    # V11.1 P0-E
+    model_changed = Signal(str)         # nouveau modèle sélectionné
     new_chat = Signal()
 
     # Legacy signals (backward compat)
@@ -549,6 +593,9 @@ class ConsolePage(QWidget):
         self.messages.regenerate_requested.connect(self.regenerate_requested.emit)
         self.messages.edit_requested.connect(self.edit_requested.emit)
 
+        # V11.1 P0-E — model_changed depuis ChatHeader
+        self.header.model_changed.connect(self.model_changed.emit)
+
     # ── API publique V7 ──
 
     def on_response_received(
@@ -580,6 +627,8 @@ class ConsolePage(QWidget):
             role="assistant",
             sources=sources or [],
             confidence=confidence,
+            mode=mode_primary or "",            # V11.1 P0-N
+            model_name=mode_secondary or "",    # V11.1 P0-N — fallback: affiché comme nom
         )
         # Mettre à jour le header
         if mode_primary is not None and mode_secondary is not None:

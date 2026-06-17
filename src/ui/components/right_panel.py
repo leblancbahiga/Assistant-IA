@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
     QScrollArea,
 )
 
+from src.ui.components.stat_card import MiniStatCard as MetricCard
+
 logger = logging.getLogger(__name__)
 
 # ── Couleurs du thème bleu-vert ───────────────────────────────────────────
@@ -50,67 +52,7 @@ TEXT_DIM = "#2D4052"
 # ══════════════════════════════════════════════════════════════════════════
 #  Module 5 — Composants atomiques
 # ══════════════════════════════════════════════════════════════════════════
-
-
-class MetricCard(QWidget):
-    """Carte métrique réutilisable — label + valeur + sous-titre.
-
-    Style sombre, bord #1A2332, fond #0A0E14.
-    """
-
-    def __init__(
-        self,
-        label: str = "",
-        value: str = "",
-        subtitle: str = "",
-        parent: QWidget | None = None,
-    ):
-        super().__init__(parent)
-        self.setFixedHeight(62)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(2)
-
-        self._label_w = QLabel(label)
-        self._label_w.setStyleSheet(
-            "font-size: 9px; color: #2D4052; letter-spacing: 0.10em;"
-            " text-transform: uppercase; background: transparent;"
-        )
-        layout.addWidget(self._label_w)
-
-        value_row = QHBoxLayout()
-        value_row.setSpacing(2)
-
-        self._value_w = QLabel(value)
-        self._value_w.setStyleSheet(
-            "font-size: 18px; font-weight: 500; color: #4A8AB0;"
-            " font-family: 'SF Mono', 'Consolas', monospace; background: transparent;"
-        )
-        value_row.addWidget(self._value_w)
-        value_row.addStretch()
-        layout.addLayout(value_row)
-
-        self._subtitle_w = QLabel(subtitle)
-        self._subtitle_w.setStyleSheet(
-            "font-size: 9px; color: #2A5A3A; background: transparent;"
-        )
-        layout.addWidget(self._subtitle_w)
-
-        self.setStyleSheet(
-            f"background-color: {BG_DARK};"
-            f" border: 0.5px solid {BORDER_COLOR};"
-            " border-radius: 6px;"
-        )
-
-    def set_value(self, value: str) -> None:
-        self._value_w.setText(value)
-
-    def set_subtitle(self, subtitle: str) -> None:
-        self._subtitle_w.setText(subtitle)
-
-    def set_label(self, label: str) -> None:
-        self._label_w.setText(label)
+# MetricCard → importé de stat_card.py via MiniStatCard (V11.1 P0-G)
 
 
 class StrategyRow(QWidget):

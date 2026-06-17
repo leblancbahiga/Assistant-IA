@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QSizePolicy,
 )
-from src.ui.components.nuru_widgets import CitationBadge
+from src.ui.components.nuru_widgets import CitationBadge, ModeBadge
 from src.ui.components.right_panel import CitationChip
 
 # ── Constantes V7 ──────────────────────────────────────────────────────────
@@ -131,6 +131,8 @@ class ChatBubble(QFrame):
         sources: list[tuple[str, int]] | None = None,
         show_actions: bool = True,
         confidence: float | None = None,
+        mode: str = "",               # V11.1 P0-N — mode de routage (LOCAL/RAG/CLOUD/VERIFY/PLAN)
+        model_name: str = "",         # V11.1 P0-N — nom du modèle (ex: "Groq llama")
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -140,6 +142,8 @@ class ChatBubble(QFrame):
         self._confidence = confidence
         self._full_text = text
         self._feedback_state: str = ""  # "up", "down", ""
+        self._mode = mode.upper() if mode else ""      # V11.1 P0-N
+        self._model_name = model_name                   # V11.1 P0-N
 
         self.setObjectName("BubbleNuru" if self._role == "nuru" else "BubbleUser")
         self.setStyleSheet(self._bubble_style())
@@ -222,6 +226,27 @@ class ChatBubble(QFrame):
             actions_layout.addWidget(self._btn_edit)
             actions_layout.addStretch()
             layout.addLayout(actions_layout)
+
+        # ── 2e. Mode footer (P0-N) — modèle + routeur, assistant seulement ──
+        if self._role != "user" and self._mode:
+            footer_layout = QHBoxLayout()
+            footer_layout.setContentsMargins(0, 2, 0, 0)
+            footer_layout.setSpacing(6)
+
+            # Libellé du modèle
+            if self._model_name:
+                model_label = QLabel(self._model_name)
+                model_label.setStyleSheet(
+                    "color: #4A6080; font-size: 10px; background: transparent;"
+                )
+                footer_layout.addWidget(model_label)
+
+            # Badge de routage
+            self._mode_badge = ModeBadge(self._mode)
+            footer_layout.addWidget(self._mode_badge)
+
+            footer_layout.addStretch()
+            layout.addLayout(footer_layout)
 
         # Appliquer le texte initial
         self.set_text(text)
@@ -491,12 +516,16 @@ class MessageRow(QWidget):
         sources: list[tuple[str, int]] | None = None,
         show_actions: bool = True,
         confidence: float | None = None,
+        mode: str = "",               # V11.1 P0-N
+        model_name: str = "",         # V11.1 P0-N
         message_id: str = "",
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
         self._message_id = message_id or self._generate_id()
         self._role = role.lower()
+        self._mode = mode.upper() if mode else ""       # V11.1 P0-N
+        self._model_name = model_name                   # V11.1 P0-N
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
@@ -514,6 +543,8 @@ class MessageRow(QWidget):
             sources=sources,
             show_actions=show_actions,
             confidence=confidence,
+            mode=self._mode,          # V11.1 P0-N
+            model_name=self._model_name,  # V11.1 P0-N
         )
 
         # Connexions des signaux

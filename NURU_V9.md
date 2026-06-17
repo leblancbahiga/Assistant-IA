@@ -1920,10 +1920,8 @@ StatsPage (timer 5s) → lit performance.db → affiche métriques
 | **J1** | `62376a6` | Quick Wins P0 : 4 audits experts → `NURU_AUDIT_SYNTHESE.md`, hooks dashboard P0-C+I+P0-J+P0-H | — |
 | **J2** | `c7b1175` | ConversationList sidebar (8 tests), P0-C+I collapsibles, spec experts dashboard (519 lignes) | ✅ 8/8 ConversationList |
 | **J3** | `d4e38db` | `ConsolePage.load_session()` + `set_session_store()`, bugfix permanent `MessagesArea` signaux regenerate/edit | ✅ 6/6 load_session + 8/8 ConversationList |
+| **J4** | _(en cours)_ | **P0-N** Routeur footer bulle · **P0-E** Model switcher header · **P0-G** StatCard unifié (`stat_card.py`) | ✅ 30/30 (5 P0-N + 5 P0-E + 6 P0-G + 14 legacy) |
 
 **Tags :** `V11.1-J1`, `V11.1-J2`, `V11.1-J3`
 
-**Reste V11.1 (J4+) :**
-- P0-N Routeur footer de bulle
-- P0-E Model switcher header
-- P0-G Unifier StatCard (sidebar + dashboard)
+**✅ V11.1 Sprint terminé :** 3 P0 livrés ce jour (P0-N, P0-E, P0-G). Reste V11.1 (J5+) : P0-F nettoyage code mort, P0-O status FactChecker, P0-M citations inline.

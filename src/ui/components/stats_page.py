@@ -36,6 +36,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from src.ui.components.stat_card import StatCard
+
 logger = logging.getLogger(__name__)
 
 # ── Couleurs du thème ──────────────────────────────────────────────────────
@@ -115,69 +117,6 @@ def _format_ms(ms: float) -> str:
 def _format_pct(val: float) -> str:
     """Formate un ratio en pourcentage."""
     return f"{val * 100:.1f}%"
-
-
-# ══════════════════════════════════════════════════════════════════════════
-#  StatCard — carte métrique unique
-# ══════════════════════════════════════════════════════════════════════════
-
-
-class StatCard(QFrame):
-    """Carte métrique compacte avec icône, label, valeur et couleur dynamique."""
-
-    def __init__(
-        self,
-        title: str,
-        icon: str = "◆",
-        value: str = "—",
-        color: str = ACCENT_BLUE,
-        parent: QWidget | None = None,
-    ):
-        super().__init__(parent)
-        self.setObjectName("StatCard")
-        self.setStyleSheet(f"""
-            #StatCard {{
-                {CARD_STYLE}
-            }}
-        """)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 8, 12, 8)
-        layout.setSpacing(4)
-
-        # Header
-        header = QHBoxLayout()
-        header.setSpacing(6)
-        self._icon_lbl = QLabel(icon)
-        self._icon_lbl.setStyleSheet(f"color: {color}; font-size: 14px; background: transparent;")
-        header.addWidget(self._icon_lbl)
-        self._title_lbl = QLabel(title)
-        self._title_lbl.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 9px; font-weight: bold; "
-            f"letter-spacing: 1px; background: transparent;"
-        )
-        header.addWidget(self._title_lbl)
-        header.addStretch()
-        layout.addLayout(header)
-
-        # Valeur
-        self._value_lbl = QLabel(value)
-        self._val_color = color
-        self._update_value_style()
-        layout.addWidget(self._value_lbl)
-
-    def set_value(self, value: str, color: str | None = None) -> None:
-        """Met à jour la valeur affichée et optionnellement la couleur."""
-        self._value_lbl.setText(value)
-        if color is not None:
-            self._val_color = color
-            self._update_value_style()
-
-    def _update_value_style(self) -> None:
-        self._value_lbl.setStyleSheet(
-            f"color: {self._val_color}; font-size: 22px; font-weight: bold; "
-            f"background: transparent;"
-        )
 
 
 # ══════════════════════════════════════════════════════════════════════════
