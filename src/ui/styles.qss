@@ -1,252 +1,633 @@
 /* ═══════════════════════════════════════════════════════════════════
-   NURU V8+ — Thème Bleu-Vert "Deep Ocean"
-   Palette : #0A0E14 fond, #1A6A9A accent, #2A8A4A succès
-   Migration 3 colonnes — remplacement du violet #7f77dd
+   NURU V11.1 — Thème "Midnight Indigo"
+   Design system moderne, sombre, élégant — inspiré Linear/Notion
+   Palette : #0D0D12 fond, #6366f1 accent, arrondis 8px
 ═══════════════════════════════════════════════════════════════════ */
-QMainWindow { background-color: #0A0E14; }
-QWidget { background-color: transparent; color: #E8EAF0; font-family: "SF Pro Text", "Inter", sans-serif; font-size: 13px; }
 
-/* ══════════════════════════════════════
-   SIDEBAR (NavSidebar)
-══════════════════════════════════════ */
-#Sidebar { background-color: #0D1318; border-right: 0.5px solid #1A2332; min-width: 200px; max-width: 220px; }
-#SidebarHeader { background-color: #0D1318; border-bottom: 0.5px solid #1A2332; padding: 16px 14px 12px; }
-#LogoLabel { font-size: 15px; font-weight: 500; color: #E8EAF0; letter-spacing: 0.08em; }
-#VersionBadge { background-color: #0F1A2A; color: #2A7FBF; border: 0.5px solid rgba(42, 127, 191, 0.3); border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600; }
-#NavSectionLabel { color: #2D3F52; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.15em; padding: 8px 10px 4px; }
-#NavButton { background-color: transparent; color: #4A6080; border: none; border-left: 2px solid transparent; border-radius: 0; padding: 7px 10px; text-align: left; font-size: 11px; font-weight: 400; letter-spacing: 0.03em; }
-#NavButton:hover { background-color: #131B24; color: #7A9ABF; }
-#NavButton[active="true"] { background-color: #0F2238; color: #3A8FD4; border-left: 2px solid #3A8FD4; font-weight: 500; }
+/* ── Base ─────────────────────────────────────────────────────── */
+
+QMainWindow {
+    background-color: #0D0D12;
+}
+QWidget {
+    background-color: transparent;
+    color: #E5E5EC;
+    font-family: "SF Pro Text", "Inter", -apple-system, sans-serif;
+    font-size: 13px;
+}
+
+/* ── SIDEBAR ──────────────────────────────────────────────────── */
+
+#Sidebar {
+    background-color: #0F0F14;
+    border-right: 1px solid #1C1C26;
+    min-width: 220px;
+    max-width: 220px;
+}
+#SidebarHeader {
+    background-color: #0F0F14;
+    border-bottom: 1px solid #1C1C26;
+    padding: 18px 14px 14px;
+}
+#LogoLabel {
+    font-size: 18px;
+    font-weight: 700;
+    color: #E5E5EC;
+    letter-spacing: -0.02em;
+}
+#VersionBadge {
+    background-color: #1A1A28;
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+#NavSectionLabel {
+    color: #5A5A6E;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 14px 14px 6px;
+}
+#NavButton {
+    background-color: transparent;
+    color: #7A7A8E;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 400;
+    margin: 1px 8px;
+    letter-spacing: 0.01em;
+}
+#NavButton:hover {
+    background-color: #1A1A24;
+    color: #A0A0B8;
+}
+#NavButton[active="true"] {
+    background-color: rgba(99, 102, 241, 0.08);
+    color: #818cf8;
+    font-weight: 500;
+}
+#CollapseSidebarBtn {
+    background-color: transparent;
+    color: #5A5A6E;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    padding: 0;
+}
+#CollapseSidebarBtn:hover {
+    background-color: #1E1E28;
+    color: #A0A0B8;
+}
 
 /* Recent Documents (Module 2) */
-#RecentDocuments { background-color: transparent; margin: 0 8px; }
-#RecentDocItem { background-color: transparent; border: none; border-radius: 5px; padding: 5px 8px; font-size: 10px; color: #3D5266; }
-#RecentDocItem:hover { background-color: #0F1A24; color: #5A7A9A; }
-#DocDot { min-width: 5px; max-width: 5px; min-height: 5px; max-height: 5px; border-radius: 3px; }
-#DocDot[indexed="true"] { background-color: #1E6B3A; }
-#DocDot[partial="true"] { background-color: #6B4E1E; }
+#RecentDocuments {
+    background-color: transparent;
+    margin: 2px 8px;
+    padding: 6px 0;
+}
+#RecentDocumentsHeader {
+    font-size: 9px;
+    font-weight: 600;
+    color: #5A5A6E;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 8px 6px 4px;
+}
+#RecentDocItem {
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 10.5px;
+    color: #6A6A7E;
+}
+#RecentDocItem:hover {
+    background-color: #1A1A24;
+    color: #8A8AA0;
+}
+#DocDot {
+    min-width: 5px;
+    max-width: 5px;
+    min-height: 5px;
+    max-height: 5px;
+    border-radius: 2.5px;
+}
+#DocDot[indexed="true"] {
+    background-color: #22C55E;
+}
+#DocDot[partial="true"] {
+    background-color: #F59E0B;
+}
 
-/* CloudStatusBadge (Module 2) */
-#CloudStatusBadge { background-color: #0A1F12; border: 0.5px solid #1A3D24; border-radius: 5px; padding: 5px 8px; }
-#CloudStatusDot { min-width: 6px; max-width: 6px; min-height: 6px; max-height: 6px; border-radius: 3px; background-color: #2A9A4A; }
-#CloudStatusText { font-size: 10px; color: #2A9A4A; letter-spacing: 0.05em; }
+/* CloudStatusBadge */
+#CloudStatusBadge {
+    background-color: #12121C;
+    border: 1px solid #1C1C2A;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 0 8px;
+}
+#CloudStatusDot {
+    min-width: 6px;
+    max-width: 6px;
+    min-height: 6px;
+    max-height: 6px;
+    border-radius: 3px;
+    background-color: #22C55E;
+}
+#CloudStatusText {
+    font-size: 10px;
+    color: #22C55E;
+    letter-spacing: 0.03em;
+}
 
 /* ModelInfoFooter */
-#ModelInfoFooter { background-color: transparent; color: #3D5266; font-size: 10px; padding: 10px 14px; border-top: 0.5px solid #1A2332; }
+#ModelInfoFooter {
+    background-color: transparent;
+    color: #5A5A6E;
+    font-size: 10px;
+    padding: 12px 14px;
+    border-top: 1px solid #1C1C26;
+}
 
-/* ══════════════════════════════════════
-   CHAT ZONE (ConsolePage)
-══════════════════════════════════════ */
-#ChatZone { background-color: #0A0E14; }
-#ChatHeader { background-color: #0D1318; border-bottom: 0.5px solid #1A2332; padding: 0 16px; min-height: 44px; }
-#ChatHeaderTitle { font-size: 12px; font-weight: 400; color: #6A8AAA; }
+/* ── CHAT ZONE (ConsolePage) ──────────────────────────────────── */
 
-/* ModeBadge — capsules colorées style mockup */
-#ModeBadge { border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; }
-#ModeBadge[mode="RAG"] { background-color: rgba(26, 143, 212, 0.1); color: #1A8FD4; border: 0.5px solid rgba(26, 63, 95, 0.8); }
-#ModeBadge[mode="LOCAL"] { background-color: rgba(42, 138, 58, 0.1); color: #2A8A3A; border: 0.5px solid rgba(26, 58, 26, 0.8); }
-#ModeBadge[mode="CLOUD"] { background-color: rgba(55, 138, 221, 0.12); color: #378add; border: 0.5px solid rgba(55, 138, 221, 0.25); }
-#ModeBadge[mode="VERIFY"] { background-color: rgba(239, 159, 39, 0.12); color: #ef9f27; border: 0.5px solid rgba(239, 159, 39, 0.25); }
-#ModeBadge[mode="PLAN"] { background-color: rgba(42, 127, 191, 0.12); color: #2A7FBF; border: 0.5px solid rgba(42, 127, 191, 0.25); }
+#ChatZone {
+    background-color: #0D0D12;
+}
+#ChatHeader {
+    background-color: #0F0F14;
+    border-bottom: 1px solid #1C1C26;
+    padding: 0 20px;
+    min-height: 48px;
+}
+#ChatHeaderTitle {
+    font-size: 13px;
+    font-weight: 500;
+    color: #7A7A8E;
+}
+#ChatHeader .QComboBox {
+    background-color: #1A1A24;
+    color: #E5E5EC;
+    border: 1px solid #252530;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 11px;
+    min-width: 120px;
+}
+#ChatHeader .QComboBox:hover {
+    border-color: #3A3A4E;
+}
+#ChatHeader .QComboBox::drop-down {
+    border: none;
+    padding-right: 6px;
+}
+#ChatHeader .QComboBox QAbstractItemView {
+    background-color: #1A1A24;
+    color: #E5E5EC;
+    border: 1px solid #252530;
+    border-radius: 6px;
+    selection-background-color: rgba(99, 102, 241, 0.15);
+    selection-color: #818cf8;
+}
+
+/* ModeBadge */
+#ModeBadge {
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+#ModeBadge[mode="RAG"] {
+    background-color: rgba(99, 102, 241, 0.12);
+    color: #818cf8;
+    border: 0.5px solid rgba(99, 102, 241, 0.2);
+}
+#ModeBadge[mode="LOCAL"] {
+    background-color: rgba(34, 197, 94, 0.12);
+    color: #22C55E;
+    border: 0.5px solid rgba(34, 197, 94, 0.2);
+}
+#ModeBadge[mode="CLOUD"] {
+    background-color: rgba(99, 102, 241, 0.12);
+    color: #818cf8;
+    border: 0.5px solid rgba(99, 102, 241, 0.2);
+}
+#ModeBadge[mode="VERIFY"] {
+    background-color: rgba(245, 158, 11, 0.12);
+    color: #F59E0B;
+    border: 0.5px solid rgba(245, 158, 11, 0.2);
+}
+#ModeBadge[mode="PLAN"] {
+    background-color: rgba(129, 140, 248, 0.12);
+    color: #818cf8;
+    border: 0.5px solid rgba(129, 140, 248, 0.2);
+}
 
 /* ConfidenceWidget */
-#ConfidenceWidget { background-color: transparent; padding: 0; }
-#ConfidenceLabel { font-size: 10px; color: #3D5266; margin-right: 4px; }
-#ConfidenceBar { background-color: #1A2332; border-radius: 2px; min-height: 4px; max-height: 4px; min-width: 64px; }
-#ConfidenceBar::chunk { border-radius: 2px; }
-#ConfidenceBar[level="high"]::chunk { background-color: #2A8A4A; }
-#ConfidenceBar[level="mid"]::chunk { background-color: #8A7A2A; }
-#ConfidenceBar[level="low"]::chunk { background-color: #8A2A2A; }
-#ConfidenceValue { font-size: 11px; font-weight: 500; min-width: 32px; }
-#ConfidenceValue[level="high"] { color: #2A8A4A; }
-#ConfidenceValue[level="mid"] { color: #8A7A2A; }
-#ConfidenceValue[level="low"] { color: #8A2A2A; }
+#ConfidenceWidget {
+    background-color: transparent;
+    padding: 0;
+}
+#ConfidenceLabel {
+    font-size: 10px;
+    color: #5A5A6E;
+    margin-right: 6px;
+}
+#ConfidenceBar {
+    background-color: #1C1C26;
+    border-radius: 2px;
+    min-height: 4px;
+    max-height: 4px;
+    min-width: 60px;
+}
+#ConfidenceBar::chunk {
+    border-radius: 2px;
+}
+#ConfidenceBar[level="high"]::chunk {
+    background-color: #22C55E;
+}
+#ConfidenceBar[level="mid"]::chunk {
+    background-color: #F59E0B;
+}
+#ConfidenceBar[level="low"]::chunk {
+    background-color: #EF4444;
+}
+#ConfidenceValue {
+    font-size: 11px;
+    font-weight: 500;
+    min-width: 30px;
+}
+#ConfidenceValue[level="high"] {
+    color: #22C55E;
+}
+#ConfidenceValue[level="mid"] {
+    color: #F59E0B;
+}
+#ConfidenceValue[level="low"] {
+    color: #EF4444;
+}
 
 /* Messages Area */
-#MessagesArea { background-color: #0A0E14; border: none; }
-#MessagesArea > QWidget { background-color: #0A0E14; }
+#MessagesArea {
+    background-color: #0D0D12;
+    border: none;
+}
+#MessagesArea > QWidget {
+    background-color: #0D0D12;
+}
+#ChatContent {
+    max-width: 720px;
+    margin: 0px auto;
+}
 
-/* P0-K V11.1 (R3) — largeur max chat centrée pour lisibilité 15-16" */
-#ChatContent { max-width: 768px; margin: 0px auto; }
-QScrollBar:vertical { background-color: transparent; width: 6px; border: none; }
-QScrollBar::handle:vertical { background-color: #1A2332; border-radius: 3px; min-height: 24px; }
-QScrollBar::handle:vertical:hover { background-color: #3D5266; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+/* Scrollbar */
+QScrollBar:vertical {
+    background-color: transparent;
+    width: 6px;
+    border: none;
+}
+QScrollBar::handle:vertical {
+    background-color: #1C1C26;
+    border-radius: 3px;
+    min-height: 30px;
+}
+QScrollBar::handle:vertical:hover {
+    background-color: #3A3A4E;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
 
-/* Bulles de chat — style mockup */
-#BubbleNuru { background-color: #0D1720; border: 0.5px solid #1A2D40; border-left: 2px solid #1A5F9A; border-radius: 2px 10px 10px 10px; padding: 9px 12px; }
-#BubbleUser { background-color: #0F122A; border: 0.5px solid #1E1E3A; border-right: 2px solid #4A3A9A; border-radius: 10px 2px 10px 10px; padding: 9px 12px; }
-#BubbleText { color: #B0C4D8; font-size: 11.5px; line-height: 1.5; background: transparent; }
-#BubbleText[role="user"] { color: #9898C8; }
+/* ── BULLES DE CHAT ───────────────────────────────────────────── */
 
-/* RAG badges — chips style mockup */
-#RagBadge { background-color: #081A0D; border: 0.5px solid #1A3A1F; border-radius: 20px; padding: 2px 7px; font-size: 9px; color: #2A8A3A; margin-top: 5px; }
-#RagBadge[warn="true"] { background-color: #1A0F05; border-color: #3A2A0A; color: #9A7A2A; }
+#BubbleNuru {
+    background-color: #12121C;
+    border: 1px solid #1C1C2A;
+    border-radius: 4px 12px 12px 12px;
+    padding: 10px 14px;
+}
+#BubbleUser {
+    background-color: #14141E;
+    border: 1px solid #1E1E2E;
+    border-right: 2px solid #6366f1;
+    border-radius: 12px 4px 12px 12px;
+    padding: 10px 14px;
+}
+#BubbleText {
+    color: #C0C0D0;
+    font-size: 12px;
+    line-height: 1.55;
+    background: transparent;
+}
+#BubbleText[role="user"] {
+    color: #A0A0B8;
+}
+#MessageRow {
+    padding: 6px 0;
+}
 
-/* CitationBadge — chips style mockup */
-#CitationBadge { background-color: #0A1830; border: 0.5px solid #1A3050; border-radius: 4px; padding: 2px 7px; font-size: 9px; color: #2A6AAA; }
-#CitationBadge:hover { background-color: rgba(42, 106, 170, 0.2); border-color: rgba(42, 106, 170, 0.5); }
+/* ── FOOTER BULLE (ModeBadge + model_name) ────────────────────── */
 
-/* Bubble action buttons */
-#BubbleAction { background-color: transparent; color: #3D5266; border: 1px solid transparent; border-radius: 5px; padding: 0; font-size: 13px; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; }
-#BubbleAction:hover { background-color: rgba(26, 106, 154, 0.15); color: #1A6A9A; border: 1px solid rgba(26, 106, 154, 0.25); }
-#BubbleAction[feedback="up"] { background-color: rgba(26, 106, 154, 0.2); color: #1A6A9A; border: 1px solid rgba(26, 106, 154, 0.4); }
-#BubbleAction[feedback="down"] { background-color: rgba(138, 42, 42, 0.12); color: #8A2A2A; border: 1px solid rgba(138, 42, 42, 0.3); }
-#BubbleAction[copied="true"] { background-color: rgba(42, 138, 74, 0.15); color: #2A8A4A; border: 1px solid rgba(42, 138, 74, 0.3); }
+#BubbleFooter {
+    background: transparent;
+    padding: 6px 0 2px;
+}
+#BubbleFooterLabel {
+    font-size: 9.5px;
+    color: #5A5A6E;
+    letter-spacing: 0.02em;
+}
+#BubbleFooter QPushButton {
+    background-color: transparent;
+    border: none;
+    color: #5A5A6E;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+#BubbleFooter QPushButton:hover {
+    background-color: #1A1A24;
+    color: #A0A0B8;
+}
 
-/* Confidence mini-bar dans les bulles */
-#ConfidenceLabel { color: #3D5266; font-size: 9px; font-weight: 600; background: transparent; }
-#ConfidenceBarBg { background-color: #1A2332; border-radius: 2px; }
-#ConfidenceFill { background-color: #2A8A4A; border-radius: 2px; }
-#ConfidenceValue { color: #3D5266; font-size: 9px; font-weight: 600; background: transparent; }
-#ConfidenceFill[level="high"] { background-color: #2A8A4A; }
-#ConfidenceFill[level="mid"] { background-color: #8A7A2A; }
-#ConfidenceFill[level="low"] { background-color: #8A2A2A; }
+/* ── INPUT AREA ───────────────────────────────────────────────── */
 
-/* TypingIndicator — style mockup */
-#TypingIndicator { background-color: #0D1720; border: 0.5px solid #1A2D40; border-left: 2px solid #1A5F9A; border-radius: 2px 10px 10px 10px; padding: 8px 12px; }
+#InputFrameV7 {
+    background-color: #0F0F14;
+    border: 1px solid #252530;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin: 12px 20px;
+    min-height: 40px;
+}
+#InputFrameV7:focus-within {
+    border-color: rgba(99, 102, 241, 0.4);
+}
+#InputFrameV7 QPlainTextEdit {
+    background-color: transparent;
+    color: #D0D0DC;
+    border: none;
+    font-size: 12.5px;
+    padding: 4px;
+    selection-background-color: rgba(99, 102, 241, 0.3);
+}
+#SendButtonV7 {
+    background-color: rgba(99, 102, 241, 0.1);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 500;
+}
+#SendButtonV7:hover {
+    background-color: rgba(99, 102, 241, 0.2);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+#SendButtonV7:pressed {
+    background-color: rgba(99, 102, 241, 0.3);
+}
+#InputArea QPushButton {
+    background-color: transparent;
+    color: #5A5A6E;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+}
+#InputArea QPushButton:hover {
+    background-color: #1A1A24;
+    color: #A0A0B8;
+}
+#InputArea QPushButton[checked="true"] {
+    color: #818cf8;
+    background-color: rgba(99, 102, 241, 0.08);
+}
 
-/* Input Area — style mockup */
-#InputArea { background-color: #0D1318; border-top: 0.5px solid #1A2332; padding: 10px 14px; }
-#InputFrameV7 { background-color: #0D1520; border: 0.5px solid #1A2D40; border-radius: 8px; padding: 4px 6px; }
-#InputFrameV7:focus-within { border-color: rgba(26, 106, 154, 0.4); }
-QTextEdit#SmartTextEdit { background-color: transparent; border: none; color: #8AAAC8; font-size: 11px; selection-background-color: rgba(26, 106, 154, 0.25); padding: 4px 6px; min-height: 28px; max-height: 80px; }
-QTextEdit#SmartTextEdit::placeholder { color: #3D5266; }
-#MicButton, #AttachButton, #StrictButton { background-color: transparent; border: 0.5px solid #1A2332; border-radius: 6px; color: #4A6080; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; font-size: 14px; padding: 0; }
-#MicButton:hover, #AttachButton:hover, #StrictButton:hover { background-color: #131B24; border-color: #3D5266; color: #7A9ABF; }
-#StrictButton:checked { background-color: rgba(26, 106, 154, 0.15); border-color: rgba(26, 106, 154, 0.4); color: #1A6A9A; }
-#SendButtonV7 { background-color: #0F2A44; border: 0.5px solid #1A4A6A; border-radius: 6px; color: #2A8FD4; min-width: 32px; max-width: 32px; min-height: 32px; max-height: 32px; font-size: 14px; padding: 0; }
-#SendButtonV7:hover { background-color: rgba(42, 143, 212, 0.2); border-color: rgba(42, 143, 212, 0.5); }
-#SendButtonV7:pressed { background-color: rgba(42, 143, 212, 0.3); }
-#SendButtonV7:disabled { background-color: #0D1520; border-color: #1A2332; color: #3D5266; }
-#NewChatHeaderBtn { background-color: transparent; border: 0.5px solid #1A2332; border-radius: 6px; color: #4A6080; min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px; font-size: 14px; padding: 0; }
-#NewChatHeaderBtn:hover { background-color: #131B24; border-color: #3D5266; color: #7A9ABF; }
-#InputHint { color: #3D5266; font-size: 10px; padding: 2px 14px 0; }
+/* ── NOTIFICATIONS / POPUPS ──────────────────────────────────── */
 
-/* ══════════════════════════════════════
-   RIGHT PANEL — RAG Diagnostic (Module 1)
-══════════════════════════════════════ */
-#RightPanelDiagnostic { background-color: #0C1018; border-left: 0.5px solid #1A2332; }
-#RightPanelHeader { background-color: #0C1018; border-bottom: 0.5px solid #1A2332; }
+#NotificationWidget {
+    background-color: #1A1A24;
+    border: 1px solid #252530;
+    border-radius: 10px;
+    padding: 12px 16px;
+}
+#NotificationWidget QLabel {
+    font-size: 11px;
+    color: #C0C0D0;
+}
 
-/* RagTabWidget */
-#RagTabWidget::pane { border: none; background-color: transparent; }
-#RagTabWidget QTabBar::tab { color: #3D5266; font-size: 10px; padding: 4px 10px; border-bottom: 1.5px solid transparent; letter-spacing: 0.04em; background: transparent; }
-#RagTabWidget QTabBar::tab:selected { color: #2A7FBF; border-bottom: 1.5px solid #2A7FBF; }
-#RagTabWidget QTabBar::tab:hover:!selected { color: #5A7A9A; }
+/* ── CONVERSATION LIST (P0-J) ─────────────────────────────────── */
 
-/* MetricsGrid cards */
-#MetricsGrid { background-color: transparent; }
-#MetricsCard { background-color: #0A0E14; border: 0.5px solid #1A2332; border-radius: 6px; }
+#ConversationList {
+    background-color: transparent;
+    padding: 0;
+    margin: 0 4px;
+}
+#ConversationListHeader {
+    font-size: 9px;
+    font-weight: 600;
+    color: #5A5A6E;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 10px 10px 4px;
+}
+#ConversationItem {
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 1px 4px;
+}
+#ConversationItem:hover {
+    background-color: #1A1A24;
+}
+#ConversationItem QLabel#ConvTitle {
+    font-size: 11px;
+    font-weight: 500;
+    color: #B0B0C4;
+}
+#ConversationItem QLabel#ConvDate {
+    font-size: 9px;
+    color: #5A5A6E;
+}
+#NewConversationBtn {
+    background-color: rgba(99, 102, 241, 0.08);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.12);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    margin: 4px 8px;
+    text-align: center;
+}
+#NewConversationBtn:hover {
+    background-color: rgba(99, 102, 241, 0.15);
+}
 
-/* RamBar progress */
-#RamBarProgress { background-color: #1A2332; border-radius: 2px; border: none; }
-#RamBarProgress::chunk { background-color: #1A7A4A; border-radius: 2px; }
+/* ── RIGHT PANEL / METRICS ────────────────────────────────────── */
 
-/* RagScoreBar progress */
-#RagScoreBarProgress { background-color: #1A2332; border-radius: 2px; border: none; }
-#RagScoreBarProgress::chunk { background-color: #2A8A4A; border-radius: 2px; }
+#RightPanel {
+    background-color: #0F0F14;
+    border-left: 1px solid #1C1C26;
+    min-width: 260px;
+    max-width: 300px;
+}
+#RightPanelHeader {
+    font-size: 11px;
+    font-weight: 600;
+    color: #7A7A8E;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 16px 14px 8px;
+}
+#RightPanel QLabel#MetricLabel {
+    color: #5A5A6E;
+    font-size: 10px;
+}
+#RightPanel QLabel#MetricValue {
+    color: #E5E5EC;
+    font-size: 14px;
+    font-weight: 600;
+}
+#RightPanel QLabel#MetricSubtitle {
+    color: #5A5A6E;
+    font-size: 9px;
+}
 
-/* Strategy rows */
-#StrategyRow { background-color: #0A0E14; border: 0.5px solid #1A2332; border-radius: 5px; }
+/* ── PLACEHOLDER PAGES ────────────────────────────────────────── */
 
-/* Index Health */
-#IndexHealthWidget { background-color: #0A0E14; border: 0.5px solid #1A2332; border-radius: 6px; }
+#PlaceholderPageTitle {
+    font-size: 20px;
+    font-weight: 600;
+    color: #E5E5EC;
+    margin-bottom: 8px;
+}
+#PlaceholderPageDesc {
+    font-size: 12px;
+    color: #7A7A8E;
+    line-height: 1.5;
+}
 
-/* Fact Check */
-#FactCheckWidget { background-color: #040E08; border: 0.5px solid #1A3A1F; border-left: 2px solid #1A7A3A; border-radius: 0 5px 5px 0; }
+/* ── TABS ─────────────────────────────────────────────────────── */
 
-/* Retro Banner */
-#RetroBanner { background-color: #100A05; border: 0.5px solid #3A1A05; border-left: 2px solid #8A4A1A; border-radius: 0 5px 5px 0; }
+QTabWidget::pane {
+    background-color: #0D0D12;
+    border: none;
+    border-top: 1px solid #1C1C26;
+}
+QTabBar::tab {
+    background-color: transparent;
+    color: #7A7A8E;
+    border: none;
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+}
+QTabBar::tab:hover {
+    color: #A0A0B8;
+}
+QTabBar::tab:selected {
+    color: #818cf8;
+    border-bottom: 2px solid #6366f1;
+}
 
-/* ══════════════════════════════════════
-   PAGES SECONDAIRES
-══════════════════════════════════════ */
-#PageTitle { font-size: 16px; font-weight: 500; color: #E8EAF0; padding: 16px 20px 8px; }
-#PageSubtitle { font-size: 12px; color: #4A6080; padding: 0 20px 16px; }
-#ContentCard { background-color: #0D1318; border: 0.5px solid #1A2332; border-radius: 10px; padding: 14px 16px; margin: 4px 0; }
-#ContentCard:hover { border-color: #3D5266; }
+/* ── PROGRESS BAR ─────────────────────────────────────────────── */
 
-/* Document items */
-#DocItem { background-color: #0D1318; border: 0.5px solid #1A2332; border-radius: 8px; padding: 10px 12px; }
-#DocItem:hover { background-color: #131B24; border-color: rgba(26, 106, 154, 0.3); }
-#DocNameLabel { font-size: 12px; font-weight: 500; color: #E8EAF0; }
-#DocMetaLabel { font-size: 10px; color: #3D5266; margin-top: 2px; }
-#DocStatusBadge { border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 600; }
-#DocStatusBadge[status="indexed"] { background-color: rgba(42, 138, 74, 0.12); color: #2A8A4A; border: 0.5px solid rgba(42, 138, 74, 0.25); }
-#DocStatusBadge[status="pending"] { background-color: rgba(239, 159, 39, 0.12); color: #ef9f27; border: 0.5px solid rgba(239, 159, 39, 0.25); }
-#DocStatusBadge[status="error"] { background-color: rgba(138, 42, 42, 0.12); color: #8A2A2A; border: 0.5px solid rgba(138, 42, 42, 0.25); }
+QProgressBar {
+    background-color: #1C1C26;
+    border: none;
+    border-radius: 3px;
+    min-height: 6px;
+    max-height: 6px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background-color: #6366f1;
+    border-radius: 3px;
+}
+QProgressBar::chunk[status="success"] {
+    background-color: #22C55E;
+}
 
-/* Nuru Brain */
-#BrainFileItem { background-color: #0D1318; border: 0.5px solid #1A2332; border-radius: 6px; padding: 8px 12px; }
-#BrainFileItem:hover { background-color: #131B24; border-color: rgba(42, 138, 74, 0.3); }
-#BrainFileName { font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; color: #4A6080; }
-#BrainFileDate { font-size: 10px; color: #3D5266; }
+/* ── TOOLTIP ──────────────────────────────────────────────────── */
 
-/* Settings */
-#SettingLabel { font-size: 12px; color: #E8EAF0; font-weight: 500; }
-#SettingDesc { font-size: 11px; color: #4A6080; margin-top: 2px; }
-#SettingRow { background-color: transparent; border-bottom: 0.5px solid #1A2332; padding: 12px 0; }
-#SettingRow:last-child { border-bottom: none; }
-#LogsView { background-color: #0A0E14; color: #4A6080; font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; border: none; padding: 12px; }
+QToolTip {
+    background-color: #1A1A24;
+    color: #E5E5EC;
+    border: 1px solid #252530;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+}
 
-/* ══════════════════════════════════════
-   COMPOSANTS COMMUNS
-══════════════════════════════════════ */
-QPushButton { background-color: #0D1318; color: #4A6080; border: 0.5px solid #1A2332; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 500; }
-QPushButton:hover { background-color: #131B24; color: #7A9ABF; border-color: #3D5266; }
-QPushButton:pressed { background-color: #1A2332; }
-QPushButton:disabled { color: #3D5266; border-color: #0D1318; }
-QPushButton#PrimaryBtn { background-color: rgba(26, 106, 154, 0.15); color: #1A6A9A; border: 0.5px solid rgba(26, 106, 154, 0.35); }
-QPushButton#PrimaryBtn:hover { background-color: rgba(26, 106, 154, 0.25); border-color: rgba(26, 106, 154, 0.6); }
-QPushButton#DangerBtn { background-color: rgba(138, 42, 42, 0.1); color: #8A2A2A; border: 0.5px solid rgba(138, 42, 42, 0.25); }
-QPushButton#DangerBtn:hover { background-color: rgba(138, 42, 42, 0.2); }
-QPushButton#GhostBtn { background-color: transparent; color: #4A6080; border: 0.5px solid transparent; }
-QPushButton#GhostBtn:hover { color: #E8EAF0; }
+/* ── RELOAD BADGE ─────────────────────────────────────────────── */
 
-QLineEdit, QTextEdit { background-color: #0D1520; color: #8AAAC8; border: 0.5px solid #1A2D40; border-radius: 7px; padding: 7px 10px; font-size: 13px; selection-background-color: rgba(26, 106, 154, 0.25); }
-QLineEdit:focus, QTextEdit:focus { border-color: rgba(26, 106, 154, 0.4); background-color: #0F1A2A; }
-QLineEdit::placeholder, QTextEdit::placeholder { color: #3D5266; }
+#ReloadBadge {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #F59E0B;
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 10px;
+    font-weight: 500;
+    margin: 4px 8px;
+}
 
-QComboBox { background-color: #0D1520; color: #8AAAC8; border: 0.5px solid #1A2D40; border-radius: 7px; padding: 6px 10px; font-size: 12px; min-width: 120px; }
-QComboBox:hover { border-color: #3D5266; }
-QComboBox:focus { border-color: rgba(26, 106, 154, 0.4); }
-QComboBox::drop-down { border: none; padding-right: 8px; }
-QComboBox::down-arrow { width: 10px; height: 10px; }
-QComboBox QAbstractItemView { background-color: #0D1520; border: 0.5px solid #1A2332; border-radius: 6px; color: #8AAAC8; selection-background-color: #131B24; padding: 4px; }
+/* ── STAT CARD UNIFIED ────────────────────────────────────────── */
 
-QCheckBox, QRadioButton { color: #4A6080; font-size: 12px; spacing: 8px; }
-QCheckBox:hover, QRadioButton:hover { color: #E8EAF0; }
-QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; border: 0.5px solid #3D5266; border-radius: 4px; background-color: #0D1520; }
-QCheckBox::indicator:checked, QRadioButton::indicator:checked { background-color: rgba(26, 106, 154, 0.3); border-color: #1A6A9A; }
-QRadioButton::indicator { border-radius: 8px; }
+#StatCard {
+    background-color: #12121C;
+    border: 1px solid #1C1C2A;
+    border-radius: 10px;
+    padding: 12px;
+}
+#StatCardTitle {
+    font-size: 10px;
+    font-weight: 500;
+    color: #7A7A8E;
+    letter-spacing: 0.02em;
+}
+#StatCardValue {
+    font-size: 22px;
+    font-weight: 700;
+    color: #E5E5EC;
+}
+#StatCardIcon {
+    font-size: 18px;
+}
 
-QSlider::groove:horizontal { height: 4px; background-color: #1A2332; border-radius: 2px; }
-QSlider::handle:horizontal { background-color: #1A6A9A; width: 14px; height: 14px; border-radius: 7px; margin: -5px 0; }
-QSlider::sub-page:horizontal { background-color: rgba(26, 106, 154, 0.5); border-radius: 2px; }
-
-QToolTip { background-color: #0D1318; color: #E8EAF0; border: 0.5px solid #1A2332; border-radius: 6px; padding: 5px 9px; font-size: 11px; }
-
-QProgressBar { background-color: #1A2332; border: none; border-radius: 2px; text-align: center; min-height: 4px; max-height: 4px; }
-QProgressBar::chunk { background-color: #1A7A4A; border-radius: 2px; }
-
-QTableWidget, QTreeWidget, QListWidget { background-color: #0A0E14; color: #E8EAF0; border: 0.5px solid #1A2332; border-radius: 8px; selection-background-color: #0D1318; outline: none; font-size: 12px; }
-QTableWidget::item, QTreeWidget::item, QListWidget::item { padding: 6px 10px; border-bottom: 0.5px solid #0D1318; }
-QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selected { background-color: #131B24; }
-QHeaderView::section { background-color: #0D1318; color: #3D5266; border: none; border-bottom: 0.5px solid #1A2332; padding: 6px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-
-QTabWidget::pane { border: 0.5px solid #1A2332; border-radius: 6px; background-color: #0C1018; }
-QTabBar::tab { background-color: transparent; color: #4A6080; border: none; border-bottom: 1.5px solid transparent; padding: 8px 16px; font-size: 12px; font-weight: 500; }
-QTabBar::tab:selected { color: #2A7FBF; border-bottom: 1.5px solid #2A7FBF; }
-QTabBar::tab:hover:not(:selected) { color: #6A8AAA; }
-
-QGroupBox { border: 0.5px solid #1A2332; border-radius: 8px; margin-top: 14px; padding: 12px 12px 14px; font-size: 11px; font-weight: 600; }
-QGroupBox::title { subcontrol-origin: margin; padding: 0 6px; color: #3D5266; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
-
-QMenu { background-color: #0D1318; border: 0.5px solid #1A2332; border-radius: 8px; padding: 4px; color: #E8EAF0; font-size: 12px; }
-QMenu::item { padding: 6px 12px; border-radius: 5px; }
-QMenu::item:selected { background-color: #131B24; }
-QMenu::separator { height: 0.5px; background-color: #1A2332; margin: 4px 0; }
-
-QMessageBox { background-color: #0C1018; }
-QMessageBox QLabel { color: #E8EAF0; }
+/* MiniStatCard (MetricCard compat) */
+#MiniStatCard {
+    background-color: #12121C;
+    border: 1px solid #1C1C2A;
+    border-radius: 8px;
+    padding: 8px;
+}
+#MiniStatCardLabel {
+    font-size: 9px;
+    font-weight: 500;
+    color: #7A7A8E;
+}
+#MiniStatCardValue {
+    font-size: 16px;
+    font-weight: 700;
+    color: #E5E5EC;
+}
+#MiniStatCardSubtitle {
+    font-size: 9px;
+    color: #5A5A6E;
+}

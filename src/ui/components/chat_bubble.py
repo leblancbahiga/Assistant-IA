@@ -145,7 +145,9 @@ class ChatBubble(QFrame):
         self._mode = mode.upper() if mode else ""      # V11.1 P0-N
         self._model_name = model_name                   # V11.1 P0-N
 
-        self.setObjectName("BubbleNuru" if self._role == "nuru" else "BubbleUser")
+        self.setObjectName(
+            "BubbleNuru" if self._role in ("nuru", "assistant") else "BubbleUser"
+        )
         self.setStyleSheet(self._bubble_style())
 
         # ── Layout principal ──
