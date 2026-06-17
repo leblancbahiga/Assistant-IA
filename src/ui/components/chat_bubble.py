@@ -133,6 +133,7 @@ class ChatBubble(QFrame):
         confidence: float | None = None,
         mode: str = "",               # V11.1 P0-N — mode de routage (LOCAL/RAG/CLOUD/VERIFY/PLAN)
         model_name: str = "",         # V11.1 P0-N — nom du modèle (ex: "Groq llama")
+        fact_status: str | None = None,  # V11.1 P0-O — "verified"/"issues"/"error"
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -144,6 +145,7 @@ class ChatBubble(QFrame):
         self._feedback_state: str = ""  # "up", "down", ""
         self._mode = mode.upper() if mode else ""      # V11.1 P0-N
         self._model_name = model_name                   # V11.1 P0-N
+        self._fact_status = fact_status                 # V11.1 P0-O
 
         self.setObjectName(
             "BubbleNuru" if self._role in ("nuru", "assistant") else "BubbleUser"
@@ -161,6 +163,7 @@ class ChatBubble(QFrame):
         self._text_label.setTextFormat(Qt.RichText)
         self._text_label.setObjectName("BubbleText")
         self._text_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self._text_label.linkActivated.connect(self._on_link_activated)  # V11.1 P0-M
         layout.addWidget(self._text_label)
 
         # ── 2b. Badges inline (confiance + citations) ──
@@ -173,6 +176,12 @@ class ChatBubble(QFrame):
         if confidence is not None and self._role != "user":
             self._confidence_badge = self._build_confidence_badge(confidence)
             self._badges_layout.addWidget(self._confidence_badge)
+
+        # Badge FactChecker status (P0-O)
+        self._fact_badge: QLabel | None = None
+        if self._fact_status and self._role != "user":
+            self._fact_badge = self._build_fact_badge(self._fact_status)
+            self._badges_layout.addWidget(self._fact_badge)
 
         # Badges de source (CitationChip)
         for path, page in self._sources:
@@ -335,6 +344,40 @@ class ChatBubble(QFrame):
         )
         return badge
 
+    # ── 2e. Badge FactChecker (P0-O) ──
+
+    def _build_fact_badge(self, status: str) -> QLabel:
+        """Badge coloré indiquant le résultat du FactChecker.
+
+        - verified (#22C55E vert) : tout supporté par les sources
+        - issues (#F59E0B orange) : certaines affirmations non vérifiées
+        - error (#EF4444 rouge)   : contradictions avec les sources
+        """
+        if status == "verified":
+            dot, label = "●", "Vérifié"
+            bg, border, color = "#0A1F0A", "#1A3F1A", "#22C55E"
+        elif status == "issues":
+            dot, label = "●", "Incertain"
+            bg, border, color = "#1A1405", "#3A2E0A", "#F59E0B"
+        elif status == "error":
+            dot, label = "●", "Non vérifié"
+            bg, border, color = "#1A0A0A", "#3A1A1A", "#EF4444"
+        else:
+            return QLabel()
+
+        display = f"{dot} {label}"
+        badge = QLabel(display)
+        badge.setStyleSheet(
+            f"background-color: {bg};"
+            f" border: 0.5px solid {border};"
+            f" border-radius: 10px;"
+            f" color: {color};"
+            f" font-size: 9px;"
+            f" font-weight: bold;"
+            f" padding: 2px 8px;"
+        )
+        return badge
+
     # ── 2f. Feedback internes ──
 
     def _on_feedback_up(self) -> None:
@@ -379,8 +422,24 @@ class ChatBubble(QFrame):
     def _on_citation_clicked(self, path: str, page: int) -> None:
         self.citation_clicked.emit(path, page)
 
-    # ── 2g. API publique ──
+    # ── 2h. Gestionnaire liens inline (P0-M) ──
 
+    def _on_link_activated(self, url: str) -> None:
+        """Gère les clics sur les liens dans le texte.
+
+        citations:[N] → émet citation_clicked
+        autres liens → ouvre dans le navigateur.
+        """
+        if url.startswith("citation:"):
+            num = url.split("citation:")[1]
+            self.citation_clicked.emit(f"[{num}]", 0)
+        else:
+            from PySide6.QtGui import QDesktopServices
+            from PySide6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(url))
+
+
+    # ── 2g. API publique ──
     def set_text(self, text: str) -> None:
         """Met à jour le texte avec conversion Markdown → HTML."""
         self._full_text = text
@@ -454,14 +513,7 @@ class ChatBubble(QFrame):
 
     @staticmethod
     def _markdown_to_html(text: str) -> str:
-        """Convertit le Markdown simple en HTML.
-
-        Supporte :
-        - Gras ``**texte**``
-        - Italique ``*texte*``
-        - Code inline `` `code` ``
-        - Sauts de ligne
-        """
+        """Convertit le Markdown simple en HTML, avec citations [N] cliquables."""
         if not text:
             return ""
         # Échapper HTML
@@ -485,7 +537,28 @@ class ChatBubble(QFrame):
         html = re.sub(r"\*(.*?)\*", r"<em>\1</em>", html)
         # Sauts de ligne
         html = html.replace("\n", "<br>")
+        # V11.1 P0-M : citations [N] → liens cliquables
+        html = ChatBubble._linkify_citations(html)
         return f'<div style="line-height: 1.6;">{html}</div>'
+
+    @staticmethod
+    def _linkify_citations(html: str) -> str:
+        """Convertit les marqueurs [N] en hyperliens cliquables.
+
+        Exemple: ``[1]`` → ``<a href="citation:1" ...>[1]</a>``
+        Ne lie que les crochets numériques non déjà dans un <a>.
+        """
+        def _replace(m: re.Match) -> str:
+            num = m.group(1)
+            return (
+                f'<a href="citation:{num}" '
+                f'style="color:#818cf8;text-decoration:none;'
+                f'font-weight:600;border-bottom:1px dotted #6366f1;"'
+                f' title="Source {num}">'
+                f"[{num}]</a>"
+            )
+        # Remplacer [N] où N est un nombre, hors balises existantes
+        return re.sub(r'(?![^<]*>)\[(\d+)\](?!<)', _replace, html)
 
 
 # ── 3. MessageRow ─────────────────────────────────────────────────────────
@@ -520,6 +593,7 @@ class MessageRow(QWidget):
         confidence: float | None = None,
         mode: str = "",               # V11.1 P0-N
         model_name: str = "",         # V11.1 P0-N
+        fact_status: str | None = None,  # V11.1 P0-O
         message_id: str = "",
         parent: QWidget | None = None,
     ):
@@ -528,6 +602,7 @@ class MessageRow(QWidget):
         self._role = role.lower()
         self._mode = mode.upper() if mode else ""       # V11.1 P0-N
         self._model_name = model_name                   # V11.1 P0-N
+        self._fact_status = fact_status                 # V11.1 P0-O
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
@@ -547,6 +622,7 @@ class MessageRow(QWidget):
             confidence=confidence,
             mode=self._mode,          # V11.1 P0-N
             model_name=self._model_name,  # V11.1 P0-N
+            fact_status=self._fact_status,  # V11.1 P0-O
         )
 
         # Connexions des signaux

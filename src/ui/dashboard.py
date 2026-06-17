@@ -1548,3 +1548,13 @@ class CyberDashboard(QMainWindow):
     # ══════════════════════════════════════════════════════════════════════
     #  FIN DE CyberDashboard
     # ══════════════════════════════════════════════════════════════════════
+
+
+if __name__ == "__main__":
+    """Point d'entrée pour lancement direct : python3 dashboard.py."""
+    import sys
+    from PySide6.QtWidgets import QApplication
+    app = QApplication(sys.argv)
+    window = CyberDashboard()
+    window.show()
+    sys.exit(app.exec())

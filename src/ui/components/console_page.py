@@ -215,6 +215,7 @@ class MessagesArea(QScrollArea):
         confidence: float | None = None,
         mode: str = "",               # V11.1 P0-N
         model_name: str = "",         # V11.1 P0-N
+        fact_status: str | None = None,  # V11.1 P0-O
     ) -> MessageRow:
         """Ajoute un message dans la zone de chat.
 
@@ -228,6 +229,8 @@ class MessagesArea(QScrollArea):
             Liste de noms de fichiers sources.
         confidence : float, optional
             Score de confiance RAG (0.0 → 1.0).
+        fact_status : str, optional
+            Statut FactChecker : "verified", "issues", "error".
 
         Retourne
         --------
@@ -250,6 +253,7 @@ class MessagesArea(QScrollArea):
             confidence=confidence,
             mode=mode,                # V11.1 P0-N
             model_name=model_name,    # V11.1 P0-N
+            fact_status=fact_status,  # V11.1 P0-O
             parent=self._container,
         )
 
@@ -605,6 +609,7 @@ class ConsolePage(QWidget):
         confidence: float | None = None,
         mode_primary: str | None = None,
         mode_secondary: str | None = None,
+        fact_status: str | None = None,  # V11.1 P0-O
     ) -> None:
         """Reçoit une réponse complète de l'assistant.
 
@@ -620,6 +625,8 @@ class ConsolePage(QWidget):
             Mode principal (LOCAL, RAG, CLOUD, ...).
         mode_secondary : str, optional
             Mode secondaire.
+        fact_status : str, optional
+            Statut FactChecker : "verified", "issues", "error".
         """
         self.messages.hide_typing()
         self.messages.add_message(
@@ -629,6 +636,7 @@ class ConsolePage(QWidget):
             confidence=confidence,
             mode=mode_primary or "",            # V11.1 P0-N
             model_name=mode_secondary or "",    # V11.1 P0-N — fallback: affiché comme nom
+            fact_status=fact_status,            # V11.1 P0-O
         )
         # Mettre à jour le header
         if mode_primary is not None and mode_secondary is not None:

@@ -8,6 +8,7 @@ Couvre :
 - Test 4 : mode='RAG' → ModeBadge avec texte RAG
 - Test 5 : MessagesArea.add_message() avec mode → footer apparaît
 """
+
 from __future__ import annotations
 
 import os
@@ -15,58 +16,18 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "src"
-sys.path.insert(0, str(SRC))
+sys.path.insert(0, str(ROOT))
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-import importlib
-import importlib.util
-import types
 
 from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import QCoreApplication
 
 _app = QCoreApplication.instance() or QApplication(sys.argv)
 
-
-# ── Import helpers (pattern tests V11.1) ──
-
-
-def _import_module_from_path(module_name: str, path: Path):
-    """Importe un module depuis un chemin fichier."""
-    spec = importlib.util.spec_from_file_location(module_name, str(path))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-# Setup package hierarchy pour imports relatifs
-for pkg_name, pkg_path in [
-    ("src", SRC),
-    ("src.ui", SRC / "ui"),
-    ("src.ui.components", SRC / "ui" / "components"),
-]:
-    if pkg_name not in sys.modules:
-        pkg = types.ModuleType(pkg_name)
-        pkg.__path__ = [str(pkg_path)]
-        sys.modules[pkg_name] = pkg
-
-# Import nuru_widgets pour ModeBadge
-nuru_widgets = _import_module_from_path(
-    "src.ui.components.nuru_widgets",
-    SRC / "ui" / "components" / "nuru_widgets.py",
-)
-ModeBadge = nuru_widgets.ModeBadge
-
-# Import chat_bubble
-chat_bubble = _import_module_from_path(
-    "src.ui.components.chat_bubble",
-    SRC / "ui" / "components" / "chat_bubble.py",
-)
-ChatBubble = chat_bubble.ChatBubble
-MessageRow = chat_bubble.MessageRow
+# Imports normaux (pas d'import dynamique)
+from src.ui.components.nuru_widgets import ModeBadge
+from src.ui.components.chat_bubble import ChatBubble, MessageRow
 
 
 def _find_mode_badge(widget: QWidget) -> ModeBadge | None:
@@ -77,16 +38,21 @@ def _find_mode_badge(widget: QWidget) -> ModeBadge | None:
 
 
 def _find_model_label(widget: QWidget) -> QWidget | None:
-    """Cherche un QLabel avec le nom du modèle (pas ModeBadge)."""
+    """Cherche un QLabel avec le nom du modèle (pas BubbleText, ModeBadge ni AvatarWidget)."""
     for child in widget.findChildren(QWidget):
         if (
             isinstance(child, ModeBadge)
             or not hasattr(child, "text")
             or not callable(child.text)
+            or child.objectName() == "BubbleText"
         ):
             continue
         txt = child.text()
-        if txt and txt not in ("LOCAL", "RAG", "CLOUD", "VERIFY", "PLAN"):
+        if (
+            txt
+            and len(txt) > 3  # plus long qu'un avatar 'U'/'N'
+            and txt not in ("LOCAL", "RAG", "CLOUD", "VERIFY", "PLAN")
+        ):
             return child
     return None
 
@@ -160,13 +126,35 @@ def test_messages_area_propagates_mode():
         "ModeBadge présent après add_message avec mode"
     )
     assert badge._mode == "VERIFY", f"attendu VERIFY, eu {badge._mode}"
+
+    model_label = _find_model_label(row)
+    assert model_label is not None, (
+        "Label modèle présent après add_message avec model_name"
+    )
+    assert "Phi-4-mini" in model_label.text(), (
+        f"attendu 'Phi-4-mini' dans le label, eu '{model_label.text()}'"
+    )
     print("PASS test_messages_area_propagates_mode")
 
 
+# ── Exécution manuelle ──
 if __name__ == "__main__":
-    test_assistant_bubble_shows_mode_footer()
-    test_assistant_bubble_no_mode_no_footer()
-    test_user_bubble_no_footer_even_with_mode()
-    test_mode_rag_badge()
-    test_messages_area_propagates_mode()
-    print("\n✅ OK — 5/5 tests P0-N passent")
+    tests = [
+        test_assistant_bubble_shows_mode_footer,
+        test_assistant_bubble_no_mode_no_footer,
+        test_user_bubble_no_footer_even_with_mode,
+        test_mode_rag_badge,
+        test_messages_area_propagates_mode,
+    ]
+    passed = 0
+    failed = 0
+    for t in tests:
+        try:
+            t()
+            passed += 1
+        except Exception as e:
+            print(f"FAIL {t.__name__}: {e}")
+            failed += 1
+    print(f"\n{'─' * 40}")
+    print(f"✅ {passed}/{passed + failed} tests P0-N passent")
+    sys.exit(0 if failed == 0 else 1)
