@@ -910,6 +910,9 @@ class CyberDashboard(QMainWindow):
             self.console_page.new_chat.connect(self.new_chat.emit)
             self.console_page.voice_toggled.connect(self.voice_toggled.emit)
             self.console_page.clear_requested.connect(self._on_console_clear)
+            # V11.1 (P0-H) — MessageActions regenerate / edit
+            self.console_page.regenerate_requested.connect(self._on_regenerate_message)
+            self.console_page.edit_requested.connect(self._on_edit_message)
 
     def _init_timers(self) -> None:
         """Initialise le timer de mise à jour des métriques."""
@@ -1407,6 +1410,25 @@ class CyberDashboard(QMainWindow):
             except Exception as e:
                 logger.debug("PerformanceTracker feedback: %s", e)
         self.feedback_positive.emit(message_id)
+
+    # V11.1 (P0-H) — handlers MessageActions
+    def _on_regenerate_message(self, message_id: str) -> None:
+        """Stub : on relance la même query que celle associée au message_id.
+
+        Pour Day-4, on ne sait pas encore retrouver la query stockée par
+        message_id (nécessite une map id→text dans SessionStore).
+        On émettra un warning + TODO V11.2 : REGENERATE = replacer la
+        query en input + emit _on_query() à nouveau. À ce stade on log.
+        """
+        logger.info("P0-H regenerate_requested pour message_id=%s (TODO V11.2)", message_id)
+
+    def _on_edit_message(self, message_id: str) -> None:
+        """Stub : ouvre un dialog d'édition avec le message user.
+
+        Pour Day-4, on log uniquement. V11.2 ajoutera un QInputDialog
+        préchargé du contenu actuel et le remplacement dans SessionStore.
+        """
+        logger.info("P0-H edit_requested pour message_id=%s (TODO V11.2 dialog)", message_id)
 
     def _on_feedback_negative(self, message_id: str) -> None:
         """Enregistre un feedback négatif (👎) dans FeedbackCollector + PerformanceTracker."""

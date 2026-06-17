@@ -121,6 +121,8 @@ class ChatBubble(QFrame):
     feedback_positive = Signal()
     feedback_negative = Signal()
     citation_clicked = Signal(str, int)  # (source_path, page)
+    regenerate_requested = Signal()  # V11.1 P0-H — demande régénération
+    edit_requested = Signal()        # V11.1 P0-H — demande édition user msg
 
     def __init__(
         self,
@@ -192,8 +194,10 @@ class ChatBubble(QFrame):
             self._btn_up = QPushButton("👍")
             self._btn_down = QPushButton("👎")
             self._btn_copy = QPushButton("📋")
+            self._btn_regen = QPushButton("🔄")
+            self._btn_edit = QPushButton("✏️")
 
-            for btn in (self._btn_up, self._btn_down, self._btn_copy):
+            for btn in (self._btn_up, self._btn_down, self._btn_copy, self._btn_regen, self._btn_edit):
                 btn.setObjectName("BubbleAction")
                 btn.setFixedSize(28, 28)
                 btn.setCursor(Qt.PointingHandCursor)
@@ -201,14 +205,21 @@ class ChatBubble(QFrame):
             self._btn_up.setToolTip("Utile")
             self._btn_down.setToolTip("Pas utile")
             self._btn_copy.setToolTip("Copier le message")
+            self._btn_regen.setToolTip("Régénérer la réponse")
+            self._btn_edit.setToolTip("Éditer le message")
 
             self._btn_up.clicked.connect(self._on_feedback_up)
             self._btn_down.clicked.connect(self._on_feedback_down)
             self._btn_copy.clicked.connect(self._copy_text)
+            self._btn_regen.clicked.connect(self.regenerate_requested.emit)
+            self._btn_edit.clicked.connect(self.edit_requested.emit)
 
             actions_layout.addWidget(self._btn_up)
             actions_layout.addWidget(self._btn_down)
             actions_layout.addWidget(self._btn_copy)
+            actions_layout.addWidget(self._btn_regen)
+            # Le bouton edit apparaît aussi sur les bulles user (édition possible)
+            actions_layout.addWidget(self._btn_edit)
             actions_layout.addStretch()
             layout.addLayout(actions_layout)
 
@@ -470,6 +481,8 @@ class MessageRow(QWidget):
     citation_clicked = Signal(str, int)
     feedback_positive = Signal(str)  # message_id
     feedback_negative = Signal(str)  # message_id
+    regenerate_requested = Signal(str)  # V11.1 P0-H — message_id
+    edit_requested = Signal(str)        # V11.1 P0-H — message_id
 
     def __init__(
         self,
@@ -507,6 +520,9 @@ class MessageRow(QWidget):
         self._bubble.feedback_positive.connect(self._on_feedback_positive)
         self._bubble.feedback_negative.connect(self._on_feedback_negative)
         self._bubble.citation_clicked.connect(self.citation_clicked.emit)
+        # V11.1 (P0-H) — regenerate / edit propagés avec message_id
+        self._bubble.regenerate_requested.connect(self._on_regenerate)
+        self._bubble.edit_requested.connect(self._on_edit)
 
         if self._role == "user":
             layout.addStretch(1)
@@ -567,3 +583,10 @@ class MessageRow(QWidget):
 
     def _on_feedback_negative(self) -> None:
         self.feedback_negative.emit(self._message_id)
+
+    # V11.1 (P0-H)
+    def _on_regenerate(self) -> None:
+        self.regenerate_requested.emit(self._message_id)
+
+    def _on_edit(self) -> None:
+        self.edit_requested.emit(self._message_id)

@@ -210,6 +210,11 @@ class MessagesArea(QScrollArea):
         if role != "user":
             row.feedback_positive.connect(self._on_feedback_positive)
             row.feedback_negative.connect(self._on_feedback_negative)
+        # V11.1 (P0-H) — regenerate / edit propagés vers ConsolePage
+        row.regenerate_requested.connect(self.regenerate_requested.emit)
+        row.edit_requested.connect(self.edit_requested.emit)
+
+        if role != "user":
             self._last_assistant_row = row
         else:
             self._last_user_text = text
@@ -469,6 +474,9 @@ class ConsolePage(QWidget):
     citation_clicked = Signal(str, int)
     feedback_positive = Signal(str)
     feedback_negative = Signal(str)
+    # V11.1 (P0-H)
+    regenerate_requested = Signal(str)  # message_id assistant
+    edit_requested = Signal(str)        # message_id user ou assistant
     new_chat = Signal()
 
     # Legacy signals (backward compat)
