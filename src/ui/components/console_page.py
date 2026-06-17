@@ -118,14 +118,19 @@ class MessagesArea(QScrollArea):
 
     Signaux
     -------
-    citation_clicked(str, int) : (source_path, page)
-    feedback_positive(str)     : message texte
-    feedback_negative(str)     : message texte
+    citation_clicked(str, int)    : (source_path, page)
+    feedback_positive(str)        : message texte
+    feedback_negative(str)        : message texte
+    regenerate_requested(str)     : message_id assistant (V11.1 P0-H)
+    edit_requested(str)           : message_id user ou assistant (V11.1 P0-H)
     """
 
     citation_clicked = Signal(str, int)
     feedback_positive = Signal(str)
     feedback_negative = Signal(str)
+    # V11.1 (P0-H)
+    regenerate_requested = Signal(str)  # message_id assistant
+    edit_requested = Signal(str)        # message_id user ou assistant
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -477,6 +482,8 @@ class ConsolePage(QWidget):
     # V11.1 (P0-H)
     regenerate_requested = Signal(str)  # message_id assistant
     edit_requested = Signal(str)        # message_id user ou assistant
+    # V11.1 JOUR 3 (P0-J)
+    session_loaded = Signal(str)        # session_id restaurée depuis sidebar
     new_chat = Signal()
 
     # Legacy signals (backward compat)
@@ -493,6 +500,7 @@ class ConsolePage(QWidget):
         self._last_query: str = ""
         self._web_search_enabled: bool = False
         self._sources: list = []
+        self._session_store = None  # V11.1 JOUR 3 — injecté via set_session_store()
 
         self._build_ui()
         self._wire_signals()
@@ -536,6 +544,10 @@ class ConsolePage(QWidget):
         self.messages.feedback_negative.connect(
             lambda msg: self.feedback_received.emit("down", msg, self._last_query)
         )
+
+        # V11.1 (P0-H) — regenerate / edit depuis MessagesArea
+        self.messages.regenerate_requested.connect(self.regenerate_requested.emit)
+        self.messages.edit_requested.connect(self.edit_requested.emit)
 
     # ── API publique V7 ──
 
@@ -637,6 +649,96 @@ class ConsolePage(QWidget):
     def scroll_to_bottom(self) -> None:
         """Défiler vers le bas (callé par dashboard si besoin)."""
         self.messages._scroll_to_bottom()
+
+    # ── V11.1 JOUR 3 (P0-J) — Restauration de session depuis sidebar ────
+
+    def load_session(self, session_id: str, *, title: str = "") -> None:
+        """Charge une session existante dans la zone de messages.
+
+        Vide le chat actuel, lit les messages depuis ``SessionStore``,
+        les re-rend dans l'ordre chronologique, et met à jour le titre
+        du header.
+
+        Paramètres
+        ----------
+        session_id : str
+            Identifiant de la session à restaurer.
+        title : str, optional
+            Titre à afficher dans le header. Si vide, on garde
+            "Nouvelle conversation" comme défaut visuel.
+
+        Notes
+        -----
+        - Le ``session_store`` doit être fourni via ``set_session_store()``
+          avant l'appel. Si None, on émet un warning et on vide l'écran.
+        - Les messages sont rendus tels que stockés (user/assistant).
+          Pas de streaming, pas de re-génération.
+        - Émet ``session_loaded(session_id)`` pour que le dashboard
+          puisse switcher d'onglet (→ "console") et mettre à jour
+          ``self._session_id``.
+        """
+        # 1. Reset UI
+        self.messages.clear()
+        self.header.reset()
+        if title:
+            self.header.set_title(title)
+
+        # 2. Récupération du store
+        store = self._session_store
+        if store is None:
+            logger.warning(
+                "ConsolePage.load_session: aucun SessionStore injecté. "
+                "Appeler set_session_store() d'abord. (session_id=%s)",
+                session_id,
+            )
+            self.session_loaded.emit(session_id)
+            return
+
+        # 3. Lecture des messages
+        try:
+            session = store.get_or_create(session_id)
+        except Exception as e:  # pragma: no cover — défense
+            logger.error("ConsolePage.load_session: échec get_or_create: %s", e)
+            self.messages.add_message(
+                text=f"⚠️ Erreur chargement session: {e}",
+                role="assistant",
+            )
+            self.session_loaded.emit(session_id)
+            return
+
+        # 4. Re-rendu des messages (ordre chronologique)
+        rendered = 0
+        for msg in session.messages:
+            try:
+                self.messages.add_message(
+                    text=msg.content or "",
+                    role=msg.role if msg.role in ("user", "assistant") else "assistant",
+                )
+                rendered += 1
+            except Exception as e:  # pragma: no cover — défense
+                logger.error(
+                    "ConsolePage.load_session: skip message (id=%d): %s",
+                    rendered,
+                    e,
+                )
+
+        logger.info(
+            "ConsolePage.load_session: session_id=%s titre=%r → %d/%d messages rendus",
+            session_id[:8] if session_id else "",
+            title,
+            rendered,
+            len(session.messages),
+        )
+        self.scroll_to_bottom()
+        self.session_loaded.emit(session_id)
+
+    def set_session_store(self, store) -> None:
+        """V11.1 JOUR 3 — Injecte le SessionStore utilisé par ``load_session``.
+
+        Le store peut être ``None`` en cas de DB indisponible ; dans ce
+        cas ``load_session`` logguera un warning et affichera un chat vide.
+        """
+        self._session_store = store
 
     # ── Internes ──
 
