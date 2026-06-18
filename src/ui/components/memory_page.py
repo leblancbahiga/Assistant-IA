@@ -9,6 +9,8 @@ from PySide6.QtCore import Qt, QTimer
 import logging
 import os
 
+from src.ui.components.stat_card import StatCard  # V11.1 P0-G
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,9 +60,9 @@ class MemoryPage(QWidget):
         # Stats row
         stats_row = QHBoxLayout()
         stats_row.setSpacing(10)
-        self.stat_facts = self._make_stat_card("📌 Faits Stockés", "0")
-        self.stat_cache = self._make_stat_card("💾 Cache Sémantique", "0 entrées")
-        self.stat_procedures = self._make_stat_card("📋 Procédures", "0 règles")
+        self.stat_facts = StatCard("📌 Faits Stockés", icon="📌", value="0", color="#60a5fa")
+        self.stat_cache = StatCard("💾 Cache Sémantique", icon="💾", value="0 entrées", color="#34d399")
+        self.stat_procedures = StatCard("📋 Procédures", icon="📋", value="0 règles", color="#fbbf24")
         stats_row.addWidget(self.stat_facts)
         stats_row.addWidget(self.stat_cache)
         stats_row.addWidget(self.stat_procedures)
@@ -183,21 +185,7 @@ class MemoryPage(QWidget):
         scroll.setWidget(content)
         layout.addWidget(scroll, stretch=1)
 
-    def _make_stat_card(self, title, value):
-        frame = QFrame()
-        frame.setObjectName("Panel")
-        frame.setFixedHeight(65)
-        fl = QVBoxLayout(frame)
-        fl.setContentsMargins(15, 8, 15, 8)
-        t = QLabel(title)
-        t.setStyleSheet("color: #9CA3AF; font-size: 11px; font-weight: 600;")
-        v = QLabel(value)
-        v.setObjectName(f"stat_value_{title}")
-        v.setStyleSheet("color: #F3F4F6; font-size: 18px; font-weight: bold;")
-        fl.addWidget(t)
-        fl.addWidget(v)
-        frame._value_label = v
-        return frame
+    # ── _make_stat_card supprimée V11.1 P0-G — remplacée par StatCard(stat_card.py) ──
 
     # ─────────────────────────────────────────────────────────
     #  _refresh_data() — Central data-loading method
@@ -228,9 +216,9 @@ class MemoryPage(QWidget):
         self.facts_empty_label.hide()
         self.proc_label.setText("Aucune procédure enregistrée.")
 
-        self.stat_facts._value_label.setText("—")
-        self.stat_cache._value_label.setText("—")
-        self.stat_procedures._value_label.setText("—")
+        self.stat_facts.set_value("—")
+        self.stat_cache.set_value("—")
+        self.stat_procedures.set_value("—")
 
         # Disable action buttons that require memory_store
         self.btn_purge.setEnabled(False)
@@ -340,23 +328,23 @@ class MemoryPage(QWidget):
         facts_count = self._safe_count("get_total_facts_count")
         user_facts_count = self._safe_count("get_total_user_facts_count")
         total_facts = facts_count + user_facts_count
-        self.stat_facts._value_label.setText(str(total_facts))
+        self.stat_facts.set_value(str(total_facts))
 
         # Cache stats
         try:
             cache_stats = self.memory_store.get_cache_stats()
             cache_entries = cache_stats.get("total_entries", 0)
-            self.stat_cache._value_label.setText(f"{cache_entries} entrées")
+            self.stat_cache.set_value(f"{cache_entries} entrées")
         except Exception:
-            self.stat_cache._value_label.setText("?")
+            self.stat_cache.set_value("?")
 
         # Procedures count
         try:
             procedures = self.memory_store.get_procedures()
             proc_count = len(procedures.split('\n')) if procedures.strip() else 0
-            self.stat_procedures._value_label.setText(f"{proc_count} règles")
+            self.stat_procedures.set_value(f"{proc_count} règles")
         except Exception:
-            self.stat_procedures._value_label.setText("? règles")
+            self.stat_procedures.set_value("? règles")
 
     def _safe_count(self, method_name: str) -> int:
         """Call a count method on memory_store safely, returning 0 on failure."""
@@ -422,7 +410,7 @@ class MemoryPage(QWidget):
         )
         if reply == QMessageBox.Yes:
             self.memory_store.purge_cache()
-            self.stat_cache._value_label.setText("0 entrées")
+            self.stat_cache.set_value("0 entrées")
             self._refresh_data()
 
     def _analyze_memory(self):
