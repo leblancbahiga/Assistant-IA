@@ -1920,7 +1920,7 @@ StatsPage (timer 5s) → lit performance.db → affiche métriques
 | **J1** | `62376a6` | Quick Wins P0 : 4 audits experts → `NURU_AUDIT_SYNTHESE.md`, hooks dashboard P0-C+I+P0-J+P0-H | — |
 | **J2** | `c7b1175` | ConversationList sidebar (8 tests), P0-C+I collapsibles, spec experts dashboard (519 lignes) | ✅ 8/8 ConversationList |
 | **J3** | `d4e38db` | `ConsolePage.load_session()` + `set_session_store()`, bugfix permanent `MessagesArea` signaux regenerate/edit | ✅ 6/6 load_session + 8/8 ConversationList |
-| **J4** | `360619b+8bce46b` | **P0-N** Routeur footer bulle · **P0-E** Model switcher header · **P0-G** StatCard unifié (`stat_card.py`) + **memory_page** migré + **9 tests validations** | ✅ 9/9 P0-N/E/G |
+|| **J4** | `360619b+8bce46b+dd0d39f+70f9541` | **P0-N** Routeur footer bulle · **P0-E** Model switcher header · **P0-G** StatCard unifié (`stat_card.py`) + **memory_page** migré + **22 tests validations** (9 originaux + 13 supplémentaires) | ✅ 22/22 P0-N/E/G |
 | **P0-F** | `6724018` | **Suppression code mort** — 1063 lignes (111 live + 952 archivées) | ✅ 30/30 verts |
 | **Redesign** | `d256481` | **Thème "Midnight Indigo"** — refonte complète design system (palette indigo, arrondis 6-12px, QSS 378 lignes) | ✅ 30/30 verts |
 
@@ -1929,4 +1929,4 @@ StatsPage (timer 5s) → lit performance.db → affiche métriques
 
 **Tags :** `V11.1-J1`, `V11.1-J2`, `V11.1-J3`, `V11.1-J4`, `V11.1-P0F`, `V11.1-REDESIGN`, `V11.1-P0O-P0M`
 
-**✅ V11.1 sprint complet — 41/41 tests verts.**
+**✅ V11.1 sprint complet — 63/63 tests verts.**
