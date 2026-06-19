@@ -506,9 +506,9 @@ class NavSidebar(QWidget):
         layout.addWidget(self._model_label)
 
         # ── V11.2 (Sprint 2) — Toggle theme ──
-        theme_row = QWidget()
-        theme_row.setObjectName("ThemeRow")
-        theme_layout = QHBoxLayout(theme_row)
+        self._theme_row = QWidget()
+        self._theme_row.setObjectName("ThemeRow")
+        theme_layout = QHBoxLayout(self._theme_row)
         theme_layout.setContentsMargins(12, 4, 12, 4)
         theme_layout.setSpacing(6)
 
@@ -525,7 +525,7 @@ class NavSidebar(QWidget):
         theme_layout.addWidget(theme_label)
         theme_layout.addStretch()
 
-        layout.addWidget(theme_row)
+        layout.addWidget(self._theme_row)
 
         # Badge rechargement (apparaît quand le code source change)
         self._reload_badge = QLabel("🔄 Code modifié — redémarrez le Dashboard")
@@ -601,6 +601,8 @@ class NavSidebar(QWidget):
                 self._conv_list.hide()
             self._recent_docs.hide()
             self._cloud_badge.hide()
+            self._model_label.hide()
+            self._theme_row.hide()
             # Mode icônes : ne montrer que l'emoji, cacher le texte
             for btn in self._buttons.values():
                 text = btn.text()
@@ -622,6 +624,8 @@ class NavSidebar(QWidget):
                 self._conv_list.show()
             self._recent_docs.show()
             self._cloud_badge.show()
+            self._model_label.show()
+            self._theme_row.show()
             # Restaurer les textes complets (depuis NAV_GROUPS)
             self._restore_button_texts()
             for w in self._nav_widgets:
@@ -777,7 +781,11 @@ class CyberDashboard(QMainWindow):
         # Restaurer état thème
         if not self._settings.value("ui/dark_theme", True, type=bool):
             self._is_dark_theme = False
-            # Le QSS sera rechargé après load_styles
+        # Syncer le bouton thème selon l'état sauvegardé
+        self._sidebar._theme_btn.setText("🌙" if self._is_dark_theme else "☀️")
+        self._sidebar._theme_btn.setToolTip(
+            "Basculer en mode clair" if self._is_dark_theme else "Basculer en mode sombre"
+        )
         self._init_timers()
         self.load_styles()
         self._wire_page_dependencies()
