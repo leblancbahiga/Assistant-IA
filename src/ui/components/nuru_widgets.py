@@ -642,6 +642,19 @@ class TypingIndicator(QFrame):
     DOT_GAP = 4
     ANIM_INTERVAL = 400  # ms
 
+    # P1-I : États de stratégie avec icônes et couleurs
+    STRATEGY_STEPS = {
+        "routing":      ("Routage",       "🔍", "#3b82f6"),
+        "rag":          ("RAG",           "📚", "#818cf8"),
+        "generation":   ("Génération",    "⚡", "#22c55e"),
+        "fact_check":   ("Fact-check",    "✓", "#f59e0b"),
+        "search":       ("Recherche Web", "🌐", "#3b82f6"),
+        "memory":       ("Mémoire",       "🧠", "#a855f7"),
+        "thinking":     ("Raisonnement",  "🤔", "#818cf8"),
+        "completed":    ("Terminé",       "✅", "#22c55e"),
+        "error":        ("Erreur",        "❌", "#ef4444"),
+    }
+
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("TypingIndicator")
@@ -653,10 +666,11 @@ class TypingIndicator(QFrame):
         layout.setContentsMargins(12, 6, 12, 6)
         layout.setSpacing(8)
 
-        self._strategy_label = QLabel("RECHERCHE MULTI-STRATÉGIE · 1/3")
+        # P1-I : Label de stratégie enrichi
+        self._strategy_label = QLabel("🔍 Routage")
         self._strategy_label.setStyleSheet(
-            "color: #2A5A8A; font-size: 9px; font-weight: bold;"
-            " letter-spacing: 0.06em; background: transparent;"
+            "color: #3b82f6; font-size: 10px; font-weight: bold;"
+            " letter-spacing: 0.04em; background: transparent;"
         )
         layout.addWidget(self._strategy_label)
 
@@ -686,6 +700,24 @@ class TypingIndicator(QFrame):
     def set_strategy_label(self, label: str) -> None:
         """Met à jour le texte de stratégie affiché."""
         self._strategy_label.setText(label)
+
+    def set_strategy(self, key: str, detail: str = "") -> None:
+        """P1-I : Met à jour l'état de stratégie avec icône et couleur.
+
+        Args:
+            key: Clé depuis STRATEGY_STEPS (routing, rag, generation, etc.)
+            detail: Texte supplémentaire optionnel (ex: source courante)
+        """
+        if key in self.STRATEGY_STEPS:
+            label_text, icon, color = self.STRATEGY_STEPS[key]
+            text = f"{icon} {label_text}"
+            if detail:
+                text += f" · {detail}"
+            self._strategy_label.setText(text)
+            self._strategy_label.setStyleSheet(
+                f"color: {color}; font-size: 10px; font-weight: bold;"
+                " letter-spacing: 0.04em; background: transparent;"
+            )
 
     def _advance_phase(self) -> None:
         self._phase = (self._phase + 1) % 3

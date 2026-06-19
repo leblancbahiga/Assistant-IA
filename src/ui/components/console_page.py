@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QKeyEvent, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 
 from .nuru_widgets import ConfidenceWidget, ModeBadge, TypingIndicator
 from .chat_bubble import MessageRow, ChatBubble
+from .mentions_popup import MentionsPopup
 
 
 # ── 1. ChatHeader ────────────────────────────────────────────────────────
@@ -223,6 +224,19 @@ class MessagesArea(QScrollArea):
         self._typing.setVisible(False)
         # On l'ajoute dans le layout après le stretch, mais on le gère manuellement
 
+        # P1-I : Streaming cursor (curseur clignotant pendant génération)
+        self._streaming_cursor = QLabel("▎")
+        self._streaming_cursor.setObjectName("StreamingCursor")
+        self._streaming_cursor.setStyleSheet(
+            "color: #818cf8; font-size: 16px; font-weight: bold;"
+            " background: transparent; padding: 4px 0 4px 20px;"
+        )
+        self._streaming_cursor.setVisible(False)
+        self._cursor_blink_timer = QTimer(self)
+        self._cursor_blink_timer.setInterval(500)
+        self._cursor_blink_timer.timeout.connect(self._toggle_cursor_visibility)
+        self._cursor_visible = True
+
         # Dernière bulle assistant (pour backward compat et mise à jour RAG)
         self._last_assistant_row: MessageRow | None = None
 
@@ -326,13 +340,39 @@ class MessagesArea(QScrollArea):
         self._typing.stop()
         self._typing.setVisible(False)
 
+    # ── P1-I : Streaming cursor ──
+    def show_streaming_cursor(self) -> None:
+        """Affiche le curseur clignotant pendant la génération."""
+        if not self._streaming_cursor.isVisible():
+            idx = self._layout.count() - 1  # just before stretch
+            if self._typing.isVisible():
+                idx = self._layout.count() - 2
+            if idx < 0:
+                idx = 0
+            self._layout.insertWidget(idx, self._streaming_cursor)
+            self._cursor_visible = True
+            self._streaming_cursor.setVisible(True)
+            self._cursor_blink_timer.start()
+            self._scroll_to_bottom()
+
+    def hide_streaming_cursor(self) -> None:
+        """Cache le curseur clignotant."""
+        self._cursor_blink_timer.stop()
+        self._streaming_cursor.setVisible(False)
+        self._streaming_cursor.setText("▎")
+
+    def _toggle_cursor_visibility(self) -> None:
+        """Bascule la visibilité du curseur pour l'effet clignotant."""
+        self._cursor_visible = not self._cursor_visible
+        self._streaming_cursor.setText("▎" if self._cursor_visible else "")
+
     def clear(self) -> None:
         """Supprime tous les messages de la zone."""
         # Supprimer tous les widgets sauf le stretch et le typing
         while self._layout.count() > 1:
             item = self._layout.takeAt(0)
             w = item.widget()
-            if w and w is not self._stretch and w is not self._typing:
+            if w and w is not self._stretch and w is not self._typing and w is not self._streaming_cursor:
                 w.deleteLater()
             elif w is self._stretch:
                 # Remettre le stretch à la fin
@@ -368,6 +408,9 @@ class MessagesArea(QScrollArea):
 class SmartTextEdit(QTextEdit):
     """QTextEdit intelligent : Entrée envoie, Shift+Entrée = nouvelle ligne.
 
+    Supporte l'auto-complétion @mentions via un popup de suggestions
+    filtré en temps réel (↑/↓/Enter/Esc).
+
     Signaux
     -------
     send_triggered : émis quand l'utilisateur appuie sur Entrée (sans Shift).
@@ -384,12 +427,129 @@ class SmartTextEdit(QTextEdit):
         self.setMinimumHeight(44)
         self.setMaximumHeight(120)
 
+        # ── @mentions popup ──
+        self._mentions_popup = MentionsPopup(self)
+        self._suppress_next_change = False
+        self.textChanged.connect(self._on_text_changed)
+
+        # Connecter les signaux du popup
+        self._mentions_popup.selected.connect(self._on_mention_selected)
+        self._mentions_popup.dismissed.connect(self._on_popup_dismissed)
+
+    # ── keyPressEvent : interception clavier ──
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        popup_open = self._mentions_popup.is_open
+
+        # ── Navigation dans le popup ──
+        if popup_open:
+            if event.key() == Qt.Key_Up:
+                self._mentions_popup.move_up()
+                event.accept()
+                return
+
+            if event.key() == Qt.Key_Down:
+                self._mentions_popup.move_down()
+                event.accept()
+                return
+
+            if event.key() == Qt.Key_Escape:
+                self._mentions_popup.close_popup()
+                event.accept()
+                return
+
+            if event.key() == Qt.Key_Return and not (event.modifiers() & Qt.ShiftModifier):
+                if self._mentions_popup.has_items:
+                    # Insérer la mention sélectionnée au lieu d'envoyer
+                    self._insert_current_mention()
+                    event.accept()
+                    return
+                # Pas d'item : laisser passer pour l'envoi normal
+
+        # ── Envoi normal (Entrée sans Shift) ──
         if event.key() == Qt.Key_Return and not (event.modifiers() & Qt.ShiftModifier):
             self.send_triggered.emit()
             event.accept()
         else:
             super().keyPressEvent(event)
+
+    # ── textChanged : détection @ et filtrage ──
+
+    def _on_text_changed(self) -> None:
+        """Detecte la frappe de ``@`` et filtre les suggestions en temps réel."""
+        if self._suppress_next_change:
+            self._suppress_next_change = False
+            return
+
+        text = self.toPlainText()
+        cursor = self.textCursor()
+        cursor_pos = cursor.position()
+
+        # Chercher le dernier '@' avant le curseur
+        at_pos = text.rfind('@', 0, cursor_pos)
+
+        if at_pos >= 0:
+            # Vérifier que '@' est bien en début de mot (précédé d'espace ou début)
+            if at_pos == 0 or text[at_pos - 1] in (' ', '\t', '\n', '\r'):
+                query = text[at_pos + 1:cursor_pos]
+                # Ne pas ouvrir si la query contient un espace → plus dans le contexte @mention
+                if ' ' not in query and '\n' not in query:
+                    # Ouvrir le popup si pas déjà ouvert
+                    if not self._mentions_popup.is_open:
+                        cursor_rect = self.cursorRect(cursor)
+                        self._mentions_popup.show_at(cursor_rect)
+
+                    self._mentions_popup.filter(query)
+                    return
+
+        # Pas de contexte @ actif → fermer le popup
+        if self._mentions_popup.is_open:
+            self._mentions_popup.close_popup()
+
+    # ── Insertion de mention ──
+
+    def _insert_current_mention(self) -> None:
+        """Remplace ``@query`` par ``@label `` (label sélectionné dans le popup)."""
+        list_widget = self._mentions_popup._list
+        current_item = list_widget.currentItem()
+        if current_item is None:
+            return
+
+        label = current_item.data(Qt.UserRole)
+        if not label:
+            return
+
+        self._do_insert_mention(label)
+
+    def _on_mention_selected(self, label: str) -> None:
+        """Callback quand un item est cliqué dans le popup."""
+        self._do_insert_mention(label)
+
+    def _do_insert_mention(self, label: str) -> None:
+        """Remplace ``@query`` par ``@label `` dans le texte."""
+        text = self.toPlainText()
+        cursor = self.textCursor()
+        cursor_pos = cursor.position()
+
+        at_pos = text.rfind('@', 0, cursor_pos)
+        if at_pos < 0:
+            return
+
+        # Sélectionner du '@' au curseur
+        cursor.setPosition(at_pos)
+        cursor.setPosition(cursor_pos, QTextCursor.KeepAnchor)
+
+        # Insérer la mention
+        self._suppress_next_change = True
+        cursor.insertText(f'@{label} ')
+
+        # Fermer le popup
+        self._mentions_popup.close_popup()
+
+    def _on_popup_dismissed(self) -> None:
+        """Callback quand le popup est fermé sans sélection."""
+        # Rien à faire — le popup est déjà caché
+        pass
 
 
 # ── 4. InputArea ─────────────────────────────────────────────────────────
@@ -408,6 +568,7 @@ class InputArea(QWidget):
     send_clicked = Signal(str)
     strict_toggled = Signal(bool)
     voice_toggled = Signal()
+    quick_action_triggered = Signal(str)  # P1-H : texte pré-rempli pour l'action
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -467,6 +628,34 @@ class InputArea(QWidget):
         input_layout.addWidget(self._btn_send)
 
         layout.addWidget(input_frame)
+
+        # ── P1-H : Quick action chips ──
+        chips_layout = QHBoxLayout()
+        chips_layout.setContentsMargins(8, 0, 8, 0)
+        chips_layout.setSpacing(6)
+        chips_layout.addStretch()
+
+        self._chips: list[QPushButton] = []
+        chip_configs = [
+            ("📝 Résumer", "Résume le document actif"),
+            ("🌐 Traduire", "Traduis le texte suivant en anglais"),
+            ("📚 Chercher", "Cherche dans les documents : "),
+            ("💡 Aider", "Explique ce concept simplement"),
+        ]
+        for label, tooltip in chip_configs:
+            btn = QPushButton(label)
+            btn.setObjectName("QuickActionChip")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setToolTip(tooltip)
+            btn.clicked.connect(lambda checked, t=tooltip: self.quick_action_triggered.emit(t))
+            chips_layout.addWidget(btn)
+            self._chips.append(btn)
+
+        chips_widget = QWidget()
+        chips_widget.setLayout(chips_layout)
+        chips_widget.setObjectName("QuickChipsContainer")
+        chips_widget.setVisible(True)
+        layout.addWidget(chips_widget)
 
         # ── Hint ──
         self._hint = QLabel("Entrée = Envoyer  •  Shift+Entrée = Nouvelle ligne")
@@ -627,6 +816,9 @@ class ConsolePage(QWidget):
         # V11.1 P0-E — model_changed depuis ChatHeader
         self.header.model_changed.connect(self.model_changed.emit)
 
+        # V11.2 (Sprint 4) — P1-H Quick action chips
+        self.input_area.quick_action_triggered.connect(self._on_quick_action)
+
     # ── API publique V7 ──
 
     def on_response_received(
@@ -778,6 +970,16 @@ class ConsolePage(QWidget):
         self._session_store = store
 
     # ── Internes ──
+
+    # ── V11.2 (Sprint 4) — P1-H Quick action chip clicked ──
+    def _on_quick_action(self, prompt: str) -> None:
+        """Pré-remplit le SmartTextEdit avec une action rapide."""
+        self.input_area._text_edit.setPlainText(prompt)
+        self.input_area._text_edit.setFocus()
+        # Placer le curseur à la fin (utile pour "Cherche dans les documents : ")
+        cursor = self.input_area._text_edit.textCursor()
+        cursor.movePosition(cursor.End)
+        self.input_area._text_edit.setTextCursor(cursor)
 
     def _on_new_chat(self) -> None:
         self.clear_chat()

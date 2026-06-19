@@ -623,6 +623,218 @@ class RetroBanner(QWidget):
         self._text.setText(text)
 
 
+class TimelineStepWidget(QWidget):
+    """Widget d'une étape individuelle dans la timeline horizontale.
+
+    Affiche icône + label + barre de progression,
+    avec une bordure gauche colorée selon le statut.
+    """
+
+    STATUS_COLORS = {
+        "done": "#22c55e",
+        "running": "#3b82f6",
+        "pending": "#5A5A6E",
+        "error": "#ef4444",
+    }
+
+    def __init__(
+        self,
+        label: str = "",
+        status: str = "pending",
+        icon: str = "○",
+        progress: int = 0,
+        parent: QWidget | None = None,
+    ):
+        super().__init__(parent)
+        color = self.STATUS_COLORS.get(status, "#5A5A6E")
+
+        self.setMinimumWidth(62)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(2)
+
+        # Icon + Label row
+        top_row = QHBoxLayout()
+        top_row.setSpacing(4)
+
+        self._icon_w = QLabel(icon)
+        self._icon_w.setStyleSheet(
+            f"font-size: 13px; color: {color}; background: transparent;"
+        )
+        top_row.addWidget(self._icon_w)
+
+        self._label_w = QLabel(label)
+        self._label_w.setStyleSheet(
+            f"font-size: 9px; color: {color}; background: transparent; font-weight: 600;"
+        )
+        top_row.addWidget(self._label_w)
+        top_row.addStretch()
+        layout.addLayout(top_row)
+
+        # Progress bar
+        self._bar = QProgressBar()
+        self._bar.setRange(0, 100)
+        self._bar.setFixedHeight(3)
+        self._bar.setTextVisible(False)
+
+        if status == "running":
+            bar_val = progress if progress > 0 else 30
+            self._bar.setValue(bar_val)
+            self._bar.setStyleSheet(
+                f"background-color: {BORDER_COLOR}; border-radius: 2px; border: none;"
+                f" QProgressBar::chunk {{ background-color: {color}; border-radius: 2px; }}"
+            )
+        elif status == "done":
+            self._bar.setValue(100)
+            self._bar.setStyleSheet(
+                f"background-color: {BORDER_COLOR}; border-radius: 2px; border: none;"
+                f" QProgressBar::chunk {{ background-color: {color}; border-radius: 2px; }}"
+            )
+        else:
+            self._bar.setValue(0)
+            self._bar.setStyleSheet(
+                f"background-color: {BORDER_COLOR}; border-radius: 2px; border: none;"
+            )
+
+        layout.addWidget(self._bar)
+
+        self.setStyleSheet(
+            f"background-color: {BG_DARK};"
+            f" border: 0.5px solid {BORDER_COLOR};"
+            f" border-left: 2px solid {color};"
+            f" border-radius: 4px;"
+        )
+
+    def set_progress(self, value: int) -> None:
+        self._bar.setValue(value)
+
+    def get_progress(self) -> int:
+        return self._bar.value()
+
+
+class TimelineRouting(QWidget):
+    """Timeline RAG — affiche les étapes du pipeline en temps réel.
+
+    Timeline horizontale avec connecteurs entre les étapes.
+    Chaque étape montre icône + label + barre de progression.
+    État initial : toutes les étapes en 'pending' avec icône ○.
+
+    Méthodes publiques :
+        update_steps(steps)  — met à jour les étapes
+        reset()              — remet tout à zéro (pending)
+    """
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._step_widgets: list[TimelineStepWidget] = []
+        self._running_index: int = -1
+
+        # Animation timer for the running step's progress bar
+        self._anim_timer = QTimer(self)
+        self._anim_timer.setInterval(350)
+        self._anim_timer.timeout.connect(self._animate_running_step)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 6, 10, 4)
+        layout.setSpacing(6)
+
+        # ── Title ──
+        title = QLabel("Timeline RAG")
+        title.setStyleSheet(
+            "font-size: 9px; color: #2D4052; letter-spacing: 0.12em;"
+            " text-transform: uppercase; background: transparent;"
+        )
+        layout.addWidget(title)
+
+        # ── Horizontal row of steps ──
+        self._row = QWidget()
+        self._row_layout = QHBoxLayout(self._row)
+        self._row_layout.setContentsMargins(0, 0, 0, 0)
+        self._row_layout.setSpacing(0)
+        layout.addWidget(self._row)
+
+        # État initial : toutes les étapes pending
+        self._default_steps = [
+            {"label": "Routage", "status": "pending", "icon": "○"},
+            {"label": "RAG", "status": "pending", "icon": "○"},
+            {"label": "Génération", "status": "pending", "icon": "○"},
+            {"label": "Fact-check", "status": "pending", "icon": "○"},
+        ]
+        self.update_steps(self._default_steps)
+
+    # ── Animation ──
+
+    def _animate_running_step(self) -> None:
+        """Anime la barre de progression de l'étape en cours."""
+        if self._running_index < 0 or self._running_index >= len(self._step_widgets):
+            return
+        step = self._step_widgets[self._running_index]
+        val = step.get_progress() + 5
+        if val > 95:
+            val = 5
+        step.set_progress(val)
+
+    # ── API publique ──
+
+    def update_steps(self, steps: list[dict]) -> None:
+        """Met à jour les étapes de la timeline.
+
+         Chaque dict doit contenir :
+           - label  (str)  : nom de l'étape
+           - status (str)  : 'done' | 'running' | 'pending' | 'error'
+           - icon   (str)  : symbole affiché (✓, ⚡, ○, ✗, …)
+         Optionnel :
+           - progress (int) : valeur de progression (0-100)
+        """
+        self._anim_timer.stop()
+        self._running_index = -1
+
+        # Nettoyer les anciens widgets
+        for w in self._step_widgets:
+            self._row_layout.removeWidget(w)
+            w.setParent(None)
+            w.deleteLater()
+        self._step_widgets.clear()
+
+        # Enlever les connecteurs restants (QLabels relâchés)
+        # On refait le layout complet
+
+        has_running = False
+
+        for i, step in enumerate(steps):
+            label = step.get("label", "")
+            status = step.get("status", "pending")
+            icon = step.get("icon", "○")
+            progress = step.get("progress", 0)
+
+            step_w = TimelineStepWidget(label, status, icon, progress)
+            self._step_widgets.append(step_w)
+            self._row_layout.addWidget(step_w)
+
+            if status == "running":
+                self._running_index = i
+                has_running = True
+
+            # Connecteur entre les étapes (sauf après la dernière)
+            if i < len(steps) - 1:
+                conn = QLabel("──")
+                conn.setStyleSheet(
+                    f"font-size: 10px; color: {BORDER_COLOR};"
+                    " background: transparent; padding: 0 2px;"
+                )
+                self._row_layout.addWidget(conn)
+
+        self._row_layout.addStretch()
+
+        if has_running:
+            self._anim_timer.start()
+
+    def reset(self) -> None:
+        """Remet toutes les étapes en 'pending' avec icône ○."""
+        self._anim_timer.stop()
+        self.update_steps(self._default_steps)
+
+
 class MetricsTab(QWidget):
     """Onglet Métriques — grid + barres + diagnostic."""
 
@@ -674,6 +886,10 @@ class MetricsTab(QWidget):
         # RetroBanner
         self.retro_banner = RetroBanner()
         content_layout.addWidget(self.retro_banner)
+
+        # TimelineRouting — P1-P TimelineRouting
+        self.timeline = TimelineRouting()
+        content_layout.addWidget(self.timeline)
 
         content_layout.addStretch()
         scroll.setWidget(content)
@@ -935,6 +1151,30 @@ class RightPanelDiagnostic(QWidget):
         """Met à jour le nombre de traces (compat MetricsPanel)."""
         self._traces_count = count
         self._tab_widget.traces.set_traces(count)
+
+    # ── API TimelineRouting (P1-P) ──
+
+    def update_timeline(self, steps: list[dict]) -> None:
+        """Met à jour les étapes de la Timeline RAG.
+
+        Chaque dict doit contenir :
+          - label  (str)  : nom de l'étape
+          - status (str)  : 'done' | 'running' | 'pending' | 'error'
+          - icon   (str)  : symbole affiché (✓, ⚡, ○, ✗, …)
+
+        Exemple :
+            steps = [
+                {"label": "Routage",   "status": "done",    "icon": "✓"},
+                {"label": "RAG",       "status": "running",  "icon": "⚡"},
+                {"label": "Génération","status": "pending",  "icon": "○"},
+                {"label": "Fact-check","status": "pending",  "icon": "○"},
+            ]
+        """
+        self._tab_widget.metrics.timeline.update_steps(steps)
+
+    def reset_timeline(self) -> None:
+        """Remet toutes les étapes de la Timeline RAG en 'pending'."""
+        self._tab_widget.metrics.timeline.reset()
 
     # ── Nouvelle API ──
 

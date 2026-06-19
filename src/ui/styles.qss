@@ -729,3 +729,27 @@ QToolTip {
 #ThinkingToggleBtn:hover {
     color: #818cf8;
 }
+
+/* ════════════════════════════════════════════
+   V11.2 (Sprint 4) — Quick Action Chips
+   ════════════════════════════════════════════ */
+#QuickActionChip {
+    background-color: rgba(99, 102, 241, 0.10);
+    border: 1px solid rgba(99, 102, 241, 0.20);
+    border-radius: 14px;
+    color: #A0A0C0;
+    font-size: 11px;
+    padding: 4px 12px;
+    min-height: 24px;
+}
+#QuickActionChip:hover {
+    background-color: rgba(99, 102, 241, 0.20);
+    border-color: rgba(99, 102, 241, 0.40);
+    color: #C0C0DC;
+}
+#QuickActionChip:pressed {
+    background-color: rgba(99, 102, 241, 0.30);
+}
+#QuickChipsContainer {
+    background-color: transparent;
+}
