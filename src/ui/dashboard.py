@@ -417,7 +417,9 @@ class NavSidebar(QWidget):
         self._collapse_sidebar_btn.setToolTip("Réduire la sidebar (Cmd+\\)")
         self._collapse_sidebar_btn.setCursor(Qt.PointingHandCursor)
         self._collapse_sidebar_btn.setFixedSize(22, 22)
-        self._collapse_sidebar_btn.clicked.connect(self.collapse_requested.emit)
+        self._collapse_sidebar_btn.clicked.connect(
+            lambda: self.collapse_requested.emit() if not self._collapsed else self.expand_requested.emit()
+        )
         header_layout.addWidget(self._collapse_sidebar_btn)
 
         layout.addWidget(header)
