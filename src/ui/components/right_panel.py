@@ -13,6 +13,7 @@ Composants :
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.ui.components.stat_card import MiniStatCard as MetricCard
+from src.ui.components.markdown_renderer import MarkdownRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +200,13 @@ class FactCheckRow(QWidget):
 
 
 class CitationChip(QLabel):
-    """Chip de source cliquable (pour chat_bubble.py)."""
+    """Chip de source cliquable (pour chat_bubble.py).
+
+    Affiche le nom du fichier avec une info-bulle enrichie contenant
+    les 200 premiers caractères du fichier source (SourcePreview).
+    """
+
+    SNIPPET_MAX_CHARS = 200
 
     def __init__(
         self,
@@ -209,7 +217,6 @@ class CitationChip(QLabel):
         filename = source_path.split("/")[-1] if source_path else "source"
         display = f"📄 {filename}"
         super().__init__(display, parent)
-        self.setToolTip(source_path)
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(
             f"background-color: #0A1830;"
@@ -219,12 +226,48 @@ class CitationChip(QLabel):
             f" color: #2A6AAA;"
             f" padding: 1px 6px;"
         )
+        self._update_tooltip()
 
     def set_source(self, source_path: str) -> None:
         self._source_path = source_path
         filename = source_path.split("/")[-1] if source_path else "source"
         self.setText(f"📄 {filename}")
-        self.setToolTip(source_path)
+        self._update_tooltip()
+
+    # ── SourcePreview ────────────────────────────────────────────────
+
+    def _update_tooltip(self) -> None:
+        """Met à jour l'info-bulle avec le snippet source."""
+        snippet = self._load_snippet(self._source_path)
+        filename = self._source_path.split("/")[-1] if self._source_path else "source"
+        tooltip_html = (
+            f'<div style="color:#C0D0E0;font-size:11px;'
+            f'max-width:300px;line-height:1.4;">'
+            f"📄 <b>{filename}</b><br><br>"
+            f"{snippet}"
+            f"</div>"
+        )
+        self.setToolTip(tooltip_html)
+        self.setToolTipDuration(10000)  # 10 secondes
+
+    @staticmethod
+    def _load_snippet(path: str, max_chars: int = 200) -> str:
+        """Lit le fichier source et retourne un snippet des premiers *max_chars*
+        caractères (sans markdown).
+
+        Si le fichier n'existe pas, retourne ``🧩 Source non trouvée``.
+        """
+        filepath = Path(path)
+        if not filepath.exists():
+            return "🧩 Source non trouvée"
+
+        try:
+            raw = filepath.read_text(encoding="utf-8", errors="replace")
+        except (OSError, PermissionError):
+            return "🧩 Erreur de lecture"
+
+        # Extraire les premiers max_chars en nettoyant le markdown
+        return MarkdownRenderer.snippet(raw, max_len=max_chars)
 
 
 # ══════════════════════════════════════════════════════════════════════════

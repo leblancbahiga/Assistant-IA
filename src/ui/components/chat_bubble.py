@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 from src.ui.components.nuru_widgets import CitationBadge, ModeBadge
 from src.ui.components.right_panel import CitationChip
+from src.ui.components.markdown_renderer import MarkdownRenderer
 
 # ── Constantes V7 ──────────────────────────────────────────────────────────
 
@@ -422,7 +423,8 @@ class ChatBubble(QFrame):
     def _copy_text(self) -> None:
         from PySide6.QtGui import QGuiApplication
 
-        QGuiApplication.clipboard().setText(self._full_text)
+        clean = MarkdownRenderer.strip_markdown(self._full_text)
+        QGuiApplication.clipboard().setText(clean)
         self._btn_copy.setProperty("copied", "true")
         self.style().unpolish(self._btn_copy)
         self.style().polish(self._btn_copy)
@@ -548,33 +550,12 @@ class ChatBubble(QFrame):
 
     @staticmethod
     def _markdown_to_html(text: str) -> str:
-        """Convertit le Markdown simple en HTML, avec citations [N] cliquables."""
-        if not text:
-            return ""
-        # Échapper HTML
-        html = (
-            text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-        )
-        # Code inline `...`
-        html = re.sub(
-            r"`([^`]+)`",
-            r'<code style="background:rgba(0,0,0,0.2);'
-            r'padding:1px 4px;border-radius:3px;'
-            r'font-family:monospace;font-size:12px;">\1</code>',
-            html,
-        )
-        # Gras **...**
-        html = re.sub(r"\*\*(.*?)\*\*", r"<strong>\1</strong>", html)
-        # Italique *...*
-        html = re.sub(r"\*(.*?)\*", r"<em>\1</em>", html)
-        # Sauts de ligne
-        html = html.replace("\n", "<br>")
-        # V11.1 P0-M : citations [N] → liens cliquables
-        html = ChatBubble._linkify_citations(html)
-        return f'<div style="line-height: 1.6;">{html}</div>'
+        """Convertit le Markdown en HTML via ``MarkdownRenderer``.
+
+        Si la bibliothèque ``markdown`` est absente, fallback vers l'ancien
+        convertisseur regex (``_fallback_html``) pour ne rien casser.
+        """
+        return MarkdownRenderer.render(text)
 
     @staticmethod
     def _linkify_citations(html: str) -> str:
