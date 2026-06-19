@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import time
 from pathlib import Path
 from typing import AsyncGenerator
@@ -20,7 +21,7 @@ from src.core.events import EventBus
 # et correspondaient à du code mort — aucun call site ne les utilisait réellement.
 # Si un vrai système de plugins est nécessaire un jour, il sera ajouté frais
 # dans un module dédié (src/plugins/) avec tests et DI explicite.
-from src.ingestion import IngestionEngine
+from src.ingestion import IngestionEngine, SUPPORTED_EXTENSIONS
 from src.ram_monitor import RAMMonitor  # V4 : Monitoring RAM
 from src.document_watcher import DocumentWatcher  # V4.5 : Auto-indexation watchdog
 from src.core.orchestrator import NuruOrchestrator  # V4.5 : Nouvel orchestrateur
@@ -227,15 +228,100 @@ class NuruCore:
     def start_background_tasks(self):
         """Lance les tâches asynchrones et le watcher en arrière-plan.
         
-        NURU V6 : auto_index_loop suspendue — l'index est construit 
-        manuellement via reindex_personal.py pour éviter la saturation RAM.
+        V11.2 : Auto-indexation réactivée avec RAM guard
+        Le watcher temps réel continue de fonctionner normalement.
         """
-        # V6 : Auto-indexation suspendue (sature la RAM sur M1 8 Go)
-        # asyncio.create_task(self.ingestion.auto_index_loop())
+        # V11.2 : Auto-indexation réactivée avec RAM guard
+        # Vérifie la RAM avant chaque fichier pour éviter la saturation
+        asyncio.create_task(self._auto_index_with_ram_guard())
         # V4.5 : Document watcher (watchdog) pour auto-indexation temps réel
         self._watcher = DocumentWatcher(index_callback=self.ingestion.index_file)
         self._watcher.start()
         logger.info("📁 Document watcher démarré (surveille Documents, Desktop, Downloads)")
+
+    async def _auto_index_with_ram_guard(self) -> None:
+        """Auto-indexation périodique avec protection RAM (V11.2).
+
+        Scanne ~/Documents, ~/Desktop, ~/Downloads toutes les 3600s.
+        Vérifie RAM libre > 500 MB avant chaque fichier pour
+        éviter la saturation sur M1 8 Go.
+        Le watcher temps réel continue de gérer les modifications.
+        """
+        dirs_to_index = [
+            Path.home() / "Documents",
+            Path.home() / "Desktop",
+            Path.home() / "Downloads",
+        ]
+
+        # 1. Attendre 60s au démarrage (laisser le temps à l'app de charger)
+        await asyncio.sleep(60)
+
+        while True:
+            logger.info("🔍 Scan auto-indexation V11.2 (RAM guard) démarré...")
+            total = 0
+            indexed = 0
+
+            # Compter d'abord le total de fichiers éligibles
+            for base_dir in dirs_to_index:
+                if not base_dir.exists():
+                    continue
+                for root, _, files in os.walk(base_dir):
+                    for file in files:
+                        if any(file.lower().endswith(e) for e in SUPPORTED_EXTENSIONS):
+                            total += 1
+
+            logger.info(f"📊 {total} fichiers éligibles trouvés au total")
+
+            processed = 0
+            for base_dir in dirs_to_index:
+                if not base_dir.exists():
+                    continue
+                for root, _, files in os.walk(base_dir):
+                    for file in files:
+                        if not any(file.lower().endswith(e) for e in SUPPORTED_EXTENSIONS):
+                            continue
+                        filepath = os.path.join(root, file)
+
+                        # 3. Vérifier RAM libre > 500 MB
+                        import psutil
+                        ram = psutil.virtual_memory()
+                        if ram.available < 500 * 1024 * 1024:  # 500 MB
+                            logger.warning(
+                                f"⚠️ RAM insuffisante ({ram.available / 1024**3:.1f} Go dispo) — "
+                                f"pause 60s avant {filepath}"
+                            )
+                            await asyncio.sleep(60)
+                            # Réessayer la vérification après la pause
+                            ram = psutil.virtual_memory()
+                            if ram.available < 500 * 1024 * 1024:
+                                logger.warning(
+                                    f"⚠️ RAM toujours insuffisante après pause — "
+                                    f"fichier sauté: {filepath}"
+                                )
+                                continue
+
+                        # 5. Indexer le fichier
+                        await self.ingestion.index_file(filepath)
+                        indexed += 1
+
+                        processed += 1
+                        # 8. Log le progrès
+                        if processed % 10 == 0 or processed == total:
+                            logger.info(
+                                f"📄 Auto-indexation: {processed}/{total} fichiers "
+                                f"traités ({indexed} indexés)"
+                            )
+
+                        # 6. Pause entre chaque fichier
+                        await asyncio.sleep(0.5)
+
+            logger.info(
+                f"✅ Cycle auto-indexation terminé: "
+                f"{indexed}/{total} fichiers indexés. "
+                f"Prochain scan dans 1h."
+            )
+            # 7. Attendre 3600s avant le prochain scan
+            await asyncio.sleep(3600)
 
     def build_system_prompt(self, intent: str, facts: list[str] = None, procedures: str = "") -> str:
         """Assemble le prompt système de base avec les faits et procédures, adapté selon l'intention."""

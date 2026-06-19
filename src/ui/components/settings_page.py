@@ -13,8 +13,8 @@ from PySide6.QtWidgets import (
     QFrame, QScrollArea, QPushButton, QComboBox,
     QCheckBox, QSlider, QSpinBox, QLineEdit,
     QFileDialog, QMessageBox, QSizePolicy,
-    QGridLayout
 )
+from PySide6.QtCore import QProcess, QProcessEnvironment
 from PySide6.QtCore import Qt, QTimer
 
 logger = logging.getLogger(__name__)
@@ -1214,19 +1214,65 @@ class SettingsPage(QWidget):
             QMessageBox.warning(self, "Erreur", f"Export diagnostic échoué : {e}")
 
     def _on_reindex_all(self):
-        """Déclenche une réindexation complète de la base RAG."""
+        """Déclenche une réindexation complète de la base RAG via QProcess."""
         reply = QMessageBox.question(
             self, "Réindexation complète",
             "Lancer une réindexation complète de tous les documents ?\n"
-            "Cette opération peut prendre plusieurs minutes.",
+            "Cette opération peut prendre plusieurs minutes.\n"
+            "La console affichera la progression en temps réel.",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
             logger.info("Full reindex triggered from Settings")
+            
+            # Lancer reindex_all.py via QProcess (non-bloquant)
+            project_root = Path(__file__).resolve().parent.parent.parent.parent
+            script_path = project_root / "reindex_all.py"
+            venv_python = project_root / ".venv" / "bin" / "python3"
+            
+            if not script_path.exists():
+                QMessageBox.warning(
+                    self, "Erreur",
+                    f"Script reindex_all.py introuvable : {script_path}"
+                )
+                return
+            if not venv_python.exists():
+                venv_python = Path("python3")  # fallback PATH
+            
+            self._reindex_process = QProcess(self)
+            self._reindex_process.setProgram(str(venv_python))
+            self._reindex_process.setArguments([str(script_path)])
+            self._reindex_process.setWorkingDirectory(str(project_root))
+            
+            # Envoyer la sortie vers le logger
+            def _forward_output(src):
+                text = bytes(self._reindex_process.readAllStandardOutput().data()).decode().strip()
+                if text:
+                    logger.info("[reindex] %s", text)
+            def _forward_error(src):
+                text = bytes(self._reindex_process.readAllStandardError().data()).decode().strip()
+                if text:
+                    logger.warning("[reindex] %s", text)
+            self._reindex_process.readyReadStandardOutput.connect(
+                lambda: _forward_output(self._reindex_process)
+            )
+            self._reindex_process.readyReadStandardError.connect(
+                lambda: _forward_error(self._reindex_process)
+            )
+            self._reindex_process.finished.connect(
+                lambda exit_code: logger.info(
+                    "[reindex] Terminé avec le code %d", exit_code
+                )
+            )
+            
+            self._reindex_process.start()
+            
             QMessageBox.information(
                 self, "Réindexation",
-                "✅ Réindexation complète lancée."
+                "✅ Réindexation complète lancée en arrière-plan.\n"
+                "Voir la console pour la progression."
             )
+            logger.info("📄 Reindex process PID: %d", self._reindex_process.processId())
 
     def _on_reindex_doc(self):
         """Réindexe un document spécifique sélectionné dans le menu."""
