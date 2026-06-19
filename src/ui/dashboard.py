@@ -153,6 +153,12 @@ try:
 except ImportError:
     PerformanceMemoryPage = None
 
+# ── V11.2 (Sprint 7) — KPIs Dashboard Accueil ────────────────────────────
+try:
+    from src.ui.components.kpi_dashboard_page import KpiDashboardPage
+except ImportError:
+    KpiDashboardPage = None
+
 
 # ══════════════════════════════════════════════════════════════════════════
 #  CONSTANTES
@@ -163,6 +169,7 @@ NAV_GROUPS = [
     {
         "label": "💬 Discussion",
         "items": [
+            ("🏠 Accueil", "home"),
             ("💬 Console", "console"),
         ],
     },
@@ -202,7 +209,9 @@ NAV_GROUPS = [
 ]
 
 PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
-    "sessions":   ("🕒 Sessions",       "Historique des sessions et conversations passées."),
+    "home":        ("🏠 Accueil",          "Tableau de bord KPI temps réel."),
+    "sessions":    ("🕒 Sessions",        "Historique des sessions et conversations passées."),
+    "console":     ("💬 Console",          "Interface de chat principale."),
     "documents":  ("📄 Documents",      "Gestion de la base documentaire et des sources RAG."),
     "memory":     ("🧠 Mémoire",        "Aperçu de la mémoire persistante du système."),
     "nuru_brain": ("🌲 Nuru Brain",     "Architecture neuronale et cognition augmentée."),
@@ -875,6 +884,8 @@ class CyberDashboard(QMainWindow):
             # Mapping slug → classe réelle
             if slug == "sessions":
                 cls = SessionsPage
+            elif slug == "home":
+                cls = KpiDashboardPage if KpiDashboardPage is not None else None
             elif slug == "documents":
                 cls = DocumentsPage
             elif slug == "memory":
@@ -1087,6 +1098,7 @@ class CyberDashboard(QMainWindow):
         """Affiche la palette de navigation rapide (Cmd+K)."""
         # Construire la liste des entrées
         entries = [
+            ("🏠 Accueil", "home"),
             ("💬 Console", "console"),
             ("📄 Documents", "documents"),
             ("🧠 Mémoire", "memory"),
@@ -1532,6 +1544,20 @@ class CyberDashboard(QMainWindow):
                 perf_page.refresh()
             except Exception as e:
                 logger.debug("performance refresh: %s", e)
+
+        # KpiDashboardPage ← memory_store + rag_engine
+        home_page = self._placeholder_map.get("home")
+        if home_page is not None:
+            if hasattr(home_page, "set_memory_store"):
+                try:
+                    home_page.set_memory_store(memory_store)
+                except Exception as e:
+                    logger.debug("home set_memory_store: %s", e)
+            if hasattr(home_page, "set_rag_engine"):
+                try:
+                    home_page.set_rag_engine(rag_engine)
+                except Exception as e:
+                    logger.debug("home set_rag_engine: %s", e)
 
         # V9 MemoryExplorer ← V9 MemoryManager
         v9_memory_page = self._v9_pages.get("memory_v9")
