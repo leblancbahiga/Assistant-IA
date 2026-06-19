@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal, QTimer, QPropertyAnimation, QEasingCurve, QDateTime
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -124,6 +124,7 @@ class ChatBubble(QFrame):
     citation_clicked = Signal(str, int)  # (source_path, page)
     regenerate_requested = Signal()  # V11.1 P0-H — demande régénération
     edit_requested = Signal()        # V11.1 P0-H — demande édition user msg
+    fact_clicked = Signal(str)       # P1-O — clic sur badge fact-check
 
     def __init__(
         self,
@@ -134,7 +135,9 @@ class ChatBubble(QFrame):
         confidence: float | None = None,
         mode: str = "",               # V11.1 P0-N — mode de routage (LOCAL/RAG/CLOUD/VERIFY/PLAN)
         model_name: str = "",         # V11.1 P0-N — nom du modèle (ex: "Groq llama")
-        fact_status: str | None = None,  # V11.1 P0-O — "verified"/"issues"/"error"
+        fact_status: str | None = None,  # V11.1 P0-O — "verified"/"issues"/"error"/"pending"
+        thinking_tokens: int = 0,     # P1-M — nombre de tokens de raisonnement
+        fact_sources: int = 0,        # P1-O — nombre de sources vérifiées
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -147,6 +150,11 @@ class ChatBubble(QFrame):
         self._mode = mode.upper() if mode else ""      # V11.1 P0-N
         self._model_name = model_name                   # V11.1 P0-N
         self._fact_status = fact_status                 # V11.1 P0-O
+        self._thinking_tokens = thinking_tokens         # P1-M
+        self._fact_sources = fact_sources               # P1-O
+        self._thinking_expanded = False                 # P1-M — état du toggle
+        self._thinking_timestamp = QDateTime.currentDateTime()  # P1-M — fraîcheur
+        self._thinking_anim_running = False             # P1-M — garde anti-réentrance
 
         self.setObjectName(
             "BubbleNuru" if self._role in ("nuru", "assistant") else "BubbleUser"
@@ -167,20 +175,74 @@ class ChatBubble(QFrame):
         self._text_label.linkActivated.connect(self._on_link_activated)  # V11.1 P0-M
         layout.addWidget(self._text_label)
 
-        # ── 2a-bis. Thinking block (P1-M) — raisonnement repliable ──
+        # ── 2a-bis. Thinking block (P1-M) — raisonnement repliable amélioré ──
+        # Wrapper container for the entire thinking block
+        self._thinking_block = QWidget()
+        self._thinking_block.setObjectName("ThinkingBlockWrapper")
+        self._thinking_block.setVisible(False)
+        thinking_layout = QVBoxLayout(self._thinking_block)
+        thinking_layout.setContentsMargins(0, 0, 0, 0)
+        thinking_layout.setSpacing(0)
+
+        # Header — clickable toggle with ▶/▼ icon, freshness, token count
+        self._thinking_header = QPushButton()
+        self._thinking_header.setObjectName("ThinkingToggleBtn")
+        self._thinking_header.setCursor(Qt.PointingHandCursor)
+        self._thinking_header.clicked.connect(self._toggle_thinking)
+        self._thinking_header.setStyleSheet(
+            "QPushButton#ThinkingToggleBtn {"
+            "  background-color: #121620;"
+            "  border: 1px solid #2A2A4E;"
+            "  border-radius: 6px 6px 0 0;"
+            "  color: #A855F7;"
+            "  font-size: 11px;"
+            "  font-weight: bold;"
+            "  padding: 6px 10px;"
+            "  text-align: left;"
+            "}"
+            "QPushButton#ThinkingToggleBtn:hover {"
+            "  background-color: #1A1E2E;"
+            "  border: 1px solid #A855F7;"
+            "}"
+        )
+        thinking_layout.addWidget(self._thinking_header)
+
+        # Content area with animated height (slides open/closed)
+        self._thinking_content_container = QWidget()
+        self._thinking_content_container.setObjectName("ThinkingContentContainer")
+        self._thinking_content_container.setMaximumHeight(0)
+        _cc_layout = QVBoxLayout(self._thinking_content_container)
+        _cc_layout.setContentsMargins(0, 0, 0, 0)
+        _cc_layout.setSpacing(0)
+
         self._thinking_content = QLabel()
         self._thinking_content.setWordWrap(True)
         self._thinking_content.setTextFormat(Qt.RichText)
-        self._thinking_content.setObjectName("ThinkingBlock")
-        self._thinking_content.setVisible(False)
-        layout.addWidget(self._thinking_content)
+        self._thinking_content.setObjectName("ThinkingContent")
+        # Style cyberpunk : fond #0D1117, bordure gauche 3px #A855F7, padding
+        self._thinking_content.setStyleSheet(
+            "QLabel#ThinkingContent {"
+            "  background-color: #0D1117;"
+            "  border-left: 3px solid #A855F7;"
+            "  border-right: 1px solid #2A2A4E;"
+            "  border-bottom: 1px solid #2A2A4E;"
+            "  border-radius: 0 0 6px 6px;"
+            "  color: #C0D0E0;"
+            "  font-size: 12px;"
+            "  padding: 8px 10px;"
+            "}"
+        )
+        _cc_layout.addWidget(self._thinking_content)
+        thinking_layout.addWidget(self._thinking_content_container)
+        layout.addWidget(self._thinking_block)
 
-        self._thinking_btn = QPushButton("🤔 Afficher le raisonnement")
-        self._thinking_btn.setObjectName("ThinkingToggleBtn")
-        self._thinking_btn.setVisible(False)
-        self._thinking_btn.setCursor(Qt.PointingHandCursor)
-        self._thinking_btn.clicked.connect(self._toggle_thinking)
-        layout.addWidget(self._thinking_btn)
+        # Animation : dépliage/repliage fluide via maximumHeight
+        self._thinking_animation = QPropertyAnimation(
+            self._thinking_content_container, b"maximumHeight"
+        )
+        self._thinking_animation.setDuration(300)
+        self._thinking_animation.setEasingCurve(QEasingCurve.OutCubic)
+        self._thinking_animation.finished.connect(self._on_thinking_anim_finished)
 
         # ── 2b. Badges inline (confiance + citations) ──
         self._badges_layout = QHBoxLayout()
@@ -360,39 +422,91 @@ class ChatBubble(QFrame):
         )
         return badge
 
-    # ── 2e. Badge FactChecker (P0-O) ──
+    # ── 2e. Badge FactChecker (P1-O) ──
 
     def _build_fact_badge(self, status: str) -> QLabel:
         """Badge coloré indiquant le résultat du FactChecker.
 
-        - verified (#22C55E vert) : tout supporté par les sources
-        - issues (#F59E0B orange) : certaines affirmations non vérifiées
-        - error (#EF4444 rouge)   : contradictions avec les sources
+        Amélioré P1-O :
+        - Icônes unicode : ✅/⚠️/❌/⏳
+        - Couleurs cyberpunk NURU
+        - Nombre de sources vérifiées
+        - Cliquable (émet fact_clicked(status))
+        - Tooltip descriptif
         """
-        if status == "verified":
-            dot, label = "●", "Vérifié"
-            bg, border, color = "#0A1F0A", "#1A3F1A", "#22C55E"
-        elif status == "issues":
-            dot, label = "●", "Incertain"
-            bg, border, color = "#1A1405", "#3A2E0A", "#F59E0B"
-        elif status == "error":
-            dot, label = "●", "Non vérifié"
-            bg, border, color = "#1A0A0A", "#3A1A1A", "#EF4444"
-        else:
+        # Définir les constantes selon le statut
+        status_data = {
+            "verified": {
+                "icon": "✅",
+                "label": "Vérifié",
+                "bg": "#0A2A10",
+                "border": "#1A4A1A",
+                "color": "#4ADE80",
+                "tooltip": "✅ Vérifié — Toutes les affirmations sont supportées par les sources",
+                "tooltip_src": "{} sources concordantes",
+            },
+            "issues": {
+                "icon": "⚠️",
+                "label": "Problèmes",
+                "bg": "#2A1A0A",
+                "border": "#4A3A1A",
+                "color": "#FBBF24",
+                "tooltip": "⚠️ Problèmes — Certaines affirmations n'ont pas pu être vérifiées",
+                "tooltip_src": "{} incohérences détectées",
+            },
+            "error": {
+                "icon": "❌",
+                "label": "Erreur",
+                "bg": "#2A0A0A",
+                "border": "#4A1A1A",
+                "color": "#F87171",
+                "tooltip": "❌ Erreur — Contradictions détectées avec les sources",
+                "tooltip_src": "{} contradictions avec les sources",
+            },
+            "pending": {
+                "icon": "⏳",
+                "label": "Vérification...",
+                "bg": "#0A1A2A",
+                "border": "#1A3A4A",
+                "color": "#60A5FA",
+                "tooltip": "⏳ Vérification en cours...",
+                "tooltip_src": None,
+            },
+        }
+
+        data = status_data.get(status)
+        if data is None:
             return QLabel()
 
-        display = f"{dot} {label}"
+        # Construire l'affichage : icône + label + nombre de sources
+        if self._fact_sources > 0 and data["tooltip_src"]:
+            display = f"{data['icon']} {data['label']} · {self._fact_sources}"
+            tooltip = f"{data['tooltip']}\n{data['tooltip_src'].format(self._fact_sources)}"
+        else:
+            display = f"{data['icon']} {data['label']}"
+            tooltip = data["tooltip"]
+
         badge = QLabel(display)
+        badge.setToolTip(tooltip)
         badge.setStyleSheet(
-            f"background-color: {bg};"
-            f" border: 0.5px solid {border};"
+            f"background-color: {data['bg']};"
+            f" border: 0.5px solid {data['border']};"
             f" border-radius: 10px;"
-            f" color: {color};"
+            f" color: {data['color']};"
             f" font-size: 9px;"
             f" font-weight: bold;"
             f" padding: 2px 8px;"
         )
+
+        # Rendre cliquable — émet fact_clicked(status) au clic
+        badge.setCursor(Qt.PointingHandCursor)
+        badge.mousePressEvent = lambda e, s=status: self._on_fact_badge_clicked(e, s)
+
         return badge
+
+    def _on_fact_badge_clicked(self, event, status: str) -> None:
+        """Gère le clic sur un badge fact-check."""
+        self.fact_clicked.emit(status)
 
     # ── 2f. Feedback internes ──
 
@@ -463,25 +577,85 @@ class ChatBubble(QFrame):
         html = self._markdown_to_html(text)
         self._text_label.setText(html)
 
-    def set_thinking(self, text: str) -> None:
-        """Définit le texte de raisonnement et rend le bouton visible.
+    def set_thinking(self, text: str, thinking_tokens: int = 0) -> None:
+        """Définit le texte de raisonnement et rend le bloc visible.
 
-        Le contenu de raisonnement est initialement masqué.
-        L'utilisateur peut cliquer sur le bouton pour l'afficher/masquer.
+        Le contenu est initialement masqué (replié).
+        L'utilisateur peut cliquer sur l'en-tête pour déplier/replier.
+
+        Parameters
+        ----------
+        text : str
+            Contenu du raisonnement (Markdown supporté).
+        thinking_tokens : int
+            Nombre de tokens de raisonnement (0 = caché).
         """
         self._thinking_text = text
+        self._thinking_tokens = thinking_tokens or self._thinking_tokens
+        self._thinking_timestamp = QDateTime.currentDateTime()
         html = self._markdown_to_html(text)
         self._thinking_content.setText(html)
-        self._thinking_btn.setVisible(True)
+        self._thinking_block.setVisible(True)
+        self._thinking_expanded = False
+        self._thinking_content_container.setMaximumHeight(0)
+        self._update_thinking_header_text()
+
+    # ── P1-M : Animation et helpers du thinking block ──
 
     def _toggle_thinking(self) -> None:
-        """Bascule l'affichage du bloc de raisonnement."""
-        is_visible = self._thinking_content.isVisible()
-        self._thinking_content.setVisible(not is_visible)
-        if is_visible:
-            self._thinking_btn.setText("🤔 Afficher le raisonnement")
+        """Bascule l'affichage du bloc de raisonnement avec animation."""
+        if self._thinking_anim_running:
+            return
+        self._thinking_anim_running = True
+        self._thinking_expanded = not self._thinking_expanded
+
+        anim = self._thinking_animation
+        anim.stop()
+
+        if self._thinking_expanded:
+            # Mesurer la hauteur naturelle du contenu
+            self._thinking_content_container.setMaximumHeight(16777215)
+            self._thinking_content_container.adjustSize()
+            natural = self._thinking_content_container.minimumSizeHint().height()
+            if natural <= 0:
+                natural = self._thinking_content_container.sizeHint().height()
+            if natural <= 0:
+                natural = 200  # fallback
+            # Réinitialiser à 0 pour l'animation départ → arrivée
+            self._thinking_content_container.setMaximumHeight(0)
+            self._thinking_content_container.updateGeometry()
+            anim.setStartValue(0)
+            anim.setEndValue(natural)
         else:
-            self._thinking_btn.setText("🤔 Masquer le raisonnement")
+            current = self._thinking_content_container.height()
+            target = 0
+            if current > 0:
+                anim.setStartValue(current)
+            else:
+                anim.setStartValue(200)
+            anim.setEndValue(target)
+
+        anim.start()
+        self._update_thinking_header_text()
+
+    def _on_thinking_anim_finished(self) -> None:
+        """Callback de fin d'animation."""
+        self._thinking_anim_running = False
+        if not self._thinking_expanded:
+            self._thinking_content_container.setMaximumHeight(0)
+        # else: la hauteur naturelle est déjà appliquée par l'animation
+
+    def _update_thinking_header_text(self) -> None:
+        """Met à jour le texte de l'en-tête avec icône, fraîcheur et tokens."""
+        icon = "▼" if self._thinking_expanded else "▶"
+        freshness = self._get_freshness_label()
+        tokens = f" · {self._thinking_tokens} tokens" if self._thinking_tokens else ""
+        self._thinking_header.setText(f"{icon} Raisonnement · {freshness}{tokens}")
+
+    def _get_freshness_label(self) -> str:
+        """Retourne un libellé de fraîcheur basé sur le timestamp."""
+        secs = self._thinking_timestamp.secsTo(QDateTime.currentDateTime())
+        return "récent" if secs < 30 else "plus ancien"
 
     def append_text(self, chunk: str) -> None:
         """Ajoute un fragment de texte (streaming)."""
@@ -599,6 +773,7 @@ class MessageRow(QWidget):
     feedback_negative = Signal(str)  # message_id
     regenerate_requested = Signal(str)  # V11.1 P0-H — message_id
     edit_requested = Signal(str)        # V11.1 P0-H — message_id
+    fact_clicked = Signal(str)          # P1-O — clic sur badge fact-check
 
     def __init__(
         self,
@@ -610,6 +785,8 @@ class MessageRow(QWidget):
         mode: str = "",               # V11.1 P0-N
         model_name: str = "",         # V11.1 P0-N
         fact_status: str | None = None,  # V11.1 P0-O
+        thinking_tokens: int = 0,     # P1-M
+        fact_sources: int = 0,        # P1-O
         message_id: str = "",
         parent: QWidget | None = None,
     ):
@@ -619,6 +796,8 @@ class MessageRow(QWidget):
         self._mode = mode.upper() if mode else ""       # V11.1 P0-N
         self._model_name = model_name                   # V11.1 P0-N
         self._fact_status = fact_status                 # V11.1 P0-O
+        self._thinking_tokens = thinking_tokens         # P1-M
+        self._fact_sources = fact_sources               # P1-O
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
@@ -636,9 +815,11 @@ class MessageRow(QWidget):
             sources=sources,
             show_actions=show_actions,
             confidence=confidence,
-            mode=self._mode,          # V11.1 P0-N
-            model_name=self._model_name,  # V11.1 P0-N
-            fact_status=self._fact_status,  # V11.1 P0-O
+            mode=self._mode,                     # V11.1 P0-N
+            model_name=self._model_name,          # V11.1 P0-N
+            fact_status=self._fact_status,        # V11.1 P0-O
+            thinking_tokens=self._thinking_tokens,  # P1-M
+            fact_sources=self._fact_sources,       # P1-O
         )
 
         # Connexions des signaux
@@ -648,6 +829,8 @@ class MessageRow(QWidget):
         # V11.1 (P0-H) — regenerate / edit propagés avec message_id
         self._bubble.regenerate_requested.connect(self._on_regenerate)
         self._bubble.edit_requested.connect(self._on_edit)
+        # P1-O — clic sur badge fact-check propagé
+        self._bubble.fact_clicked.connect(self.fact_clicked.emit)
 
         if self._role == "user":
             layout.addStretch(1)
@@ -700,6 +883,10 @@ class MessageRow(QWidget):
     def set_text(self, text: str) -> None:
         """Proxy : remplace le texte de la bulle."""
         self._bubble.set_text(text)
+
+    def set_thinking(self, text: str, thinking_tokens: int = 0) -> None:
+        """Proxy : définit le raisonnement de la bulle."""
+        self._bubble.set_thinking(text, thinking_tokens)
 
     # ── Relais de signaux ──
 
