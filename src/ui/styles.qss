@@ -705,3 +705,27 @@ QToolTip {
     background-color: transparent;
     border-top: 1px solid #1C1C26;
 }
+
+/* ── THINKING BLOCK (P1-M) ────────────────────────────────────── */
+
+#ThinkingBlock {
+    background-color: rgba(99, 102, 241, 0.04);
+    border-left: 2px solid rgba(99, 102, 241, 0.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 4px 0 0 0;
+    font-size: 12px;
+    color: #8A8A9E;
+    line-height: 1.5;
+}
+#ThinkingToggleBtn {
+    background-color: transparent;
+    border: none;
+    color: #6A6A8E;
+    font-size: 11px;
+    padding: 4px 0;
+    text-align: left;
+}
+#ThinkingToggleBtn:hover {
+    color: #818cf8;
+}

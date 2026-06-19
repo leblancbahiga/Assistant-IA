@@ -71,6 +71,20 @@ class ChatHeader(QWidget):
         self._title_label.setObjectName("ChatHeaderTitle")
         layout.addWidget(self._title_label)
 
+        # ── Routing Indicator (P1-G) ──
+        self._routing_chip = QLabel("🧠 Auto")
+        self._routing_chip.setObjectName("RoutingChip")
+        self._routing_chip.setStyleSheet(
+            "QLabel#RoutingChip {"
+            "  background: rgba(255, 255, 255, 0.15);"
+            "  border-radius: 10px;"
+            "  padding: 2px 8px;"
+            "  font-size: 11px;"
+            "  border: 1px solid rgba(255, 255, 255, 0.1);"
+            "}"
+        )
+        layout.addWidget(self._routing_chip)
+
         # ── Model Switcher (P0-E) ──
         self._model_combo = QComboBox()
         self._model_combo.setObjectName("ModelSwitcher")
@@ -114,6 +128,18 @@ class ChatHeader(QWidget):
         """Change le titre du header."""
         self._title_label.setText(title)
 
+    def set_routing(self, label: str, icon: str) -> None:
+        """Met à jour le chip d'indication de routage (P1-G).
+
+        Paramètres
+        ----------
+        label : str
+            Texte du chip (ex: \"Auto\", \"Manual\", \"Strict\").
+        icon : str
+            Icône à afficher (ex: \"🧠\", \"⚡\", \"🎯\").
+        """
+        self._routing_chip.setText(f"{icon} {label}")
+
     def set_modes(self, primary: str, secondary: str) -> None:
         """Change les badges de mode (LOCAL, RAG, CLOUD, VERIFY, PLAN)."""
         self._mode_primary.set_mode(primary)
@@ -137,6 +163,7 @@ class ChatHeader(QWidget):
     def reset(self) -> None:
         """Réinitialise le header à l'état par défaut."""
         self._title_label.setText("Nouvelle conversation")
+        self._routing_chip.setText("🧠 Auto")
         self._mode_primary.set_mode("LOCAL")
         self._mode_secondary.set_mode("RAG")
         self._confidence.set_score(0.0)

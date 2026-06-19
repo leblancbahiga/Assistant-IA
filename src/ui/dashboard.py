@@ -61,6 +61,11 @@ except ImportError as e:
     ConsolePage = None
     RightPanelDiagnostic = None
 
+try:
+    from src.ui.components.toast import ToastManager
+except ImportError:
+    ToastManager = None
+
 # ── ViewModels ──────────────────────────────────────────────────────────
 try:
     from src.ui.viewmodels.rag_diagnostic_vm import RAGDiagnosticViewModel
@@ -780,6 +785,8 @@ class CyberDashboard(QMainWindow):
         self._wire_signals()
         self._setup_shortcuts()
         self._is_dark_theme = True
+        self._focus_mode = False
+        self._sidebar_backup_visible = True
         # Restaurer état thème
         if not self._settings.value("ui/dark_theme", True, type=bool):
             self._is_dark_theme = False
@@ -981,6 +988,12 @@ class CyberDashboard(QMainWindow):
             self._rag_diagnostic_vm = RAGDiagnosticViewModel()
             self._rag_diagnostic_vm.updated.connect(self._on_rag_vm_updated)
 
+        # ── V11.2 (Sprint 3) — Toast Notifications ──
+        self._toast_manager = None
+        if ToastManager is not None:
+            self._toast_manager = ToastManager(central)
+        self._toast_overlay_needs_update = True
+
     # ── V11.1 (P0-C+I) — Collapse / Expand des panels ──
     def _collapse_sidebar(self) -> None:
         """Mini-mode sidebar : 60px (icônes seules)."""
@@ -1030,6 +1043,29 @@ class CyberDashboard(QMainWindow):
         self.load_styles()
         logger.info("Thème basculé : %s", "sombre" if self._is_dark_theme else "clair")
 
+    # ── V11.2 (Sprint 3) — Focus Mode ──
+    def _toggle_focus_mode(self) -> None:
+        """Bascule en plein écran chat (cache sidebar + right panel)."""
+        self._focus_mode = not self._focus_mode
+        if self._focus_mode:
+            self._sidebar_backup_visible = self._sidebar.isVisible()
+            self._right_backup_visible = self._metrics.isVisible()
+            self._sidebar.hide()
+            if hasattr(self, "_right_expand_btn") and self._right_expand_btn is not None:
+                self._right_expand_btn.hide()
+            self._metrics.hide()
+            self.console_page.setFocus()
+            # Naviguer vers la console si pas déjà là
+            if self._pages.currentIndex() != 0:
+                self._on_page_changed("console")
+            logger.info("Focus Mode activé")
+        else:
+            if self._sidebar_backup_visible:
+                self._sidebar.show()
+            if self._right_backup_visible:
+                self._metrics.show()
+            logger.info("Focus Mode désactivé")
+
     def _wire_signals(self) -> None:
         """Connecte les signaux entre composants."""
         # Sidebar → page switching
@@ -1070,6 +1106,10 @@ class CyberDashboard(QMainWindow):
         for seq, slug in key_map.items():
             sc = QShortcut(QKeySequence(seq), self)
             sc.activated.connect(lambda s=slug: self._on_page_changed(s))
+
+        # V11.2 (Sprint 3) — Cmd+F plein écran chat
+        self._focus_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self._focus_shortcut.activated.connect(self._toggle_focus_mode)
 
     def _init_timers(self) -> None:
         """Initialise le timer de mise à jour des métriques."""
@@ -1702,6 +1742,17 @@ class CyberDashboard(QMainWindow):
 
         except Exception as e:
             logger.debug("Échec mise à jour métriques : %s", e)
+
+    # ── V11.2 (Sprint 3) — Repositionner le toast overlay ──
+    def resizeEvent(self, event) -> None:
+        """Redimensionne le toast overlay au resize de la fenêtre."""
+        super().resizeEvent(event)
+        if self._toast_manager is not None and hasattr(self, "_toast_manager"):
+            # Positionner en bas à droite, dans la zone centrale
+            tw = min(460, self.width() - 40)
+            x = self.width() - tw - 16
+            y = self.height() - 340
+            self._toast_manager.setGeometry(x, y, tw, 320)
 
     # ══════════════════════════════════════════════════════════════════════
     #  FIN DE CyberDashboard

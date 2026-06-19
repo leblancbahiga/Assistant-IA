@@ -166,6 +166,21 @@ class ChatBubble(QFrame):
         self._text_label.linkActivated.connect(self._on_link_activated)  # V11.1 P0-M
         layout.addWidget(self._text_label)
 
+        # ── 2a-bis. Thinking block (P1-M) — raisonnement repliable ──
+        self._thinking_content = QLabel()
+        self._thinking_content.setWordWrap(True)
+        self._thinking_content.setTextFormat(Qt.RichText)
+        self._thinking_content.setObjectName("ThinkingBlock")
+        self._thinking_content.setVisible(False)
+        layout.addWidget(self._thinking_content)
+
+        self._thinking_btn = QPushButton("🤔 Afficher le raisonnement")
+        self._thinking_btn.setObjectName("ThinkingToggleBtn")
+        self._thinking_btn.setVisible(False)
+        self._thinking_btn.setCursor(Qt.PointingHandCursor)
+        self._thinking_btn.clicked.connect(self._toggle_thinking)
+        layout.addWidget(self._thinking_btn)
+
         # ── 2b. Badges inline (confiance + citations) ──
         self._badges_layout = QHBoxLayout()
         self._badges_layout.setSpacing(4)
@@ -445,6 +460,26 @@ class ChatBubble(QFrame):
         self._full_text = text
         html = self._markdown_to_html(text)
         self._text_label.setText(html)
+
+    def set_thinking(self, text: str) -> None:
+        """Définit le texte de raisonnement et rend le bouton visible.
+
+        Le contenu de raisonnement est initialement masqué.
+        L'utilisateur peut cliquer sur le bouton pour l'afficher/masquer.
+        """
+        self._thinking_text = text
+        html = self._markdown_to_html(text)
+        self._thinking_content.setText(html)
+        self._thinking_btn.setVisible(True)
+
+    def _toggle_thinking(self) -> None:
+        """Bascule l'affichage du bloc de raisonnement."""
+        is_visible = self._thinking_content.isVisible()
+        self._thinking_content.setVisible(not is_visible)
+        if is_visible:
+            self._thinking_btn.setText("🤔 Afficher le raisonnement")
+        else:
+            self._thinking_btn.setText("🤔 Masquer le raisonnement")
 
     def append_text(self, chunk: str) -> None:
         """Ajoute un fragment de texte (streaming)."""
