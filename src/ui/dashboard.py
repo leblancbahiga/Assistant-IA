@@ -41,9 +41,13 @@ except ImportError:
     logger.warning("InferenceWorker non disponible")
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QPushButton,
     QSizePolicy,
@@ -139,6 +143,16 @@ try:
 except ImportError:
     ToolTester = None
 
+# ── V11.2 (Sprint 5) — Pages fusionnées ──────────────────────────────────
+try:
+    from src.ui.components.performance_page import PerformancePage
+except ImportError:
+    PerformancePage = None
+try:
+    from src.ui.components.performance_memory_page import PerformanceMemoryPage
+except ImportError:
+    PerformanceMemoryPage = None
+
 
 # ══════════════════════════════════════════════════════════════════════════
 #  CONSTANTES
@@ -157,14 +171,13 @@ NAV_GROUPS = [
         "items": [
             ("📄 Documents", "documents"),
             ("🧠 Mémoire", "memory"),
-            ("🔍 Recherche RAG", "diagnostics"),
+            ("📊 Performances", "performance"),
         ],
     },
     {
         "label": "🤖 Assistant",
         "items": [
             ("⚡ Agent en direct", "agent"),
-            ("📊 Performances", "stats_v10"),
         ],
     },
     {
@@ -180,10 +193,10 @@ NAV_GROUPS = [
         "label": "⋯ Plus",
         "collapsible": True,
         "items": [
-            ("🧠 Mémoire V9 (avancé)", "memory_v9"),
             ("📋 Tâches", "tasks"),
             ("💬 Feedback", "feedback"),
             ("📂 Toutes les conversations", "sessions"),
+            ("🔍 Diagnostics (legacy)", "diagnostics"),
         ],
     },
 ]
@@ -198,6 +211,7 @@ PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
     "logs":       ("📋 Logs",           "Journaux système et traces de débogage."),
     "diagnostics":("📊 Diagnostics",    "Analyse des performances RAG et diagnostic des requêtes."),
     "stats_v10":   ("📈 Stats V10",      "Statistiques temps réel et coûts de NURU V10."),
+    "performance": ("📊 Performances",   "Métriques fusionnées et diagnostics RAG."),
     "tools_v10":   ("🔧 Outils V10",     "Test des outils de génération et de recherche."),
 }
 
@@ -864,7 +878,7 @@ class CyberDashboard(QMainWindow):
             elif slug == "documents":
                 cls = DocumentsPage
             elif slug == "memory":
-                cls = MemoryPage
+                cls = PerformanceMemoryPage if PerformanceMemoryPage is not None else MemoryPage
             elif slug == "logs":
                 cls = LogsPage
             elif slug == "settings":
@@ -873,6 +887,8 @@ class CyberDashboard(QMainWindow):
                 cls = SystemPage
             elif slug == "diagnostics":
                 cls = DiagnosticsPage
+            elif slug == "performance":
+                cls = PerformancePage if PerformancePage is not None else None
             elif slug == "nuru_brain":
                 cls = ArchitecturePage
             else:
@@ -1066,6 +1082,134 @@ class CyberDashboard(QMainWindow):
                 self._metrics.show()
             logger.info("Focus Mode désactivé")
 
+    # ── V11.2 (Sprint 5) — P1-A Cmd+K Command Palette ──
+    def _show_command_palette(self) -> None:
+        """Affiche la palette de navigation rapide (Cmd+K)."""
+        # Construire la liste des entrées
+        entries = [
+            ("💬 Console", "console"),
+            ("📄 Documents", "documents"),
+            ("🧠 Mémoire", "memory"),
+            ("📊 Performances", "performance"),
+            ("⚡ Agent en direct", "agent"),
+            ("🔧 Outils & Debug", "tools_v10"),
+            ("⚙️ Paramètres", "settings"),
+            ("📋 Logs", "logs"),
+            ("📋 Tâches", "tasks"),
+            ("💬 Feedback", "feedback"),
+            ("📂 Toutes les conversations", "sessions"),
+            ("🔍 Diagnostics (legacy)", "diagnostics"),
+        ]
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Recherche rapide")
+        dialog.setFixedSize(400, 320)
+        dialog.setObjectName("CommandPalette")
+        dialog.setStyleSheet(
+            "#CommandPalette {"
+            "  background-color: #121620;"
+            "  border: 1px solid #2A2A4E;"
+            "  border-radius: 8px;"
+            "}"
+        )
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        search_input = QLineEdit()
+        search_input.setPlaceholderText("Tapez une page...")
+        search_input.setStyleSheet(
+            "QLineEdit {"
+            "  background-color: #1A1A2E;"
+            "  color: #C0D0E0;"
+            "  border: 1px solid #2A2A4E;"
+            "  border-radius: 6px;"
+            "  padding: 8px 12px;"
+            "  font-size: 14px;"
+            "}"
+            "QLineEdit:focus {"
+            "  border-color: #3b82f6;"
+            "}"
+        )
+        layout.addWidget(search_input)
+
+        list_widget = QListWidget()
+        list_widget.setStyleSheet(
+            "QListWidget {"
+            "  background-color: transparent;"
+            "  border: none;"
+            "  color: #C0D0E0;"
+            "  font-size: 13px;"
+            "}"
+            "QListWidget::item {"
+            "  padding: 8px 12px;"
+            "  border-radius: 4px;"
+            "}"
+            "QListWidget::item:selected, QListWidget::item:hover {"
+            "  background-color: #1A2A4E;"
+            "  color: #FFFFFF;"
+            "}"
+        )
+        layout.addWidget(list_widget)
+
+        # Remplir la liste
+        filtered = list(entries)
+        for icon_name, slug in filtered:
+            item = QListWidgetItem(icon_name)
+            item.setData(Qt.UserRole, slug)
+            list_widget.addItem(item)
+
+        # Navigation clavier
+        def filter_items(text: str) -> None:
+            list_widget.clear()
+            for icon_name, slug in entries:
+                if text.lower() in icon_name.lower() or text.lower() in slug:
+                    item = QListWidgetItem(icon_name)
+                    item.setData(Qt.UserRole, slug)
+                    list_widget.addItem(item)
+            if list_widget.count() > 0:
+                list_widget.setCurrentRow(0)
+
+        def on_item_activated() -> None:
+            current = list_widget.currentItem()
+            if current:
+                slug = current.data(Qt.UserRole)
+                dialog.accept()
+                self._on_page_changed(slug)
+
+        search_input.textChanged.connect(filter_items)
+        list_widget.itemClicked.connect(lambda item: (
+            setattr(dialog, '_clicked_slug', item.data(Qt.UserRole)),
+            dialog.accept(),
+            self._on_page_changed(item.data(Qt.UserRole))
+        ))
+        list_widget.itemActivated.connect(on_item_activated)
+
+        # Gérer navigation clavier dans le champ de recherche
+        def on_search_key(event):
+            if event.key() == Qt.Key_Down:
+                next_row = (list_widget.currentRow() + 1) % list_widget.count()
+                list_widget.setCurrentRow(next_row)
+                event.accept()
+            elif event.key() == Qt.Key_Up:
+                prev_row = (list_widget.currentRow() - 1) % list_widget.count()
+                list_widget.setCurrentRow(prev_row)
+                event.accept()
+            elif event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+                on_item_activated()
+                event.accept()
+            elif event.key() == Qt.Key_Escape:
+                dialog.reject()
+                event.accept()
+            else:
+                super(QLineEdit, search_input).keyPressEvent(event)
+
+        search_input.keyPressEvent = on_search_key
+        search_input.setFocus()
+
+        dialog.exec()
+
     def _wire_signals(self) -> None:
         """Connecte les signaux entre composants."""
         # Sidebar → page switching
@@ -1110,6 +1254,10 @@ class CyberDashboard(QMainWindow):
         # V11.2 (Sprint 3) — Cmd+F plein écran chat
         self._focus_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         self._focus_shortcut.activated.connect(self._toggle_focus_mode)
+
+        # V11.2 (Sprint 5) — P1-A Cmd+K palette de navigation
+        self._cmd_k_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+        self._cmd_k_shortcut.activated.connect(self._show_command_palette)
 
     def _init_timers(self) -> None:
         """Initialise le timer de mise à jour des métriques."""
@@ -1362,14 +1510,28 @@ class CyberDashboard(QMainWindow):
                 except Exception as e:
                     logger.debug("load_documents: %s", e)
 
-        # MemoryPage ← memory_store
+        # MemoryPage / PerformanceMemoryPage ← memory_store
         if memory_page is not None:
             memory_page.memory_store = memory_store
-            if memory_store is not None and hasattr(memory_page, "load_data"):
-                try:
-                    memory_page.load_data()
-                except Exception as e:
-                    logger.debug("load_data: %s", e)
+            if memory_store is not None:
+                if hasattr(memory_page, "load_data"):
+                    try:
+                        memory_page.load_data()
+                    except Exception as e:
+                        logger.debug("load_data: %s", e)
+                elif hasattr(memory_page, "set_memory_store"):
+                    try:
+                        memory_page.set_memory_store(memory_store)
+                    except Exception as e:
+                        logger.debug("set_memory_store: %s", e)
+
+        # PerformancePage ← tracker
+        perf_page = self._placeholder_map.get("performance")
+        if perf_page is not None and hasattr(perf_page, "refresh"):
+            try:
+                perf_page.refresh()
+            except Exception as e:
+                logger.debug("performance refresh: %s", e)
 
         # V9 MemoryExplorer ← V9 MemoryManager
         v9_memory_page = self._v9_pages.get("memory_v9")
