@@ -22,7 +22,7 @@ from pathlib import Path
 import psutil
 
 from PySide6.QtCore import Qt, QTimer, QSettings, Signal, QSize, QThreadPool, QFileSystemWatcher
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QShortcut, QKeySequence
 
 # ── Path setup ────────────────────────────────────────────────────────────
 project_root = Path(__file__).parent.parent.parent
@@ -139,18 +139,12 @@ except ImportError:
 #  CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════
 
-# V11.1 (P0-B) — Sidebar renommée : logique user au lieu de "V9/V10/dev"
+# V11.2 (Sprint 1) — Navigation simplifiée : 4 groupes principaux + 1 groupe secondaire "Plus"
 NAV_GROUPS = [
     {
-        "label": "🏠 Accueil",
+        "label": "💬 Discussion",
         "items": [
-            ("💬 Nouvelle conversation", "console"),
-        ],
-    },
-    {
-        "label": "💬 Discussions",
-        "items": [
-            ("📂 Toutes les conversations", "sessions"),
+            ("💬 Console", "console"),
         ],
     },
     {
@@ -158,7 +152,7 @@ NAV_GROUPS = [
         "items": [
             ("📄 Documents", "documents"),
             ("🧠 Mémoire", "memory"),
-            ("🔍 Recherche dans les docs", "diagnostics"),
+            ("🔍 Recherche RAG", "diagnostics"),
         ],
     },
     {
@@ -169,14 +163,22 @@ NAV_GROUPS = [
         ],
     },
     {
-        "label": "⚙️ Plus",
+        "label": "⚙️ Système",
         "items": [
-            ("🧩 Outils & Debug", "tools_v10"),
+            ("🔧 Outils & Debug", "tools_v10"),
+            ("⚙️ Paramètres", "settings"),
+            ("📋 Logs", "logs"),
+        ],
+    },
+    # Groupe secondaire caché par défaut — "Plus" toggle
+    {
+        "label": "⋯ Plus",
+        "collapsible": True,
+        "items": [
             ("🧠 Mémoire V9 (avancé)", "memory_v9"),
             ("📋 Tâches", "tasks"),
             ("💬 Feedback", "feedback"),
-            ("⚙️ Paramètres", "settings"),
-            ("📋 Logs", "logs"),
+            ("📂 Toutes les conversations", "sessions"),
         ],
     },
 ]
@@ -374,6 +376,9 @@ class NavSidebar(QWidget):
 
         self._buttons: dict[str, QPushButton] = {}
         self._active_slug: str = ""
+        self._collapsed = False
+        self._collapsible_sections: dict[int, list[QPushButton]] = {}
+        self._collapsible_visible: dict[int, bool] = {}
 
         self._build_ui()
 
@@ -395,20 +400,20 @@ class NavSidebar(QWidget):
         logo_label.setObjectName("LogoLabel")
         header_layout.addWidget(logo_label)
 
-        name_label = QLabel("NURU")
-        name_label.setObjectName("LogoLabel")
-        header_layout.addWidget(name_label)
+        self._name_label = QLabel("NURU")
+        self._name_label.setObjectName("LogoLabel")
+        header_layout.addWidget(self._name_label)
 
         header_layout.addStretch()
 
-        badge = QLabel("V10")
-        badge.setObjectName("VersionBadge")
-        header_layout.addWidget(badge)
+        self._badge = QLabel("V10")
+        self._badge.setObjectName("VersionBadge")
+        header_layout.addWidget(self._badge)
 
         # V11.1 (P0-C) — Bouton collapse sidebar
         self._collapse_sidebar_btn = QPushButton("‹")
         self._collapse_sidebar_btn.setObjectName("CollapseSidebarBtn")
-        self._collapse_sidebar_btn.setToolTip("Masquer la sidebar (Cmd+\\)")
+        self._collapse_sidebar_btn.setToolTip("Réduire la sidebar (Cmd+\\)")
         self._collapse_sidebar_btn.setCursor(Qt.PointingHandCursor)
         self._collapse_sidebar_btn.setFixedSize(22, 22)
         self._collapse_sidebar_btn.clicked.connect(self.collapse_requested.emit)
@@ -417,37 +422,73 @@ class NavSidebar(QWidget):
         layout.addWidget(header)
 
         # ── Groupes de navigation ──
-        for group in NAV_GROUPS:
-            # Section label
-            section = QLabel(group["label"])
-            section.setObjectName("NavSectionLabel")
-            layout.addWidget(section)
+        self._nav_widgets: list[QWidget] = []  # Tous les widgets de nav (boutons + labels)
 
-            for label_text, slug in group["items"]:
-                btn = QPushButton(label_text)
-                btn.setObjectName("NavButton")
-                btn.setProperty("slug", slug)
-                btn.setCursor(Qt.PointingHandCursor)
-                btn.setCheckable(True)
-                btn.clicked.connect(lambda _checked=False, s=slug: self._on_nav_click(s))
-                layout.addWidget(btn)
-                self._buttons[slug] = btn
+        for group_idx, group in enumerate(NAV_GROUPS):
+            is_collapsible = group.get("collapsible", False)
+
+            if is_collapsible:
+                # Bouton toggle "⋯ Plus"
+                toggle_btn = QPushButton(group["label"])
+                toggle_btn.setObjectName("NavSectionToggle")
+                toggle_btn.setCursor(Qt.PointingHandCursor)
+                toggle_btn.setCheckable(True)
+                toggle_btn.clicked.connect(
+                    lambda checked, idx=group_idx: self._toggle_section(idx)
+                )
+                layout.addWidget(toggle_btn)
+                self._nav_widgets.append(toggle_btn)
+
+                # Items cachés par défaut
+                section_buttons = []
+                for label_text, slug in group["items"]:
+                    btn = QPushButton(label_text)
+                    btn.setObjectName("NavButton")
+                    btn.setProperty("slug", slug)
+                    btn.setProperty("secondary", "true")
+                    btn.setCursor(Qt.PointingHandCursor)
+                    btn.setCheckable(True)
+                    btn.clicked.connect(
+                        lambda _checked=False, s=slug: self._on_nav_click(s)
+                    )
+                    btn.setVisible(False)  # Caché par défaut
+                    layout.addWidget(btn)
+                    self._buttons[slug] = btn
+                    section_buttons.append(btn)
+                    self._nav_widgets.append(btn)
+
+                self._collapsible_sections[group_idx] = section_buttons
+                self._collapsible_visible[group_idx] = False
+            else:
+                # Section label normale
+                section = QLabel(group["label"])
+                section.setObjectName("NavSectionLabel")
+                layout.addWidget(section)
+                self._nav_widgets.append(section)
+
+                for label_text, slug in group["items"]:
+                    btn = QPushButton(label_text)
+                    btn.setObjectName("NavButton")
+                    btn.setProperty("slug", slug)
+                    btn.setCursor(Qt.PointingHandCursor)
+                    btn.setCheckable(True)
+                    btn.clicked.connect(
+                        lambda _checked=False, s=slug: self._on_nav_click(s)
+                    )
+                    layout.addWidget(btn)
+                    self._buttons[slug] = btn
+                    self._nav_widgets.append(btn)
 
         layout.addStretch()
 
         # ── V11.1 (P0-J) — Liste des conversations récentes ──
+        self._conv_list: ConversationList | None = None
         if ConversationList is not None:
             self._conv_list = ConversationList(session_store=None)
-            # Clic "Nouvelle conversation" → on bascule vers le chat.
             self._conv_list.new_conversation_requested.connect(
                 lambda: self.page_changed.emit("console")
             )
-            # NOTE V11.2 : session_selected → restauration ConsolePage
-            # (nécessite d'ajouter ConsolePage.load_session()).
-            # Pour Day-2 on expose juste la mécanique, sans restauration.
             layout.addWidget(self._conv_list)
-        else:
-            self._conv_list = None
 
         # ── Documents récents (Module 2) ──
         self._recent_docs = RecentDocuments()
@@ -469,6 +510,14 @@ class NavSidebar(QWidget):
         self._reload_badge.setAlignment(Qt.AlignCenter)
         self._reload_badge.hide()
         layout.addWidget(self._reload_badge)
+
+    def _toggle_section(self, group_idx: int) -> None:
+        """Affiche ou masque les items du groupe collapsible."""
+        buttons = self._collapsible_sections.get(group_idx, [])
+        visible = not self._collapsible_visible.get(group_idx, False)
+        self._collapsible_visible[group_idx] = visible
+        for btn in buttons:
+            btn.setVisible(visible)
 
     def set_reload_badge(self, visible: bool) -> None:
         self._reload_badge.setVisible(visible)
@@ -515,6 +564,56 @@ class NavSidebar(QWidget):
             new_btn.setChecked(True)
             self._unpolish(new_btn)
             self._active_slug = slug
+
+    def set_collapsed(self, collapsed: bool) -> None:
+        """Mini-mode sidebar : 60px (icônes seules) ou 220px (complet)."""
+        self._collapsed = collapsed
+        if collapsed:
+            self.setFixedWidth(60)
+            self._name_label.hide()
+            self._badge.hide()
+            self._collapse_sidebar_btn.setText("»")
+            self._collapse_sidebar_btn.setToolTip("Agrandir la sidebar (Cmd+\\)")
+            if self._conv_list:
+                self._conv_list.hide()
+            self._recent_docs.hide()
+            self._cloud_badge.hide()
+            # Mode icônes : ne montrer que l'emoji, cacher le texte
+            for btn in self._buttons.values():
+                text = btn.text()
+                emoji = text.split(" ")[0] if " " in text else text[:2]
+                btn.setText(emoji)
+                btn.setToolTip(text)
+                btn.setProperty("mini", "true")
+                self._unpolish(btn)
+            for w in self._nav_widgets:
+                if isinstance(w, QLabel):
+                    w.hide()
+        else:
+            self.setFixedWidth(220)
+            self._name_label.show()
+            self._badge.show()
+            self._collapse_sidebar_btn.setText("‹")
+            self._collapse_sidebar_btn.setToolTip("Réduire la sidebar (Cmd+\\)")
+            if self._conv_list:
+                self._conv_list.show()
+            self._recent_docs.show()
+            self._cloud_badge.show()
+            # Restaurer les textes complets (depuis NAV_GROUPS)
+            self._restore_button_texts()
+            for w in self._nav_widgets:
+                if isinstance(w, QLabel):
+                    w.show()
+
+    def _restore_button_texts(self) -> None:
+        """Restaure les textes complets des boutons depuis NAV_GROUPS."""
+        for group in NAV_GROUPS:
+            for label_text, slug in group["items"]:
+                if slug in self._buttons:
+                    self._buttons[slug].setText(label_text)
+                    self._buttons[slug].setToolTip("")
+                    self._buttons[slug].setProperty("mini", "false")
+                    self._unpolish(self._buttons[slug])
 
     def update_model_info(self, name: str, stats: str) -> None:
         """Met à jour l'info modèle dans le footer de la sidebar."""
@@ -650,6 +749,7 @@ class CyberDashboard(QMainWindow):
         if self._settings.value("ui/rightpanel_collapsed", False, type=bool):
             self._collapse_right_panel()
         self._wire_signals()
+        self._setup_shortcuts()
         self._init_timers()
         self.load_styles()
         self._wire_page_dependencies()
@@ -844,25 +944,14 @@ class CyberDashboard(QMainWindow):
 
     # ── V11.1 (P0-C+I) — Collapse / Expand des panels ──
     def _collapse_sidebar(self) -> None:
-        """Masque la sidebar et affiche un mini-bouton pour la restaurer."""
-        if not hasattr(self, "_sidebar_expand_btn") or self._sidebar_expand_btn is None:
-            self._sidebar_expand_btn = QPushButton("›")
-            self._sidebar_expand_btn.setObjectName("ExpandSidebarBtn")
-            self._sidebar_expand_btn.setToolTip("Afficher la sidebar (Cmd+\\)")
-            self._sidebar_expand_btn.setCursor(Qt.PointingHandCursor)
-            self._sidebar_expand_btn.setFixedSize(20, 60)
-            self._sidebar_expand_btn.clicked.connect(self._expand_sidebar)
-            self._main_layout.insertWidget(0, self._sidebar_expand_btn)
-        self._sidebar.hide()
-        self._sidebar_expand_btn.show()
+        """Mini-mode sidebar : 60px (icônes seules)."""
+        self._sidebar.set_collapsed(True)
         if hasattr(self, "_settings"):
             self._settings.setValue("ui/sidebar_collapsed", True)
 
     def _expand_sidebar(self) -> None:
-        """Restaure la sidebar et cache le bouton d'expansion."""
-        if hasattr(self, "_sidebar_expand_btn") and self._sidebar_expand_btn is not None:
-            self._sidebar_expand_btn.hide()
-        self._sidebar.show()
+        """Restaure la sidebar complète (220px)."""
+        self._sidebar.set_collapsed(False)
         if hasattr(self, "_settings"):
             self._settings.setValue("ui/sidebar_collapsed", False)
 
@@ -913,6 +1002,22 @@ class CyberDashboard(QMainWindow):
             # V11.1 (P0-H) — MessageActions regenerate / edit
             self.console_page.regenerate_requested.connect(self._on_regenerate_message)
             self.console_page.edit_requested.connect(self._on_edit_message)
+
+    # ── V11.2 (Sprint 1) — Raccourcis clavier ──
+    def _setup_shortcuts(self) -> None:
+        """Configure les raccourcis clavier : Ctrl+1..5 pour les pages principales."""
+        key_map = {
+            "Ctrl+1": "console",
+            "Ctrl+2": "documents",
+            "Ctrl+3": "memory",
+            "Ctrl+4": "diagnostics",
+            "Ctrl+5": "agent",
+            "Ctrl+6": "stats_v10",
+            "Ctrl+7": "settings",
+        }
+        for seq, slug in key_map.items():
+            sc = QShortcut(QKeySequence(seq), self)
+            sc.activated.connect(lambda s=slug: self._on_page_changed(s))
 
     def _init_timers(self) -> None:
         """Initialise le timer de mise à jour des métriques."""

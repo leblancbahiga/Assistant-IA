@@ -21,7 +21,7 @@ QWidget {
 #Sidebar {
     background-color: #0F0F14;
     border-right: 1px solid #1C1C26;
-    min-width: 220px;
+    min-width: 60px;
     max-width: 220px;
 }
 #SidebarHeader {
@@ -85,6 +85,59 @@ QWidget {
 #CollapseSidebarBtn:hover {
     background-color: #1E1E28;
     color: #A0A0B8;
+}
+
+/* V11.2 (Sprint 1) — Section toggle "⋯ Plus" */
+#NavSectionToggle {
+    background-color: transparent;
+    color: #5A5A6E;
+    border: 1px dashed #252530;
+    border-radius: 6px;
+    padding: 6px 14px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 500;
+    margin: 6px 8px 2px;
+    letter-spacing: 0.04em;
+}
+#NavSectionToggle:hover {
+    background-color: #1A1A24;
+    color: #7A7A9E;
+    border-color: #35354A;
+}
+#NavSectionToggle:checked {
+    background-color: rgba(99, 102, 241, 0.06);
+    color: #818cf8;
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+/* V11.2 (Sprint 1) — Boutons secondaires (sous "⋯ Plus") */
+#NavButton[secondary="true"] {
+    padding: 6px 14px 6px 24px;
+    font-size: 11px;
+    color: #6A6A7E;
+}
+#NavButton[secondary="true"]:hover {
+    background-color: #1A1A24;
+    color: #9A9AB0;
+}
+#NavButton[secondary="true"][active="true"] {
+    background-color: rgba(99, 102, 241, 0.06);
+    color: #7A8cff;
+}
+
+/* V11.2 (Sprint 1) — Mini-mode sidebar (icônes seules, 60px) */
+#NavButton[mini="true"] {
+    padding: 8px 4px;
+    margin: 1px 4px;
+    text-align: center;
+    font-size: 16px;
+}
+#NavButton[mini="true"]:hover {
+    background-color: #1A1A24;
+}
+#NavButton[mini="true"][active="true"] {
+    background-color: rgba(99, 102, 241, 0.08);
 }
 
 /* Recent Documents (Module 2) */
