@@ -112,6 +112,10 @@ try:
 except ImportError:
     AgentStatusWidget = None
 try:
+    from src.ui.components.agent_task_page import AgentTaskPage
+except ImportError:
+    AgentTaskPage = None
+try:
     from src.ui.components.memory_explorer import MemoryExplorer
 except ImportError:
     MemoryExplorer = None
@@ -184,7 +188,7 @@ NAV_GROUPS = [
     {
         "label": "🤖 Assistant",
         "items": [
-            ("⚡ Agent en direct", "agent"),
+            ("🤖 Agent & Tâches", "agent_tasks"),
         ],
     },
     {
@@ -200,7 +204,6 @@ NAV_GROUPS = [
         "label": "⋯ Plus",
         "collapsible": True,
         "items": [
-            ("📋 Tâches", "tasks"),
             ("💬 Feedback", "feedback"),
             ("📂 Toutes les conversations", "sessions"),
             ("🔍 Diagnostics (legacy)", "diagnostics"),
@@ -222,6 +225,7 @@ PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
     "stats_v10":   ("📈 Stats V10",      "Statistiques temps réel et coûts de NURU V10."),
     "performance": ("📊 Performances",   "Métriques fusionnées et diagnostics RAG."),
     "tools_v10":   ("🔧 Outils V10",     "Test des outils de génération et de recherche."),
+    "agent_tasks": ("🤖 Agent & Tâches", "Supervision agent et tâches en cours."),
 }
 
 
@@ -922,9 +926,8 @@ class CyberDashboard(QMainWindow):
         # ── V9 Pages ──
         self._v9_pages: dict[str, QWidget] = {}
         v9_entries = [
-            ("agent",     "Agent",     "Supervision de l'agent ReAct en temps réel", AgentStatusWidget),
+            ("agent_tasks", "Agent & Tâches", "Supervision agent + tâches", AgentTaskPage),
             ("memory_v9", "Mémoire V9", "Explorateur des 6 types de mémoire", MemoryExplorer),
-            ("tasks",     "Tâches",    "Tâches en cours, terminées et interrompues", TaskListWidget),
             ("feedback",  "Feedback",  "Historique des retours utilisateur", FeedbackPage),
         ]
         for slug, title, desc, cls in v9_entries:
@@ -1103,11 +1106,10 @@ class CyberDashboard(QMainWindow):
             ("📄 Documents", "documents"),
             ("🧠 Mémoire", "memory"),
             ("📊 Performances", "performance"),
-            ("⚡ Agent en direct", "agent"),
+            ("🤖 Agent & Tâches", "agent_tasks"),
             ("🔧 Outils & Debug", "tools_v10"),
             ("⚙️ Paramètres", "settings"),
             ("📋 Logs", "logs"),
-            ("📋 Tâches", "tasks"),
             ("💬 Feedback", "feedback"),
             ("📂 Toutes les conversations", "sessions"),
             ("🔍 Diagnostics (legacy)", "diagnostics"),
@@ -1255,7 +1257,7 @@ class CyberDashboard(QMainWindow):
             "Ctrl+2": "documents",
             "Ctrl+3": "memory",
             "Ctrl+4": "diagnostics",
-            "Ctrl+5": "agent",
+            "Ctrl+5": "agent_tasks",
             "Ctrl+6": "stats_v10",
             "Ctrl+7": "settings",
         }
@@ -1364,7 +1366,7 @@ class CyberDashboard(QMainWindow):
                 }
                 page.set_data(data)
 
-            if slug == "tasks" and hasattr(page, "set_tasks"):
+            if slug == "agent_tasks" and hasattr(page, "set_tasks"):
                 import json
                 import sqlite3 as _sqlite3
                 db_path = Path.home() / ".nuru" / "task_states.db"
