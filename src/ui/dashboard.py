@@ -368,6 +368,7 @@ class NavSidebar(QWidget):
     page_changed = Signal(str)
     collapse_requested = Signal()
     expand_requested = Signal()
+    theme_toggled = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -503,6 +504,28 @@ class NavSidebar(QWidget):
         self._model_label.setObjectName("ModelInfoFooter")
         self._model_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._model_label)
+
+        # ── V11.2 (Sprint 2) — Toggle theme ──
+        theme_row = QWidget()
+        theme_row.setObjectName("ThemeRow")
+        theme_layout = QHBoxLayout(theme_row)
+        theme_layout.setContentsMargins(12, 4, 12, 4)
+        theme_layout.setSpacing(6)
+
+        self._theme_btn = QPushButton("🌙")
+        self._theme_btn.setObjectName("ThemeToggleBtn")
+        self._theme_btn.setToolTip("Basculer en mode clair")
+        self._theme_btn.setCursor(Qt.PointingHandCursor)
+        self._theme_btn.setFixedSize(24, 24)
+        self._theme_btn.clicked.connect(self.theme_toggled.emit)
+        theme_layout.addWidget(self._theme_btn)
+
+        theme_label = QLabel("Thème")
+        theme_label.setObjectName("ThemeLabel")
+        theme_layout.addWidget(theme_label)
+        theme_layout.addStretch()
+
+        layout.addWidget(theme_row)
 
         # Badge rechargement (apparaît quand le code source change)
         self._reload_badge = QLabel("🔄 Code modifié — redémarrez le Dashboard")
@@ -750,6 +773,11 @@ class CyberDashboard(QMainWindow):
             self._collapse_right_panel()
         self._wire_signals()
         self._setup_shortcuts()
+        self._is_dark_theme = True
+        # Restaurer état thème
+        if not self._settings.value("ui/dark_theme", True, type=bool):
+            self._is_dark_theme = False
+            # Le QSS sera rechargé après load_styles
         self._init_timers()
         self.load_styles()
         self._wire_page_dependencies()
@@ -796,6 +824,7 @@ class CyberDashboard(QMainWindow):
 
         # ── 1. Sidebar ──
         self._sidebar = NavSidebar()
+        self._sidebar.theme_toggled.connect(self._toggle_theme)
         self._main_layout.addWidget(self._sidebar)
 
         # ── 2. Pages centrales ──
@@ -977,6 +1006,19 @@ class CyberDashboard(QMainWindow):
         self._metrics.show()
         if hasattr(self, "_settings"):
             self._settings.setValue("ui/rightpanel_collapsed", False)
+
+    # ── V11.2 (Sprint 2) — Toggle thème ──
+    def _toggle_theme(self) -> None:
+        """Bascule entre thème sombre et clair."""
+        self._is_dark_theme = not self._is_dark_theme
+        self._settings.setValue("ui/dark_theme", self._is_dark_theme)
+        # Mettre à jour l'icône du bouton
+        self._sidebar._theme_btn.setText("🌙" if self._is_dark_theme else "☀️")
+        self._sidebar._theme_btn.setToolTip(
+            "Basculer en mode clair" if self._is_dark_theme else "Basculer en mode sombre"
+        )
+        self.load_styles()
+        logger.info("Thème basculé : %s", "sombre" if self._is_dark_theme else "clair")
 
     def _wire_signals(self) -> None:
         """Connecte les signaux entre composants."""
@@ -1161,8 +1203,9 @@ class CyberDashboard(QMainWindow):
     # ══════════════════════════════════════════════════════════════════════
 
     def load_styles(self) -> None:
-        """Charge le fichier styles.qss."""
-        style_path = Path(__file__).parent / "styles.qss"
+        """Charge le fichier QSS correspondant au thème actif."""
+        style_name = "styles.qss" if self._is_dark_theme else "styles_light.qss"
+        style_path = Path(__file__).parent / style_name
         if style_path.exists():
             try:
                 with open(style_path, "r", encoding="utf-8") as f:
@@ -1171,7 +1214,7 @@ class CyberDashboard(QMainWindow):
             except Exception as e:
                 logger.warning("Impossible de charger les styles : %s", e)
         else:
-            logger.info("Aucun fichier styles.qss trouvé à %s", style_path)
+            logger.info("Aucun fichier styles trouvé à %s", style_path)
 
     # ══════════════════════════════════════════════════════════════════════
     #  CALLBACKS
