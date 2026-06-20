@@ -6,8 +6,7 @@ from pathlib import Path
 from typing import AsyncGenerator
 from src.config import config
 from src.rag_engine import RAGEngine, RAGResult
-from src.semantic_router import SemanticRouter  # Remplace IntentClassifier legacy
-from src.core.router import Router  # Routeur avec PolicyEngine
+from src.routing import Router, RouterResult
 from src.llm_local import LocalLLM
 from src.llm_cloud import CloudLLM
 from src.memory_store import MemoryStore

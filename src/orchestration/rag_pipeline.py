@@ -24,7 +24,7 @@ from typing import AsyncGenerator, Optional
 
 from src.config import config
 from src.core.exceptions import RAGError, LLMError, ConfigError
-from src.semantic_router import RAG_KEYWORDS
+from src.routing.router import RAG_KEYWORDS
 
 logger = logging.getLogger(__name__)
 

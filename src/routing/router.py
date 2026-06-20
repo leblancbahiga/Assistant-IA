@@ -1,29 +1,21 @@
-"""
-Routeur Sémantique Hybride V10.1 pour NURU.
-Architecture 2-passes de l'audit :
-1. Trivial (regex, 0ms) — salutations, identité
-2. Patterns documentaires (instantané) — mots-clés CV/rapport/projet
-3. Patterns connaissance générale (instantané) — maths, logique, sciences
-4. Patterns web (instantané) — actualité, prix, météo
-5. LLM Classification (~100ms) — cas ambigus
-6. Spotlight (fichiers locaux)
-7. Cloud Fallback
-8. Clarification
-"""
+"""Routeur unifié V12 — Fusion SemanticRouter + Router."""
+import enum
 import logging
 import re
 import time
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
 
 from src.infra.cache import TTLDecisionCache
+from src.core.prompt_guard import sanitize_for_prompt_injection
+from src.core.policies import PolicyEngine
+from src.core.query_context import QueryContext
 
 logger = logging.getLogger(__name__)
 
 # ── Prompt classification LLM (Passe 2) ───────────────────────────────────
 # AUDIT-2026-06-14 V10.3 — S-001 P0 : sanitisation de la query avant interpolation
 # pour éliminer le risque de prompt-injection via le passage LLM de classification.
-from src.core.prompt_guard import sanitize_for_prompt_injection
 
 _INJECTION_BOUNDARIES = ("Classe cette requête", "Réponse")  # seuls extraits du template, JAMAIS user-influencés
 
@@ -45,6 +37,7 @@ def build_classify_prompt(query: str) -> str:
     - Garantit qu'aucun contenu user ne peut faire sortir le modèle du cadre "un seul mot"
     """
     return CLASSIFY_PROMPT.replace("<<QUERY>>", sanitize_for_prompt_injection(query, max_chars=500))
+
 
 # ── Patterns connaissance générale (Passe 1 — audit §7.1) ─────────────────
 GENERAL_KNOWLEDGE_PATTERNS = [
@@ -107,12 +100,52 @@ class RouterResult:
     processing_time_ms: float = 0.0
     rag_top_score: float = 0.0
     spotlight_context: str = ""
+    hybrid_strategy: Optional[str] = None  # V6: ajouté par Router
 
 
-class SemanticRouter:
-    """Routeur V10.1 : 2-passes (regex → LLM) avec gate de score RAG."""
+class HybridStrategy(enum.Enum):
+    """Stratégies hybrides local+cloud inspirées d'OpenJarvis.
 
-    def __init__(self, rag_engine=None, is_online_check=None, cloud_llm=None):
+    LOCAL_ONLY          : tout en local (défaut V5)
+    LOCAL_CLOUD_VERIFY  : Phi-4-mini répond, Groq vérifie et corrige
+    CLOUD_PLAN_LOCAL    : Groq planifie les étapes, Phi-4-mini exécute
+    LOCAL_RAG_CLOUD     : RAG locale récupère, Groq synthétise (Archon)
+    """
+    LOCAL_ONLY = "local_only"
+    LOCAL_CLOUD_VERIFY = "verify"
+    CLOUD_PLAN_LOCAL = "plan"
+    LOCAL_RAG_CLOUD = "rag"
+
+    @classmethod
+    def from_config(cls, mode: str):
+        """Parse une string config en HybridStrategy."""
+        mapping = {
+            "local_only": cls.LOCAL_ONLY,
+            "verify": cls.LOCAL_CLOUD_VERIFY,
+            "plan": cls.CLOUD_PLAN_LOCAL,
+            "rag": cls.LOCAL_RAG_CLOUD,
+        }
+        return mapping.get(mode, cls.LOCAL_ONLY)
+
+
+class Router:
+    """Routeur unifié V12 — Patterns + LLM + Spotlight + PolicyEngine.
+
+    Fusion de SemanticRouter (src/semantic_router.py) et Router (src/core/router.py).
+
+    Architecture 2-passes de l'audit :
+    1. Trivial (regex, 0ms) — salutations, identité
+    2. Patterns documentaires (instantané) — mots-clés CV/rapport/projet
+    3. Patterns connaissance générale (instantané) — maths, logique, sciences
+    4. Patterns web (instantané) — actualité, prix, météo
+    5. LLM Classification (~100ms) — cas ambigus
+    6. Spotlight (fichiers locaux)
+    7. Cloud Fallback
+    8. Clarification
+    """
+
+    def __init__(self, rag_engine=None, is_online_check=None,
+                 cloud_llm=None, policy_engine=None, hybrid_mode="local_only"):
         self.rag_engine = rag_engine
         self.cloud_llm = cloud_llm
         self.is_online = is_online_check or (lambda: True)
@@ -123,6 +156,8 @@ class SemanticRouter:
             self._spotlight = SpotlightSearch()
         except Exception:
             pass
+        self.policy_engine = policy_engine or PolicyEngine()
+        self.hybrid_strategy = HybridStrategy.from_config(hybrid_mode)
 
     def set_rag_engine(self, rag_engine):
         self.rag_engine = rag_engine
@@ -301,7 +336,46 @@ class SemanticRouter:
                 return valid.upper()
         return "GENERAL"
 
-    async def route_with_context(self, ctx, rag_context=None, rag_result=None):
-        """Route avec un QueryContext (compatibilité orchestrator)."""
-        query = getattr(ctx, 'query', '') or getattr(ctx, 'text', '')
-        return await self.route(query, rag_context=rag_context, rag_result=rag_result)
+    async def route_with_context(self, ctx: QueryContext, rag_context: Optional[str] = None,
+                                  rag_result=None) -> RouterResult:
+        """Route en utilisant un QueryContext pour les décisions RAM-dépendantes.
+
+        Ajoute les informations de stratégie hybride dans le résultat.
+        V10 : Spotlight contourne l'escalade RAM (pas de LLM, léger).
+        V10 Audit: Accepte un rag_context/rag_result pré-calculé pour éviter
+        le double appel retrieve().
+        """
+        result = await self.route(ctx.query, rag_context=rag_context, rag_result=rag_result)
+
+        # V10 : Spotlight ne déclenche JAMAIS l'escalade Cloud
+        # (Spotlight = mdfind, pas de LLM, pas de RAM nécessaire)
+        is_spotlight = result.spotlight_context != ""
+
+        # V10 Expert fix: Spotlight bypass — si Spotlight a trouvé du contenu,
+        # forcer LOCAL_ONLY quel que soit l'état RAM
+        if is_spotlight and len(result.spotlight_context) > 500:
+            logger.info(
+                f"🔍 Spotlight bypass: {len(result.spotlight_context)} chars trouvés "
+                f"→ forçage LOCAL_ONLY (pas d'escalade Cloud)"
+            )
+            # Ne pas changer la décision (déjà LOCAL_RAG depuis N4)
+            return result
+
+        # Escalade cloud si RAM trop basse (sauf si c'est du Spotlight)
+        if result.decision == "LOCAL_RAG" and not is_spotlight and self.policy_engine.should_use_cloud(ctx):
+            logger.info(f"↩️ Router: RAM {ctx.ram_free_mb} MB → escalation Cloud forcée")
+            result.decision = "CLOUD_GROQ"
+            result.reasoning += " | RAM trop basse pour local"
+        elif is_spotlight:
+            logger.info(f"🔍 Router: Spotlight actif → pas d'escalade RAM")
+
+        # Stratégie hybride : enrichir le résultat
+        result.hybrid_strategy = self.hybrid_strategy.value
+        result.reasoning += f" | hybrid:{self.hybrid_strategy.value}"
+
+        return result
+
+    def set_hybrid_strategy(self, mode: str):
+        """Change la stratégie hybride à la volée."""
+        self.hybrid_strategy = HybridStrategy.from_config(mode)
+        logger.info(f"🔄 Router: stratégie hybride → {self.hybrid_strategy.value}")

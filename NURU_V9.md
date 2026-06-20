@@ -593,7 +593,7 @@ OBJECTIF UTILISATEUR
             └── Score de confiance
                     │
                 ┌───┴───┐
-                │  OK ?  │
+                │  OK ? │
                 └───┬───┘
                  OUI│   NON
                     │      │

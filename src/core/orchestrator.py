@@ -31,6 +31,7 @@ from src.token_juice import TokenJuice
 from src.learning.trace_collector import TraceCollector
 from src.cache.llm_cache import LLMCache
 from src.orchestration import RAGOrchestrator, LLMGenerator
+from src.routing.prompt_builder import DynamicPromptBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,7 @@ class NuruOrchestrator:
         self.web = web_search
         self.context_budget = context_budget
         self._system_prompt_builder = system_prompt_builder
+        self.prompt_builder = DynamicPromptBuilder()
         # NURU : Mode Strict RAG depuis config
         self.response_guard = StrictRAGGuard(config.response_mode)
         # NURU : Vérificateur de citations
@@ -279,9 +281,15 @@ class NuruOrchestrator:
             relevant_facts = await self.long_term_memory.get_relevant_facts(query, limit=10)
             if relevant_facts:
                 user_facts_str = self.long_term_memory.format_facts_for_prompt(relevant_facts)
-        system_prompt, full_prompt = self._build_prompt(
+        system_prompt, full_prompt = self.prompt_builder.build_prompt(
             intent, query, rag_context, web_context,
             user_facts_str=user_facts_str, session_id=session_id,
+            system_prompt_builder=self._system_prompt_builder,
+            memory_store=self.memory_store,
+            session_store=self.session_store,
+            context_budget=self.context_budget,
+            model_family=self._model_for_intent(intent),
+            session_max_context=self._session_max_context,
         )
 
         # Action E : Budget token post-template — écrêtage final du prompt complet
@@ -467,6 +475,15 @@ class NuruOrchestrator:
             "CLARIFICATION": "SIMPLE",
             "SIMPLE": "SIMPLE",
         }.get(decision, "GENERAL")
+
+    def _model_for_intent(self, intent: str) -> str:
+        """Mappe un intent au nom de famille de modèle."""
+        return {
+            "COMPLEX": "llama",
+            "RAG": "phi",
+            "GENERAL": "phi",
+            "SIMPLE": "phi",
+        }.get(intent, "phi")
 
     def _build_prompt(self, intent, query, rag_context, web_context,
                       user_facts_str="", session_id: Optional[str] = None):
