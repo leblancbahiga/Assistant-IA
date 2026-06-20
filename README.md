@@ -1,16 +1,16 @@
 <div align="center">
-  <img src="https://img.shields.io/badge/NURU-V10.2-00A3FF?style=for-the-badge&logo=python&logoColor=white" alt="NURU V10.2"/>
+  <img src="https://img.shields.io/badge/NURU-V12-00D4FF?style=for-the-badge&logo=python&logoColor=white" alt="NURU V12"/>
   <img src="https://img.shields.io/badge/Platform-macOS%20M1-39FF14?style=for-the-badge&logo=apple&logoColor=white" alt="macOS M1"/>
   <img src="https://img.shields.io/badge/RAM-8%20Go%20Unified-FFB000?style=for-the-badge" alt="8 Go RAM"/>
-  <img src="https://img.shields.io/badge/Tests-54%2F59-success?style=for-the-badge" alt="54/59 Tests"/>
-  <img src="https://img.shields.io/badge/Status-V10.2%20Actif%20(Certifié%20Audit)-00A3FF?style=for-the-badge" alt="Status V10.2 Actif"/>
+  <img src="https://img.shields.io/badge/Tests-66%20%F0%9F%94%B4%20Phase%200-success?style=for-the-badge" alt="66 Tests"/>
+  <img src="https://img.shields.io/badge/Status-V12%20Actif%20(Phase%200%20%E2%9C%85)-00D4FF?style=for-the-badge" alt="Status V12"/>
 </div>
 
 <br/>
 
-<h1 align="center">🌀 NURU — Assistant IA Local V10.2</h1>
+<h1 align="center">🌀 NURU — Personal Cognitive OS V12</h1>
 <p align="center">
-  <i>Agentic RAG System for Apple Silicon — Intent-First Routing + Cloud Multi-Provider + Memory V9</i>
+  <i>De l'assistant IA agentic au système d'exploitation cognitif personnel</i>
 </p>
 
 <p align="center">
@@ -19,137 +19,93 @@
 
 ---
 
-## ✨ Aperçu
+## ✨ Vision
 
-**NURU V10.2** est un assistant IA personnel **agentic** qui combine :
-- Un **routeur intent-first** (classification LLM via Groq ~100ms) qui décide AVANT tout appel d'outil
-- Un **LLM local** (Phi-4-mini) pour le trivial et l'offline
-- Un **LLM cloud multi-provider** (Groq, OpenCode Zen, OpenRouter, DeepSeek, Nvidia) avec circuit breaker
-- Un **moteur RAG hybride multi-stratégie** : Vectoriel + FTS5 + HyDE + Query Rewriting + RRF
-- Une **mémoire V9** structurée (épisodique, sémantique, utilisateur, erreurs) + mémoire V5
-- Un **vérificateur de faits** post-génération avec boucle de rétroaction
-- Le tout dans une **interface PySide6 cyberpunk 3 colonnes** (V10)
+**NURU V12** est la fondation d'un **Personal Cognitive Operating System** — une présence numérique qui comprend, anticipe et agit pour son utilisateur. Pas un chatbot, pas un copilote : **un JARVIS personnel**.
 
-## 🚀 Fonctionnalités Clés V10
-
-| Composant | Technologie | Détails |
-|-----------|-------------|---------|
-| **Routeur Intent** | LLM Classification (Groq, ~100ms) | GENERAL_KNOWLEDGE / RAG / WEB / SIMPLE |
-| LLM Local (principal) | **Phi-4-mini-instruct 4-bit** (MLX) | ~2.5 Go RAM, ~12 tok/s sur M1 |
-| LLM Cloud (multi-provider) | **Groq** (Llama 3.3 70B) → **OpenRouter** → **DeepSeek** → **Nvidia** | Circuit Breaker + Fallback |
-| Embeddings | **multilingual-e5-base-mlx** | 768d, multilingue (FR/EN/Swahili) |
-| Reranker | **cross-encoder/ms-marco-MiniLM-L6-v2** | Conditionnel (zone grise) |
-| Mémoire | **V9 MemoryManager** (épisodique + sémantique + utilisateur) + **V5 MemoryStore** | 7 faits utilisateur |
-
-### 🧠 Routeur Intent-First (V10)
-
-Le routeur classifie la requête **avant** tout appel d'outil :
-
-| Intent | Déclencheur | Action |
-|--------|-------------|--------|
-| `GENERAL_KNOWLEDGE` | Maths, logique, sciences, définitions | LLM répond directement (pas de RAG) |
-| `DOCUMENT_KEYWORD` | CV, rapport, projet, fichier | Pipeline RAG + gate de score (≥0.15) |
-| `WEB_SEARCH` | Actualité, prix, météo, président | CloudLLM + recherche web |
-| `SIMPLE` | Salutations, identité | LLM local direct |
-| `COMPLEX` | Cas ambigus | LLM Classification → routing |
-
-**Classification 2-passes :**
-- **Passe 1** (regex, 0ms) : patterns connaissance générale, documents, web
-- **Passe 2** (LLM Groq, ~100ms) : cas ambigus non résolus par la Passe 1
-
-### 🔍 RAG Hybride V10
-
-- **Gate de score** : `LOCAL_RAG` seulement si `top_score ≥ 0.15` (pas de faux positifs)
-- **Score affiché** : utilise le score reranker (0.95), pas le RRF normalisé (0.33)
-- **Tables DOCX** : extraction complète incluant les tableaux
-- **Profil auto-détecté** : cv/rapport/note selon le nom du fichier
-- **Seuils** : `rag_score_threshold=0.30` (V10.2: 0.40→0.30, moins de faux négatifs), `rag_score_fallback=0.25`
-
-### 🧠 Mémoire V9
-
-- **MemoryBridge** : connecte V5 (MemoryStore) + V9 (MemoryManager) au pipeline
-- **UserMemory** : faits structurés (clé/valeur/catégorie/confiance)
-- **EpisodicMemory** : souvenirs datés et contextuels
-- **Injection prompt** : faits V9 injectés dans le system prompt via LongTermMemory
-
-### 📊 Scores de confiance
-
-| Score | Label | Affichage |
-|-------|-------|-----------|
-| ≥ 0.70 | HAUTE | 🟢 Vert |
-| ≥ 0.40 | MOYENNE | 🟡 Jaune |
-| < 0.40 | FAIBLE | 🔴 Rouge |
+| Pilier | V10 → V12 | Différenciateur |
+|--------|-----------|-----------------|
+| **Identité** | Prompt hardcodé → **PersonaEngine** + traits configurables | Z.ai : « plus grande faiblesse cachée » |
+| **Mémoire** | Faits utilisateur simples → **SleepCycleManager** (3 phases light/deep/REM) | Courbe de l'oubli, journal de rêves |
+| **Action** | « Copilote qui parle » → **Agent Loop** (planner → executor → verifier → recovery) | Contrôle OS, navigateur, shell sandboxé |
+| **Voix/Vision** | Texte seul → **Pipeline vocal local** (STT+TTS+wake word+VAD+barge-in) + vision écran/doc | Présence Z.ai animée (Orb 7 états) |
+| **Proactivité** | Attend qu'on lui parle → **ProactiveEngine** + signaux + routines | Rappels, suggestions, surveillance |
+| **Écosystème** | Îlot → **MCP Client/Server** + intégrations Gmail/Calendar/Tâches | Interopérabilité Claude Desktop, Cursor |
+| **Sécurité** | Correctifs ponctuels → **Privacy Layer** + CostGuard + Harnais d'évaluation | Opt-in granulaire, budget cloud |
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture V12
 
 ```
-┌─────────────────┬──────────────────────────┬──────────────────────┐
-│   Sidebar        │   Chat Central            │   Colonne Métriques  │
-│  (260px)         │   (QStackedWidget)        │   (320px fixe)       │
-│                  │                           │                      │
-│                  │   🧃 TokenJuice          │   RAM 2.3/8.0G       │
-│                  │       ↓                   │   TOK/S   RAG   MODE │
-│                  │   🧠 Intent Router        │   12.5    0.95  RAG  │
-│                  │     ├─ GENERAL → LLM      │   ──────────         │
-│                  │     ├─ RAG    → Pipeline  │   📊 DIAGNOSTIC      │
-│                  │     ├─ WEB    → Cloud     │   Stratégie active   │
-│                  │     └─ SIMPLE → Local     │   Index Health       │
-│                  │       ↓                   │   ──────────         │
-│                  │   🔍 Pipeline RAG V10     │   🧠 MÉMOIRE V9      │
-│                  │   Query Rewriter          │   7 faits user       │
-│                  │   Multi-Strategy          │   Épisodique         │
-│                  │   RRF + Dedup             │                      │
-│                  │   Score Gate ≥0.15        │                      │
-│                  │       ↓                   │                      │
-│                  │   ☁️ CloudLLM Multi-Prov  │                      │
-│                  │       ↓                   │                      │
-│                  │   ✅ FactChecker          │                      │
-│                  │       ↓                   │                      │
-│                  │   📥 TraceCollector       │                      │
-└─────────────────┴──────────────────────────┴──────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                    PHASE 2a — GARDE-FOUS & IDENTITÉ                   │
+│  PrivacyLayer · ConsentManager · AuditLog · PersonaEngine · Traits   │
+├──────────────────────────────────────────────────────────────────────┤
+│                    PHASE 2 — MULTIMODAL                               │
+│  STT (mlx-whisper) · TTS (Kokoro) · Wake word · VAD · Barge-in       │
+│  Vision écran (cloud) · Vision doc (OCR+LLM) · VoiceOverlay Z.ai     │
+├──────────────────────────────────────────────────────────────────────┤
+│                    PHASE 3 — PROACTIVITÉ & MÉMOIRE                    │
+│  ProactiveEngine · SleepCycleManager · Prompt dynamique               │
+│  PersonaEngine (plein) · Routines · Harnais d'évaluation              │
+├──────────────────────────────────────────────────────────────────────┤
+│                    PHASE 4 — ÉCOSYSTÈME                               │
+│  MCP Client/Server · ModelRouter · CostGuard · Intégrations           │
+│  (Gmail, Calendar, Tâches, Spotify, GitHub, Notion, Slack)           │
+├──────────────────────────────────────────────────────────────────────┤
+│                    PHASE 1 — AGENT LOOP (ACTION)                      │
+│  ToolRegistry · Shell sandboxé · Navigateur · Contrôle OS · Fichiers │
+├──────────────────────────────────────────────────────────────────────┤
+│                    PHASE 0 — CONSOLIDATION (✅ TERMINÉE)               │
+│  Router unique · DynamicPromptBuilder · 66 tests · Design Z.ai V12   │
+├──────────────────────────────────────────────────────────────────────┤
+│                    FONDATIONS V9-V10 (existant)                       │
+│  RAG hybride · Mémoire V9 · Multi-provider cloud · TokenJuice        │
+└──────────────────────────────────────────────────────────────────────┘
 ```
+
+### 🎨 Design Z.ai — Présence Numérique
+
+Le design V12 remplace le cockpit 3 colonnes par une **présence animée** :
+
+| Composant | Description |
+|-----------|-------------|
+| **NuruPresenceOrb** | Orbe 120px animé QPainter, **7 états** (idle, listening, thinking, speaking, acting, error, sleeping), cycle EventBus |
+| **VoiceOverlay** | Fenêtre frameless 60%×40%, animations de transition (scale 0.8→1.0, 250ms), disparition après 8s silence |
+| **FloatingWidget** | Widget flottant 160px, parallélisable (Phase 3) |
+| **macOS native** | Menu bar QSystemTrayIcon, raccourcis ⌥␣ ⌘⇧N |
+| **Palette** | `#0D1117` (fond) / `#00D4FF` (cyan) / `#E8A87C` (corail accent) |
+| **Performance** | < 5% CPU (QPainter), max 5% CPU animations |
 
 ---
 
-## 🐛 Corrections V10.2 (Audit certifié)
+## 🚀 Roadmap V12 (21 sprints, ~5 mois)
 
-| # | Problème | Correctif | Rapport |
-|---|----------|-----------|:-------:|
-| 1 | **`import logging` manquant** dans `config.py` — toggles Settings plantés | `import logging` ajouté | #3 |
-| 2 | **URL OpenRouter erronée** `api.openrouter.ai` (404) | `api.` retiré | #3 |
-| 3 | **Fuite mémoire MLX** sur erreur streaming | `finally: self.unload()` dans `generate_stream()` | #1, #A |
-| 4 | **`pysqlite3` bloquant** sur Python 3.11+ | `pysqlite3-binary` + import protégé try/except | #3 |
-| 5 | **Prompt/RAG injection** — LLM peut recevoir des instructions adverses | `_sanitize_rag_query()` + `_sanitize_chunk_content()` (PromptGuard) | #1, #2, #5, #Final |
-| 6 | **`confidence_label="HAUTE"`** sur retour RAG vide | Forcé à `"ABSENT"` | #3, #4 |
-| 7 | **Seuil RAG 0.40 trop élevé** — faux négatifs documentaires | Réduit à `0.30` | #4, #2, #1, #A |
-| 8 | **Fenêtre contextuelle bridée** (4096 tokens, Phi-4-mini 32K) | `max_prompt_tokens=8192`, `reserved_response=2048` | #A |
-| 9 | **`except Exception` génériques** dans le pipeline | Hiérarchie `OrchestratorError` → `RAGError/LLMError/MemoryError` | #1, #2, #A |
-| 10 | **Race condition cache sémantique** | `asyncio.Lock()` sur `get_cache()`/`set_cache()` | #2, #4 |
-| 11 | **Pas de cache RAM LLM** — chaque requête identique refait une recherche sémantique SQLite | Cache multi-niveau : L1 RAM (hash+T...[truncated]
+```text
+Phase 0   ✅ Consolidation       (S1-S2)    Nettoyage V4, routeur unique, 66 tests
+Phase 1   🔄 Agent Loop          (S3-S8)    Shell → OS → Navigateur → Fichiers → MCP
+Phase 2a  🔜 Garde-fous         (S8.5)     Privacy Layer + PersonaEngine (base)
+Phase 2   🔜 Multimodal          (S9-S14)   STT → TTS → Wake word → VAD → Vision
+Phase 3   🔜 Proactivité         (S15-S18)  Proactive → PersonaEngine → SleepCycle → Routines
+Phase 4   🔜 Écosystème          (S19-S20)  MCP → ModelRouter → CostGuard → Intégrations
+```
 
-**Constats des 7 experts auditeurs :** consensus 7/7 — NURU sécurisé et stabilisé. Cache LLM multi-niveau ajouté (L1 RAM). Code mort V8 (`audio_tts.py`, `sqlite_compat.py`) déjà nettoyé. Modules V8 (MultiSearchOrchestrator, FactChecker, HyDE, decomposer) confirmés actifs.
+### 🧬 V13 — Absorption dans V12
 
-## 🐛 Corrections V10.1
+Conformément à la stratégie « formaliser, réconcilier, compléter », les modules V13-A/B sont **intégrés dans V12** :
 
-| # | Problème | Correctif |
-|---|----------|-----------|
-| 1 | **Profile Boost x2.5** favorisait les CV | Supprimé — tous les fichiers égaux |
-| 2 | **Dashboard V7** — pages V10 vierges | Navigation V10 + label V10 |
-| 3 | **source_list non défini** après suppression Profile Boost | Variable initialisée |
-| 4 | **Tables DOCX non extraites** | Extraction ajoutée dans `_parse_file` |
-| 5 | **Profil chunking toujours "cv"** | `detect_profile()` auto-détecte cv/rapport/note |
-| 6 | **Timeout indexation 30s** | Porté à 120s pour les gros fichiers |
-| 7 | **RAG-par-défaut** — "je ne trouve pas" pour maths/logique | Routeur intent-first + GENERAL_KNOWLEDGE |
-| 8 | **Scores affichés = 0.33%** | Score reranker utilisé (0.95) au lieu du RRF |
-| 9 | **Mémoire V9 non câblée** | MemoryBridge V5+V9 + _load_v9_page_data corrigé |
-| 10 | **#8B949E dans le texte** | Color code retiré du label MemoryExplorer |
-| 11 | **Agent "Inactif"** | Changé en "Prêt — en attente de tâche" |
-| 12 | **Sessions/Documents** sans données | `_wire_page_dependencies` crée les instances |
-| 13 | **`embed()` async appelé synchrone** | Remplacé par `embed_sync()` |
-| 14 | **`import re` conditionnel** | Déplacé au niveau module |
-| 15 | **remove_file_index** — database locked | Retry 3x + BEGIN IMMEDIATE + busy_timeout |
+| Module V13 | Absorbé dans V12 | Sprint |
+|------------|------------------|--------|
+| **PersonaEngine** | Identité NURU (traits, presets, ToneAdapter) | Phase 2a (base) + S16 (plein) |
+| **Privacy & Consent Layer** | Opt-in capteurs, journal d'audit, indicateur macOS | Phase 2a S8.5 |
+| **SleepCycleManager** | 3 phases mémoire (light/deep/REM) | Phase 3 S16 |
+| **ModelRouter** | Choix délibéré du LLM par tâche | Phase 4 S20 |
+| **CostGuard** | Budget cloud (2$/jour) + bascule auto locale | Phase 4 S19 |
+| **Connecteur Tâches** | Reminders/Todoist générique | Phase 4 S20 |
+| **Harnais d'évaluation** | Tests régression mémoire + cohérence persona | Phase 3 S18 |
+
+**Ce qui reste V13** (après V12) : LiveKit (voix distante), Médiatisation locale MLX, Skills SDK + Vues.
 
 ---
 
@@ -157,68 +113,90 @@ Le routeur classifie la requête **avant** tout appel d'outil :
 
 ```
 src/
-├── core/
-│   ├── orchestrator.py      # NuruOrchestrator V4.5
-│   ├── router.py             # Router (wrapper SemanticRouter + PolicyEngine)
-│   ├── exceptions.py         # Hiérarchie: OrchestratorError → RAGError|LLMError|MemoryError
-│   ├── response_guard.py     # StrictRAGGuard
-│   └── policies.py           # PolicyEngine (RAM + fallback)
-├── rag/
-│   ├── multi_search.py       # Multi-stratégie + RRF
-│   ├── chunking.py           # SemanticChunker
-│   ├── v2_chunking.py        # HierarchicalChunkerV2 (auto-detect profile)
-│   └── spotlight.py          # Spotlight (mdfind macOS)
-├── memory/
-│   ├── manager.py            # MemoryManager V9
-│   ├── user.py               # UserMemory (faits structurés)
-│   ├── episodic.py           # EpisodicMemory
-│   └── semantic.py           # SemanticMemory
-├── ui/
-│   ├── dashboard.py          # CyberDashboard V10
-│   ├── styles.qss            # Thème Deep Ocean
-│   └── components/
-│       ├── console_page.py   # Chat
-│       ├── documents_page.py # Base documentaire
-│       ├── sessions_page.py  # Historique sessions
-│       ├── memory_page.py    # Mémoire V5
-│       ├── memory_explorer.py # Mémoire V9
-│       ├── diagnostics_page.py # Diagnostics RAG
-│       ├── v6_system_page.py # État modules V10
-│       ├── agent_status.py   # Widget agent
-│       └── stats_page.py     # Statistiques V10
-├── cache/
-│   ├── __init__.py            # Package cache V10.2
-│   └── llm_cache.py           # Cache multi-niveau (L1 RAM + L2 SQLite)
-├── semantic_router.py        # Routeur intent-first (Passe 1 + LLM)
-├── long_term_memory.py       # Adaptateur MemoryBridge → orchestrator
-├── memory_bridge.py          # Pont V5+V9
-├── rag_engine.py             # Moteur RAG hybride
-├── ingestion.py              # Indexation documents
-├── embedder.py               # Embeddings MLX
-├── llm_local.py              # Phi-4-mini MLX
-├── llm_cloud.py              # Multi-provider cloud
+├── core/                     # Cœur (orchestrateur, policies, exceptions)
+├── routing/                  # Routeur N0-N6 + DynamicPromptBuilder (Phase 0)
+├── agent/                    # Agent Loop : TaskPlanner, Executor, Verifier (Phase 1)
+├── personality/              # PersonaEngine : traits, presets, ValueGuardrails
+├── privacy/                  # Privacy & Consent Layer, audit log (Phase 2a)
+├── voice/                    # Pipeline vocal : STT, TTS, wake word, VAD (Phase 2)
+├── vision/                   # Vision écran, documents (Phase 2)
+├── proactive/                # ProactiveEngine, signaux, routines (Phase 3)
+├── memory/                   # MemoryManager V9, SleepCycleManager (Phase 3)
+├── mcp/                      # MCP Client/Server, intégrations (Phase 4)
+├── models/                   # ModelRouter, CostGuard (Phase 4)
+├── security/                 # Security hardening, sandbox (Phase 4)
+├── eval/                     # Harnais d'évaluation mémoire & persona (Phase 3)
+├── ui/                       # Dashboard, VoiceOverlay, NuruPresenceOrb
+│   └── assets/               # Logos V5
+├── rag/                      # Multi-stratégie, chunking, HyDE
+├── cache/                    # Cache LLM multi-niveau (L1 RAM + L2 SQLite)
+├── token_juice.py            # Compression tokens (-40% à -50%)
 ├── config.py                 # Configuration
-├── nuru_core.py              # NuruCore (orchestrateur principal)
-├── token_juice.py            # Compression tokens
-└── reranker.py               # Cross-encoder reranker
+└── nuru_core.py              # Orchestrateur principal
 ```
 
 ---
 
-## 🚀 Installation
+## 🧠 Modules clés
+
+### Routeur Intent-First (V10+)
+Classification LLM (~100ms) : `GENERAL_KNOWLEDGE` / `RAG` / `WEB` / `SIMPLE` / `COMPLEX` — décide **avant** tout appel d'outil.
+
+### RAG Hybride V10
+Vectoriel + FTS5 + HyDE + Query Rewriting + RRF. Gate de score ≥ 0.30. Extraction DOCX complète (tableaux inclus). Profil auto-détecté (cv/rapport/note).
+
+### Mémoire V9
+- **EpisodicMemory** — souvenirs datés et contextuels
+- **SemanticMemory** — faits structurés clé/valeur/confiance
+- **UserMemory** — préférences utilisateur persistantes
+- **ErrorMemory** — historique des erreurs pour auto-correction
+- **SleepCycleManager** — consolidation en 3 phases (light/deep/REM)
+
+### Multi-Provider Cloud
+Groq (Llama 3.3 70B, primaire) → OpenRouter → DeepSeek → Phi-4-mini (local). Circuit breaker + fallback + **ModelRouter** (choix délibéré par tâche).
+
+### TokenJuice
+Compression adaptative -40% à -50% tokens selon le contexte — l'avantage compétitif qui rend tout possible sur M1 8 Go.
+
+---
+
+## 📊 État d'avancement
+
+| Phase | Statut | Modules | Tests |
+|-------|--------|---------|-------|
+| **Phase 0** — Consolidation | ✅ Terminée | 3 (routing/, prompt_builder, tests/) | **66 ✅** |
+| **Phase 1** — Agent Loop | 🔄 En cours | ToolRegistry, executor, planner | — |
+| **Phase 2a** — Garde-fous | 🔜 Planifié | Privacy, PersonaEngine base | — |
+| **Phase 2** — Multimodal | 🔜 Planifié | STT, TTS, Wake word, VAD, Vision | — |
+| **Phase 3** — Proactivité | 🔜 Planifié | Proactive, SleepCycle, Routines, Éval | — |
+| **Phase 4** — Écosystème | 🔜 Planifié | MCP, ModelRouter, CostGuard, Intégs | — |
+
+**RAM cible finale** : < 7.0 Go (tous modes confondus)
+**V13 Vision** : `NURU_V13_VISION.md` — LiveKit, médiatisation locale, skills SDK
+
+---
+
+## 🚀 Démarrage rapide
 
 ```bash
-# Cloner le dépôt
-git clone <url>
-cd "Assistant IA"
-
-# Installer les dépendances
-pip install -r requirements.txt
-
 # Lancer le dashboard
 python3 src/ui/dashboard.py
+
+# Tests Phase 0
+python3 -m pytest tests/ -v
 ```
 
 ---
 
-*Document mis à jour le 14 juin 2026 — NURU V10.2 — Audit certifié 7 experts*
+## 📜 Documentation
+
+| Document | Contenu |
+|----------|---------|
+| `NURU_V9.md` | Plan V12 détaillé (phases, sprints, design Z.ai) |
+| `NURU_V13_VISION.md` | Vision Personal Cognitive Operating System |
+| `NURU_AUDIT_SYNTHESE.md` | 7 rapports d'audit, 88 trouvailles |
+| `ROADMAP.md` | Roadmap unifiée V12→V13 |
+
+---
+
+*Document mis à jour le 20 juin 2026 — NURU V12 — Phase 0 ✅ — V13-A/B absorbé*
