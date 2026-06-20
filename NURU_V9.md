@@ -2270,6 +2270,9 @@ NURU V12 reste **nocturne par défaut** — c'est son identité et l'Orb perd 80
 | S1 | **Prompt unique** | Fusionner les 4 builds de prompt système en un seul `DynamicPromptBuilder` qui lit la UserMemory et construit le prompt à la volée. Fin du hardcoding. | ~200 lignes |
 | S2 | **Tests critiques** | Ajouter des tests unitaires sur : routeur (20 tests), RAG pipeline (15 tests), mémoire (15 tests), sécurité PromptGuard (10 tests). Cible : 60 tests nouveaux, 100% verts. | — |
 | S2 | **pyproject.toml** | Mettre `version = "12.0.0"`, aligner avec la réalité. Supprimer les badges faux du README. | 3 fichiers |
+| | | **= Résultat Phase 0 =** | **✅ Complète** |
+| | | S1 : Nettoyage V4 + fusion routeurs (src/routing/router.py) + DynamicPromptBuilder | 7 fichiers, 321 insertions |
+| | | S2 : 66 tests (routeur 20, RAG 15, mémoire 15, PromptGuard 10) → 100% verts | HEAD `9ef336f` |
 
 **Critères de succès Phase 0** :
 - ✅ Plus aucun import conditionnel V4 dans le code
