@@ -1930,3 +1930,420 @@ StatsPage (timer 5s) → lit performance.db → affiche métriques
 **Tags :** `V11.1-J1`, `V11.1-J2`, `V11.1-J3`, `V11.1-J4`, `V11.1-P0F`, `V11.1-REDESIGN`, `V11.1-P0O-P0M`
 
 **✅ V11.1 sprint complet — 63/63 tests verts.**
+
+### V11.2 J3 — 2026-06-20 « Dashboard UX — 9 Sprints complétés »
+
+**Sprint V11.2 (J1→J3) : amélioration UX du dashboard NURU basée sur 7 audits experts.**
+
+| Sprint | Commit | Livrable | Lignes |
+|--------|--------|----------|--------|
+| **S1** | `7efb656` | Navigation simplifiée + Sidebar repliable + Raccourcis Ctrl+1..7 | +? |
+| **S2** | `8a1ceb6` | Accessibilité + Toggle thème clair/sombre | +? |
+| **Fix** | `99f2310` | Fix régressions Sprint 1 causées par Sprint 2 | — |
+| **Fix** | `3c47f32` | Fix sidebar bloquée en mode mini — ne se dépliait plus | — |
+| **S3** | `83471b2` | Focus Mode (Cmd+F plein écran) + Toasts + Routing + ThinkingBlock | +? |
+| **S4** | `d5afddd` | Quick actions chips + Streaming cursor + @mentions + TimelineRouting | +748 |
+| **S5** | `4d53017` | Cmd+K palette recherche + Fusion Memory V8+V9 + Fusion Stats+Diagnostics | +2 050 |
+| **S6** | `60add02` | Markdown rendering riche (code blocks, tables) + SourcePreview citations | +? |
+| **S7** | `bca24f4` | KPIs Dashboard Accueil (P1-J) | +? |
+| **S8** | `946ac0d` | Fusion AgentStatus + TaskList (P1-F) | +? |
+| **S9** | `e5d5688` | Thinking block animé (QPropertyAnimation) + Fact-checker badges enrichis (4 statuts) | +231 |
+
+#### ✅ Terminé (V11.2)
+
+- P1-H Quick action chips (Résumer, Traduire, Chercher, Aider)
+- P1-I Streaming cursor + TypingIndicator enrichi (9 états)
+- P1-L @mentions popup (auto-complétion, navigation clavier)
+- P1-P TimelineRouting barre horizontale (panel droit)
+- P1-A Cmd+K palette universelle
+- P1-D Fusion Memory V8+V9 (PerformanceMemoryPage, 6 onglets)
+- P1-E Fusion Stats+Diagnostics (PerformancePage)
+- P1-K Markdown rendering riche (code blocks, tableaux, listes)
+- P1-N SourcePreview hover (snippet 200 chars)
+- P1-J KPIs Dashboard Accueil
+- P1-F Fusion AgentStatus + TaskList (Agent Live)
+- P1-M Thinking block animé (dépliable QPropertyAnimation 300ms)
+- P1-O Fact-checker badges enrichis (✅⚠️❌⏳ + compteur sources)
+
+#### ⏳ Reste à faire
+
+| Priorité | ID | Description | Effort |
+|----------|----|-------------|--------|
+| 🔷 | **P1-C** | Design system tokens — palette 13 tokens, grille 4px, spacing, typographie | ~2j |
+| ♿ | **ACC-1..8** | Accessibilité transverse — police mini 12px, contraste 4.5:1, focus indicators, setAccessibleName, boutons 32px | ~1j |
+| 🔶 | **P2** | Polish — skeleton loaders, empty states, animations restantes, historique prompts ↑/↓, numérotation messages | ~2j |
+| 📝 | **Docs** | Mettre à jour ROADMAP.md (date, scope, état V11.2) | ~30min |
+
+**Tags :** `V11.2-J3`, `V11.2-S1-2`, `V11.2-S3`, `V11.2-S4`, `V11.2-S5`, `V11.2-S6`, `V11.2-S7`, `V11.2-S8`, `V11.2-S9`
+**HEAD :** `e5d5688`
+**Prochaine version :** V11.3 (Polish + Accessibilité + Design tokens)
+
+---
+
+## V12 — Plan de Transformation JARVIS
+*Vers un assistant personnel proactif, multimodal, et contextuel — pas un chatbot avec outils*
+
+**Date** : 2026-06-20 | **Basé sur** : Synthèse de 6 audits experts | **Auteur** : Leblanc BAHIGA Mudarhi
+
+> ⚠️ **Vision** : NURU devient un système intelligent, proactif, multimodal, contextuel — capable d'assister son utilisateur dans sa vie numérique quotidienne, d'apprendre de ses habitudes, d'agir de manière autonome sous supervision, et de devenir progressivement une extension cognitive de son utilisateur.
+>
+> Un JARVIS, pas un chatbot augmenté.
+
+### Table des matières V12
+
+1. [V12 Vision — Le vrai gap](#v12-vision)
+2. [Phase 0 — Consolidation (2 semaines)](#phase-0-consolidation)
+3. [Phase 1 — Action (6 semaines)](#phase-1-action)
+4. [Phase 2 — Multimodal (8 semaines)](#phase-2-multimodal)
+5. [Phase 3 — Proactivité (4 semaines)](#phase-3-proactivite)
+6. [Phase 4 — Écosystème (4 semaines)](#phase-4-ecosysteme)
+7. [TokenJuice — Stratégie de compression](#tokenjuice-strategie)
+8. [Budget RAM — Contrainte M1 8 Go](#budget-ram)
+9. [Synthèse — Les 3 actions immédiates](#synthese-3-actions)
+
+---
+
+### V12 Vision — Le vrai gap
+
+La majorité des projets « JARVIS » open-source échouent parce qu'ils **ajoutent des outils à un chatbot**, espérant que la somme des outils fera un assistant. Ça ne marche pas. La différence entre un copilote et un assistant n'est pas quantitative — elle est **architecturale**.
+
+**Un assistant personnel (JARVIS) a 3 piliers :**
+
+| Pilier | Chatbot + outils | Assistant (JARVIS) | Statut NURU |
+|--------|------------------|-------------------|-------------|
+| **Action** | Répond à des questions, produit du texte | **Agit** sur l'environnement : shell, navigateur, OS, fichiers | ❌ Aucune |
+| **Multimodalité** | Texte uniquement | Voix (entrée + sortie), Vision (écran + images), Texte | ❌ Texte seul |
+| **Proactivité** | Attend qu'on lui parle | **Initie** : rappels, suggestions, surveillance, routines | ❌ Réactif pur |
+
+**NURU est bloqué au niveau « Copilote Intelligent Avancé »** (Z.ai scorecard : ⭐⭐⭐⭐☆ RAG 5/5, 💀 Contrôle 1/5, 💀 Voix 1/5, 💀 Proactivité 0/5). La transition vers JARVIS nécessite de construire ces 3 piliers **en parallèle** sur la fondation existante.
+
+**Nos avantages cachés (0/6 audits les ont identifiés) :**
+
+| Actif | Valeur | Pourquoi personne ne l'a vu |
+|-------|--------|---------------------------|
+| **TokenJuice** (-40% tokens) | Compense la RAM limitée, permet plus de contexte | Les audits regardent l'architecture, pas le pipeline de tokens |
+| **EventBus** (pub/sub existant) | Backbone tout fait pour la proactivité et la supervision parallèle | Les audits comparent aux standards (MCP), pas ce qui existe déjà |
+
+**Stratégie V12** : Exploiter ces 2 actifs uniques que **personne** dans les 6 rapports n'a vus, pour construire une architecture qui respecte la contrainte M1 8 Go.
+
+---
+
+### Phase 0 — Consolidation : Tuer le legacy V4 (2 semaines)
+
+**Objectif** : Avant d'ajouter QUOI QUE CE SOIT, consolider la dette technique. **Z.ai, Kimi, Mavis, Alex — tous les 4 audits valides sont unanimes : la dualité V4/V8+ est le blocage #1.**
+
+| Semaine | Sprint | Actions | Lignes affectées |
+|---------|--------|---------|-----------------|
+| S1 | **Nettoyage V4** | Supprimer tous les imports conditionnels V4. Normaliser les docstrings. Uniformiser les naming conventions. Supprimer `PluginSystem` (stub vide), `ReflectionEngine` (stub vide). Remplacer les 3 routeurs (`semantic_router.py`, `core/router.py`, `nuru_core.py`) par un routeur unique. | ~500 lignes |
+| S1 | **Prompt unique** | Fusionner les 4 builds de prompt système en un seul `DynamicPromptBuilder` qui lit la UserMemory et construit le prompt à la volée. Fin du hardcoding. | ~200 lignes |
+| S2 | **Tests critiques** | Ajouter des tests unitaires sur : routeur (20 tests), RAG pipeline (15 tests), mémoire (15 tests), sécurité PromptGuard (10 tests). Cible : 60 tests nouveaux, 100% verts. | — |
+| S2 | **pyproject.toml** | Mettre `version = "12.0.0"`, aligner avec la réalité. Supprimer les badges faux du README. | 3 fichiers |
+
+**Critères de succès Phase 0** :
+- ✅ Plus aucun import conditionnel V4 dans le code
+- ✅ Un seul routeur, un seul build de prompt
+- ✅ 60 nouveaux tests verts
+- ✅ pyproject.toml aligné sur la réalité
+- ✅ RAM libérée : ~200 Mo (suppression stubs + routeurs dupliqués)
+
+---
+
+### Phase 1 — Action : Contrôle de l'environnement (6 semaines)
+
+**Objectif** : NURU passe de « répond à des questions » à « agit sur le monde ». C'est le **différenciateur #1** identifié par Z.ai. Sans action, NURU reste un chatbot.
+
+#### Architecture — Security-first
+
+```python
+# Principe : 5 couches de défense (inspiré de Jarvis-OS)
+EXECUTION_MODEL = {
+    0: "manual_only",     # NURU propose, humain exécute
+    1: "safe_confirm",    # Actions non-destructives, auto-confirmées
+    2: "confirm_all",     # Toute action nécessite approbation
+    3: "trusted_patterns",# Patterns appris = auto, nouveaux = confirm
+    4: "semi_autonomous", # Supervision passive, intervention si anomalie
+    5: "full_autonomous", # Supervision a posteriori (journal)
+}
+```
+
+| Semaine | Sprint | Module | Description | RAM ajoutée | Dépend de |
+|---------|--------|--------|-------------|-------------|-----------|
+| S3 | **Shell sécurisé** | `src/tools/shell_exec.py` | Exécution de commandes terminal avec sandbox, blocklist, allowlist, et approbation humaine. 5 couches de défense. Limité à `~/Nuru_Workspace/` par défaut. | ~50 Mo | Phase 0 |
+| S4 | **Contrôle OS** | `src/tools/os_control.py` | PyAutoGUI + AppleScript : ouvrir/fermer apps, lancer scripts, gérer fenêtres, volume, luminosité. Découverte automatique des apps installées. | ~80 Mo | Shell sécurisé |
+| S5 | **Contrôle navigateur** | `src/tools/browser_ctrl.py` | Playwright : navigation web, formulaires, scraping. Pas de contrôle financier sans approbation explicite. | ~150 Mo | Contrôle OS |
+| S6 | **Gestion fichiers CRUD** | `src/tools/file_ops.py` | Créer, modifier, déplacer, supprimer fichiers. Restreint à `~/Nuru_Workspace/` + dossiers explicitement autorisés. | ~30 Mo | Shell sécurisé |
+| S7 | **Intégration ToolRegistry** | Connecter les 4 outils au ToolRegistry existant + Exposition des outils via MCP. | ~20 Mo | Tous |
+| S8 | **Tests + Sécurité** | Tests d'intégration des 4 outils (min 40 tests). Audit de sécurité. Hardening du sandbox. | 0 | Tous |
+
+**Critères de succès Phase 1** :
+- ✅ « NURU, ouvre VS Code » → VS Code s'ouvre
+- ✅ « NURU, cherche le prix du iPhone 16 sur Amazon » → Playwright navigue et rapporte
+- ✅ « NURU, crée un dossier 'projet_investissement' dans Workspace » → dossier créé
+- ✅ « NURU, exécute pip install pandas » → shell sandboxé
+- ✅ Toute action destructive nécessite approbation humaine
+- ✅ RAM totale < 5.5 Go
+
+---
+
+### Phase 2 — Multimodal : Voix + Vision (8 semaines)
+
+**Objectif** : NURU acquiert la parole, l'écoute et la vue. Le **différenciateur #2** identifié par tous les audits : un assistant qui ne parle pas n'est pas JARVIS.
+
+#### Architecture Voix — Local-first
+
+```python
+# Pipeline vocal local (M1 8 Go optimisé)
+# STT : mlx-whisper tiny (100ms, ~500 Mo RAM)
+# LLM : Phi-4-mini local (réponses courtes)
+# TTS : Kokoro (local, <200ms latence)
+# VAD : Silero VAD (détection activité vocale)
+# Wake word : OpenWakeWord (1-2% CPU)
+```
+
+| Semaine | Sprint | Module | Description | RAM ajoutée | Dépend de |
+|---------|--------|--------|-------------|-------------|-----------|
+| S9 | **Pipeline STT** | `src/voice/stt.py` | mlx-whisper tiny, streaming local, buffering intelligent. Détection fin de phrase pour découpage. | ~500 Mo | Phase 0 |
+| S10 | **Pipeline TTS** | `src/voice/tts.py` | Kokoro TTS local, streaming sentence-by-sentence. Fallback macOS `say` si RAM insuffisante. | ~300 Mo | Phase 0 |
+| S11 | **Wake word** | `src/voice/wake_word.py` | « Hey NURU » via OpenWakeWord. Bascule automatique en mode écoute. Faible CPU (<5%). | ~50 Mo | STT + TTS |
+| S12 | **VAD + Barge-in** | `src/voice/vad.py` | Silero VAD pour interruption naturelle. Priorité à la voix utilisateur sur la réponse en cours. | ~50 Mo | Pipeline voix |
+| S13 | **Vision écran** | `src/vision/screen.py` | Capture d'écran périodique (mss, 2-5s). Analyse par LLM cloud (GPT-4o Vision). Pas de vision locale (trop RAM). Détection des changements d'interface. | ~100 Mo | Phase 1 |
+| S14 | **Vision documents** | `src/vision/doc_vision.py` | OCR amélioré (pytesseract). Analyse d'images et screenshots via LLM cloud. Détection de tableaux dans les images. | ~80 Mo | Vision écran |
+
+**Contrainte RAM critique Phase 2** :
+- Le pipeline vocal complet ne peut PAS tourner en permanence
+- **Stratégie** : Modules déchargeables. Wav2Vec + Kokoro chargés uniquement en mode conversation vocale. En idle : juste le wake word (50 Mo).
+- Mode dégradé : si RAM > 6.5 Go → désactiver la vision, basculer TTS sur `say` (0 Mo supplémentaire)
+
+**Critères de succès Phase 2** :
+- ✅ « Hey NURU, quelle heure est-il ? » → réponse vocale en < 3s
+- ✅ NURU parle avec une voix naturelle (Kokoro)
+- ✅ L'utilisateur peut interrompre NURU en parlant (barge-in)
+- ✅ NURU analyse une capture d'écran et décrit ce qu'il voit
+- ✅ NURU extrait le texte d'une photo de document
+- ✅ RAM conversation vocale < 2.0 Go additionnels
+- ✅ Idle (wake word seul) : +50 Mo seulement
+
+---
+
+### Phase 3 — Proactivité : EventBus Engine + Mémoire dynamique (4 semaines)
+
+**Objectif** : NURU passe de réactif à **proactif**. C'est le **différenciateur #3** — l'élément qui transforme un chatbot en compagnon numérique.
+
+#### Architecture — EventBus comme backbone proactif
+
+L'EventBus existant est **le secret de NURU que tous les audits ont raté**. C'est le système nerveux parfait pour la proactivité :
+
+```python
+class ProactiveEngine:
+    """
+    Tourne en background. Collecte des signaux, évalue la pertinence,
+    et déclenche des initiatives sans requête utilisateur explicite.
+    
+    Fréquence : toutes les 15-30 minutes en idle.
+    RAM idle : ~30 Mo (signal collectors uniquement).
+    RAM active : ~200 Mo (LLM pour génération d'initiative).
+    """
+    
+    SIGNALS = {
+        "time": TimeSignal(),           # Heure, jour, mois, saison
+        "calendar": CalendarSignal(),   # Événements à venir
+        "filesystem": FSSignal(),       # Fichiers modifiés, nouveaux
+        "session": SessionSignal(),     # Dernière conversation
+        "memory": MemorySignal(),       # Échéances, rappels en mémoire
+        "system": SystemSignal(),       # CPU, RAM, batterie, réseau
+    }
+    
+    # Mode d'exécution des initiatives
+    MODE = {
+        "auto": ["time_signals", "system_alerts"],  # Pas besoin d'approbation
+        "notify": ["calendar_reminders", "file_changes"],  # Notification + approbation
+        "validate": ["action_suggestions", "workflow_proposals"],  # Demande explicite
+    }
+```
+
+| Semaine | Sprint | Module | Description | RAM ajoutée | Dépend de |
+|---------|--------|--------|-------------|-------------|-----------|
+| S15 | **ProactiveEngine** | `src/proactive/engine.py` | Moteur de signaux + évaluation LLM. Scheduler 15-30 min. Détection contextuelle (heure, apps ouvertes, calendrier). | ~200 Mo (actif), ~30 Mo (idle) | Phase 0 |
+| S15 | **Signal Collectors** | `src/proactive/signals/` | TimeSignal, CalendarSignal, FSSignal, MemorySignal, SystemSignal. Chacun = un fichier, remplaçable. | ~20 Mo | S15 |
+| S16 | **Prompt dynamique** | `src/memory/dynamic_prompt.py` | Le prompt système n'est plus hardcodé. Il est construit dynamiquement depuis UserMemory + contexte courant. **Fin du hardcoding identifié par Z.ai.** | ~20 Mo | Phase 0 |
+| S16 | **Consolidation mémoire** | `src/memory/consolidation.py` | Curator (inspiré de Jarvis-OS) : decay temporel, fusion d'épisodes, détection contradictions. Tourne en période d'inactivité. | ~100 Mo (pic) | Phase 0 |
+| S17 | **Routines & presets** | `src/proactive/routines.py` | « Mode travail », « Mode soirée » : presets configurables. Déclenchables par commande vocale, heure, ou contexte. | ~50 Mo | Phase 1 + 2 |
+| S18 | **Apprentissage contextuel** | `src/proactive/learning.py` | Détection des patterns d'utilisation. « NURU remarque que tu ouvres toujours VS Code + terminal à 9h → proposition de preset 'Morning Dev'. » | ~80 Mo | S16 + S17 |
+
+**Règle de fer de la proactivité** : NURU ne fait JAMAIS d'action destructive sans validation humaine. Les initiatives sont classées par mode (AUTO/NOTIFY/VALIDATE) et l'utilisateur voit TOUT.
+
+**Critères de succès Phase 3** :
+- ✅ NURU dit « Bonjour, ta réunion commence dans 10 min » sans qu'on lui demande
+- ✅ NURU suggère « Je vois que tu travailles sur le projet X, veux-tu que j'ouvre les fichiers de la session précédente ? »
+- ✅ Le prompt système change dynamiquement selon le contexte
+- ✅ La mémoire se consolide automatiquement (décay + fusion)
+- ✅ « Mode travail » est un preset fonctionnel
+- ✅ RAM proactive idle < 50 Mo (hors pic consolidation)
+
+---
+
+### Phase 4 — Écosystème : MCP + Intégrations (4 semaines)
+
+**Objectif** : NURU n'est plus une île. Il se branche à l'écosystème MCP. **Identifié par tous les audits comme un risque existentiel (Kimi : « obsolescence en 12 mois »).**
+
+| Semaine | Sprint | Module | Description | RAM ajoutée | Dépend de |
+|---------|--------|--------|-------------|-------------|-----------|
+| S19 | **MCP Client** | `src/mcp/client.py` | Connexion aux serveurs MCP existants. Découverte d'outils. Cache de schémas. | ~50 Mo | Phase 0 |
+| S19 | **MCP Server** | `src/mcp/server.py` | NURU expose ses propres outils (RAG, mémoire, outils Phase 1) comme serveur MCP. Interopérabilité avec Claude Desktop, Cursor, etc. | ~30 Mo | Phase 1 |
+| S20 | **Intégrations clés** | `src/mcp/integrations/` | Connecteurs MCP vers : Notion, Google Calendar, Gmail, Slack, GitHub, Spotify. Priorité : les 4 premiers. | ~100 Mo | Phase 1 + 3 |
+| S20 | **Security hardening final** | `src/security/` | Audit de sécurité complet. Sandbox des outils. Chiffrement de la base mémoire. Journal d'audit immuable. Validation des entrées. **5 catégories de vulnérabilités corrigées (Kimi audit).** | ~50 Mo | Toutes |
+
+**Critères de succès Phase 4** :
+- ✅ NURU lit/modiie un document Google Docs via MCP
+- ✅ NURU consulte le calendrier Google et suggère des créneaux
+- ✅ NURU expose son RAG comme serveur MCP → utilisable depuis Claude Desktop
+- ✅ Aucune vulnérabilité critique restante (fuite d'identité, path traversal, connection leaks)
+- ✅ RAM totale < 7.0 Go
+
+---
+
+### TokenJuice — Stratégie de compression JARVIS
+
+TokenJuice (-40% tokens) est **l'avantage compétitif le plus sous-estimé de NURU** (0/6 audits l'ont identifié). Sur M1 8 Go, chaque token économisé est un token qui peut être utilisé pour le contexte proactif, la mémoire, ou la voix.
+
+**Extension V12 de TokenJuice :**
+
+```python
+class TokenJuiceV12:
+    """
+    Compression adaptative selon le contexte.
+    """
+    
+    # Objectifs V12
+    TARGETS = {
+        "chat_normal": 0.40,         # -40% (actuel)
+        "voice_response": 0.50,      # -50% (voix = phrases courtes)
+        "proactive_suggestion": 0.45,# -45% (suggestions concises)
+        "memory_consolidation": 0.30,# -30% (préserver le sens critique)
+        "mcp_integration": 0.35,     # -35% (interopérabilité)
+        "emergency_ram": 0.60,       # -60% (si RAM < 1 Go libre)
+    }
+    
+    # Économies estimées V12
+    # Actuel : ~40% → 100 tokens → 60 tokens
+    # Cible : ~50% moyen → 100 tokens → 50 tokens
+    # Gain : +25% de contexte disponible pour proactivité
+```
+
+**Impact TokenJuice sur le plan V12 :**
+
+| Ressource | Sans TokenJuice | Avec TokenJuice (50%) | Gain |
+|-----------|-----------------|----------------------|------|
+| Contexte par requête | 6,144 tokens | ~9,000 tokens | +46% |
+| Mémoire consolidée par jour | ~500 épisodes | ~750 épisodes | +50% |
+| Prompts proactifs | 10/jour max | 15/jour max | +50% |
+| Coût cloud mensuel | ~$8 | ~$4 | -50% |
+
+---
+
+### Budget RAM — Contrainte M1 8 Go
+
+La contrainte M1 8 Go est **la raison pour laquelle la majorité des projets JARVIS solo échouent** sur Apple Silicon. Chaque Mo compte.
+
+| Composant | Actuel (V11.2) | V12 Cible | Delta |
+|-----------|---------------|-----------|-------|
+| Système (macOS + apps) | ~2.5 Go | ~2.5 Go | 0 |
+| LLM local (Phi-4-mini) | ~3.0 Go | ~3.0 Go | 0 |
+| RAG + Embeddings | ~1.0 Go | ~0.8 Go | -200 Mo (optimisation) |
+| Dashboard PySide6 | ~0.5 Go | ~0.5 Go | 0 |
+| **Sous-total système** | **~7.0 Go** | **~6.8 Go** | **-200 Mo** |
+| | | | |
+| **Disponible pour V12** | **~1.0 Go** | **~1.2 Go** | **+200 Mo** |
+| | | | |
+| Phase 1 — Outils | — | ~300 Mo | +300 Mo |
+| Phase 2 — Voix (actif) | — | ~900 Mo | +900 Mo |
+| Phase 2 — Voix (idle) | — | ~50 Mo | +50 Mo |
+| Phase 2 — Vision | — | ~180 Mo | +180 Mo |
+| Phase 3 — Proactif (actif) | — | ~200 Mo | +200 Mo |
+| Phase 3 — Proactif (idle) | — | ~50 Mo | +50 Mo |
+| Phase 4 — MCP | — | ~180 Mo | +180 Mo |
+
+**🔥 Réalité : le pipeline vocal complet (STT + TTS + LLM + VAD) ne peut pas coexister avec le RAG + Dashboard + Outils.**
+
+**Stratégie de survie RAM :**
+
+```python
+class RAMOrchestrator:
+    """
+    Gestionnaire de mémoire dynamique. 
+    Les modules se chargent/déchargent selon le mode actif.
+    """
+    
+    MODES = {
+        "idle": {
+            "active": ["wake_word", "proactive_idle"], 
+            "inactive": ["stt", "tts", "vision", "outils_lourds"],
+            "ram_used": 50  # Mo
+        },
+        "chat": {
+            "active": ["rag", "llm_local", "dashboard"],
+            "inactive": ["stt", "tts", "vision"],
+            "ram_used": 300  # Mo
+        },
+        "voice_conversation": {
+            "active": ["stt", "tts", "llm_local", "vad"],
+            "inactive": ["rag", "vision", "outils_lourds"],
+            "ram_used": 900  # Mo
+        },
+        "vision_analysis": {
+            "active": ["vision", "llm_cloud"],
+            "inactive": ["stt", "tts", "rag"],
+            "ram_used": 300  # Mo
+        },
+        "task_execution": {
+            "active": ["outils", "llm_local", "rag"],
+            "inactive": ["stt", "tts", "vision"],
+            "ram_used": 500  # Mo
+        },
+    }
+    
+    async def switch_mode(self, new_mode: str):
+        # 1. Unload modules inactifs
+        # 2. Load modules actifs
+        # 3. Vérifier budget RAM
+        # 4. Si > 7.5 Go → forcer mode dégradé
+        pass
+```
+
+**Résultat** : NURU ne fait JAMAIS tout à la fois. Il est **contextuellement conscient de sa RAM** et s'adapte. L'utilisateur ne voit pas la complexité — il voit un assistant qui répond toujours, même si certaines capacités se dégradent en douceur.
+
+---
+
+### Synthèse — Les 3 actions immédiates (Z.ai, validé par consensus des audits)
+
+Z.ai (le meilleur rapport, 8/10) a identifié 3 actions qui transforment NURU de « copilote » à « assistant » :
+
+| # | Action | Pourquoi | Effort | Impact |
+|---|--------|----------|--------|--------|
+| 1 | **Contrôle shell sécurisé** | L'action est le différenciateur #1. Sans elle, NURU est un oracle. | 2 semaines (Phase 1) | 🔟/🔟 |
+| 2 | **Prompt dynamique depuis la mémoire** | Le prompt hardcodé bloque toute personnalisation. Z.ai : « Plus grande faiblesse cachée ». | 1 semaine (Phase 3) | 9/10 |
+| 3 | **Wake word + conversation vocale** | « Hey NURU » est le marqueur JARVIS #1 dans l'imaginaire collectif. | 4 semaines (Phase 2) | 10/10 |
+
+**Ces 3 actions, livrées dans les 3 à 6 prochains mois, transforment NURU d'un copilote intelligent en un véritable assistant personnel. Chaque pièce du puzzle se connecte. (Z.ai, recommandation finale.)**
+
+---
+
+### Résumé V12 — Timeline
+
+```text
+Phase 0 ─ Consolidation (S1-S2) ── Nettoyage V4, routeur unique, prompt unique, pyproject
+              ↓
+Phase 1 ─ Action (S3-S8) ── Shell sécurisé → Contrôle OS → Navigateur → Fichiers → MCP
+              ↓
+Phase 2 ─ Multimodal (S9-S14) ── STT → TTS → Wake word → VAD → Vision écran → Vision doc
+              ↓
+Phase 3 ─ Proactivité (S15-S18) ── ProactiveEngine → Prompt dynamique → Consolidation → Routines
+              ↓
+Phase 4 ─ Écosystème (S19-S20) ── MCP Client/Server → Intégrations → Security hardening
+```
+
+**Durée totale estimée** : 20 semaines (~5 mois solo intensif)
+**RAM cible finale** : < 7.0 Go (tous modes confondus)
+**Investissement TokenJuice** : -40% à -50% tokens — le carburant qui rend tout ça possible sur M1.
+
+---
