@@ -105,7 +105,7 @@ Conformément à la stratégie « formaliser, réconcilier, compléter », les m
 | **Connecteur Tâches** | Reminders/Todoist générique | Phase 4 S20 |
 | **Harnais d'évaluation** | Tests régression mémoire + cohérence persona | Phase 3 S18 |
 
-**Ce qui reste V13** (après V12) : LiveKit (voix distante), Médiatisation locale MLX, Skills SDK + Vues.
+**Ce qui reste V14** (après V12) : GoalMemory, ProjectMemory, LiveKit, Media Intelligence, Skills SDK, LifeOS. Voir `NURU_V14_VISION.md`.
 
 ---
 
@@ -193,10 +193,10 @@ python3 -m pytest tests/ -v
 | Document | Contenu |
 |----------|---------|
 | `NURU_V9.md` | Plan V12 détaillé (phases, sprints, design Z.ai) |
-| `NURU_V13_VISION.md` | Vision Personal Cognitive Operating System |
+| `NURU_V14_VISION.md` | Vision long terme (après V12) — GoalMemory, LiveKit, Skills SDK |
 | `NURU_AUDIT_SYNTHESE.md` | 7 rapports d'audit, 88 trouvailles |
 | `ROADMAP.md` | Roadmap unifiée V12→V13 |
 
 ---
 
-*Document mis à jour le 20 juin 2026 — NURU V12 — Phase 0 ✅ — V13-A/B absorbé*
+*Document mis à jour le 20 juin 2026 — NURU V12 — Phase 0 ✅ — V13-A/B absorbé — V14 vision long terme*
