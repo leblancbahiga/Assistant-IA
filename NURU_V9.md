@@ -2159,7 +2159,9 @@ class NuruWindow(QMainWindow):
         self.floating_widget = NuruFloatingWidget()       # 160×160px
         self.context_strip = ContextStrip(self)
         self._bind_events()                               # EventBus → UI
+```
 
+```python
 class VoiceOverlay(QWidget):
     """Fenêtre frameless pour le mode vocal.
     
@@ -2174,6 +2176,33 @@ class VoiceOverlay(QWidget):
         # Animation : scale 1.0→0.8, opacity 1→0, 250ms, InCubic
         # Timeout : 8s sans détection vocale
         ...
+```
+
+#### Brand Assets — Logos NURU
+
+Cinq versions disponibles dans `src/ui/assets/` :
+
+| Fichier | Série | Style | Usage interface |
+|---------|-------|-------|----------------|
+| `nuru_logo_v5.png` | V5 | "N" stylisé + œil amande, dégradé cyan clair→turquoise, fond light | **Primary icon** — icône de fenêtre, splash screen |
+| `nuru_logo_v5_wordmark.png` | V5 | "N" + ovale + wordmark NURU, dégradé cyan→bleu profond | **Top bar** — wordmark complet, about dialog |
+| `nuru_logo_v5_dark.png` | V5 dark | "N" creux néon cyan, cadre arrondi, fond noir brillant | **Menu bar** QSystemTrayIcon (22×22px adapté) |
+| `nuru_logo_v4_dark.png` | V4 (legacy) | "M" + œil + ondes sonores, cyan néon, fond noir | **VoiceOverlay** — onde sonore native intégrée dans le design |
+| `nuru_logo_v3.png` | V3 (legacy) | Œil + ECG heartbeat, dégradé cyan, fond light | Old branding — archivé, utilisable pour historique |
+
+**Version recommandée V12** : la série **V5** est la plus aboutie — design moderne, lisible en toutes tailles, compatible dark/light. La V4 (M+eye+waves) est plus chargée mais peut servir d'inspiration pour l'animation du WaveformRing dans le VoiceOverlay.
+
+**PySide6 — intégration :**
+```python
+# Menu bar icon (V5 dark)
+tray_icon = QIcon("src/ui/assets/nuru_logo_v5_dark.png")
+tray = QSystemTrayIcon(tray_icon)
+tray.setToolTip("NURU V12")
+
+# Splash / about (V5 wordmark)
+splash_label = QLabel()
+splash_pixmap = QPixmap("src/ui/assets/nuru_logo_v5_wordmark.png")
+splash_label.setPixmap(splash_pixmap.scaledToWidth(320, Qt.SmoothTransformation))
 ```
 
 #### Roadmap implémentation interface (Z.ai, 9 semaines — parallélisable)
