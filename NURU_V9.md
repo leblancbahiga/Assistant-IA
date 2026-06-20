@@ -2089,41 +2089,52 @@ La majorité des projets « JARVIS » open-source échouent parce qu'ils **ajout
 - ❌ Barre d'outils horizontale → actions contextuelles inline
 - ❌ Indicateurs CPU/RAM visibles → mode debug dédié
 
-#### NuruPresenceOrb : Le cœur visuel
+#### NuruPresenceOrb : Le cœur visuel — 7 états animés (Z.ai, v2)
 
 ```python
 class NuruPresenceOrb(QWidget):
-    """Présence animée de NURU. 6 états avec QPropertyAnimation.
+    """Présence animée de NURU. 7 états avec QPropertyAnimation.
     
     Tailles : 120px (fenêtre), 200px (VoiceOverlay), 80px (FloatingWidget)
     Rendu : QPainter custom (pas de 3D, pas de GPU)
-    CPU cible : < 5% par animation
+    M1 8 Go : CPU < 5% par animation, single-level shadows only
     """
     
-    # États et animations
+    # État mise à jour : action.state remplace le simple pulse_warm
     STATES = {
-        "idle":      {"anim": "pulse 4s",     "desc": "Respiration lente, opacité 0.8-1.0"},
-        "listening": {"anim": "sound_waves",  "desc": "3 cercles concentriques qui s'expandent"},
-        "thinking":  {"anim": "halo_spin 8s", "desc": "Arc 270° rotatif, dégradé radial cyan"},
-        "speaking":  {"anim": "particles",    "desc": "Particules calibrées au volume TTS"},
-        "action":    {"anim": "pulse_warm",   "desc": "Orb pulsant accent-warm"},
-        "error":     {"anim": "blink_red",    "desc": "Clignotant #FF4D6A, 2s fixes"},
+        "idle":      {"anim": "pulse 4s",        "desc": "Respiration lente, opacité 0.8↔1.0"},
+        "listening": {"anim": "sound_waves",     "desc": "3 cercles concentriques qui s'expandent", "signal": "voice.wake_detected"},
+        "thinking":  {"anim": "halo_spin 3s",    "desc": "Arc 270° rotatif, dégradé radial cyan", "signal": "voice.thinking_start"},
+        "speaking":  {"anim": "particles_tight", "desc": "Particules calibrées au volume TTS", "signal": "voice.response_start"},
+        "acting":    {"anim": "arc_progress",    "desc": "Orb scale 0.85 + anneau arc QPainter clockwise. Progress signal 0→1.0", "signal": "action.started → action.completed"},
+        "respond":   {"anim": "pulse_accel 1.5s","desc": "Pulsing accéléré (idle rendu plus rapide)", "signal": "voice.response_start"},
+        "error":     {"anim": "blink_red 2s",    "desc": "Clignotant #FF4D6A, alterné avec opacité réduite"},
     }
-    
-    # Signaux EventBus
-    state_changed = Signal(str)  # → event_bus.emit("ui.state_change", state)
 ```
 
-#### Mode vocal — Cycle de vie de l'overlay
+**Décisions Z.ai (v2) :**
+- `acting` 🆕 = état dédié pour les actions longues (NURU exécute une commande). L'Orb se contracte à 85% avec un anneau de progression (`QPainter::drawArc`). Le `ProactiveToast` accompagne mais ne remplace pas.
+- `respond` 🆕 = séparé de `speaking` pour distinguer la parole TTS de l'attente de la réponse (thinking→respond→speaking)
+- L'actuel `action` / `pulse_warm` disparaît (fusionné dans `acting`)
+- Cycle voix corrigé : `listening → thinking → respond → speaking → idle`
 
+#### Cycle EventBus — Voix + Action
+
+**Voix :**
 ```
-EventBus signal               → VoiceOverlay réaction
-────────────────────────────────────────────────────
-voice.wake_detected           → overlay apparition (scale 0.8→1.0, opacity 0→1, 250ms)
+voice.wake_detected           → overlay apparition (scale 0.8→1.0, opacity 0→1, 250ms), Orb → listening
 voice.transcript_update       → transcription temps réel
-voice.thinking_start          → Orb en mode halo rotatif cyan
-voice.response_start          → Orb en mode parole + TTS
-voice.session_end / timeout 8s → overlay disparition (scale 1.0→0.8, opacity 1→0)
+voice.thinking_start          → Orb → thinking (halo rotatif 3s/tr, cyan blanchi)
+voice.response_start          → Orb → respond (pulse accéléré 1.5s)
+voice.speaking                → Orb → speaking (particules TTS)
+voice.session_end / timeout 8s → overlay disparition (scale 1.0→0.8, opacity 1→0), Orb → idle
+```
+
+**Action (nouveau) :**
+```
+action.started                → Orb → acting (scale 0.85, anneau progression 0°/360°)
+action.progress(pct: 0→1.0)  → arc_angle = int(360 * pct) (QPainter::drawArc)
+action.completed              → Orb → idle, toast optionnel 3s
 ```
 
 #### Intégration macOS
@@ -2165,13 +2176,56 @@ class VoiceOverlay(QWidget):
         ...
 ```
 
-#### Roadmap implémentation interface (Z.ai, 9 semaines)
+#### Roadmap implémentation interface (Z.ai, 9 semaines — parallélisable)
 
 | Phase | Semaines | Livrables | Critères validation |
 |-------|----------|-----------|-------------------|
 | **P1 — Socle visuel** | 1-3 | NuruWindow sombre + coins arrondis, Orb idle/thinking (QPainter), ConversationSurface bulles, Design tokens (palette, typo, espacement) | Chat fonctionnel avec identité V12 |
+| **P1.5 — Widget flottant** 🔀 | 2-3 | FloatingWidget layout + Tray menu (dépend uniquement de NuruWindow, pas de l'Orb) | Widget apparaît dans menu bar |
 | **P2 — Expérience vocale** | 4-6 | VoiceOverlay frameless complet, Orb listening/speaking (ondes, halo), Menu bar QSystemTrayIcon, Raccourcis clavier | Activation vocale + overlay fonctionnel |
-| **P3 — Présence & polish** | 7-9 | Floating widget always-on-top, ProactiveToasts glissants, ContextStrip (NSWorkspace), Mode debug Ctrl+D, Micro-interactions (ease curves, hover, timing) | Tous modes actifs, micro-interactions fluides |
+| **P3 — Présence & polish** | 7-9 | Orb acting (anneau progression), ProactiveToasts glissants, ContextStrip (NSWorkspace), Mode debug Ctrl+D, Light mode, Micro-interactions | Tous modes actifs, micro-interactions fluides |
+
+> **Parallélisme** : P1.5 (FloatingWidget) peut démarrer dès la semaine 2, en parallèle de P1. Il ne dépend que de `NuruWindow` et `QSystemTrayIcon` — pas de l'Orb. Si le widget est fonctionnel avant l'Orb, un cercle gris statique sert de placeholder.
+
+#### Redimensionnement — Fluide, pas de paliers
+
+L'Orb = **`min(largeur, hauteur) * 0.25`**. Pas de breakpoints, pas de paliers — un simple ratio.
+
+| Taille écran | Diamètre Orb | Adaptation |
+|-------------|-------------|------------|
+| 1920×1080 | 270 px | Pleine expérience |
+| 1440×900 | 225 px | Shadow retiré sous 1440px (économie GPU M1) |
+| 1280×800 | 200 px | Transcription 18→16px, WaveformRings réduit |
+| 1024×600 | 150 px | FloatingWidget 140×120px |
+
+```python
+def resizeEvent(self, event):
+    size = min(self.width(), self.height())
+    self.orb_radius = size * 0.125          # diamètre = 25%
+    self.orb_center = QPointF(self.width()/2, self.height()/2)
+    self.update()                            # → paintEvent
+```
+
+#### Thème clair — Mode basculable (pas un thème égal)
+
+NURU V12 reste **nocturne par défaut** — c'est son identité et l'Orb perd 80% de son impact sur fond clair. Mais un mode clair est disponible comme **profil basculable**.
+
+**Approche : transformation algébrique, pas de palette parallèle**
+
+| Élément | Dark (défaut) | Light (optionnel) |
+|---------|--------------|-------------------|
+| Background | `#0A0E17` | `#F4F6F9` |
+| Surface 1 | `#151B26` | `#FFFFFF` |
+| Accent | `#00D4FF` | `#0099BB` cyan assombri ~15% |
+| Text | `#E8ECF1` | `#1A2332` |
+| Orb glow | Radial cyan 40% opacity | Radial cyan 12% opacity |
+
+**Pas de duplication** — un `QPalette` swap + `opacity_multiplier` sur l'Orb suffit :
+- Activation : `Cmd+Shift+L` ou détection macOS (`NSAppearanceObserver`)
+- Le glow de l'Orb passe de 40% à 12% d'opacité
+- Même composant, deux jeux de tokens
+
+> **Décision Z.ai** : ne pas créer un « thème clair » séparé. Une transformation algébrique sur les tokens existants (inversion de lightness + réduction opacité glow). En PySide6 : `QPalette` swap + une `opacity_multiplier` property sur l'Orb.
 
 > **Contrainte M1 8 Go** : Toutes les animations sont implémentées via `QPropertyAnimation` et `QPainter` — pas de 3D, pas de `QGraphicsBlurEffect`, pas de canvas lourd. Budget : < 5% CPU par animation. Vérifiable via Instruments macOS.
 
