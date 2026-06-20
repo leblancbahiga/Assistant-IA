@@ -53,7 +53,7 @@ class InferenceWorker(QRunnable):
             async def stream():
                 nonlocal full_response
                 try:
-                    async for token in self.core.process_query_v45(self.query):
+                    async for token in self.core.process_query(self.query):
                         full_response += token
                         self.signals.token_received.emit(token)
                 except Exception as e:

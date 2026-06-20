@@ -1,7 +1,7 @@
 [project]
 name = "nuru"
-version = "10.3.0"
-description = "NURU V10.3 — Assistant IA local pour Apple Silicon (Phi-4-mini / Groq / RAG multi-stratégie sécurisé)"
+version = "12.0.0"
+description = "NURU V12 — Plan de Transformation JARVIS : assistant personnel vocal et visuel (Phi-4-mini / Groq / RAG multi-stratégie / EventBus)"
 authors = [
     { name = "Leblanc BAHIGA Mudarhi" }
 ]

@@ -1,4 +1,4 @@
-"""Moteur de politiques de décision pour NURU V4.5.
+"""Moteur de politiques de décision pour NURU V8+.
 
 Centralise les règles de seuils (RAM, confiance, fallback) qui étaient
 dispersées dans semantic_router.py et rag_engine.py.

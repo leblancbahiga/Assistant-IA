@@ -1,4 +1,4 @@
-"""Conteneurs de données immutables pour le pipeline NURU V4.5.
+"""Conteneurs de données immutables pour le pipeline NURU V8+.
 
 QueryContext : état figé d'une requête au moment du routage.
 EvidencePack : preuves assemblées par le pipeline RAG.

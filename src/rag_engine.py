@@ -109,11 +109,11 @@ class RAGEngine:
         self.embedder = Embedder()
         self.cloud = CloudLLM()  # Cloud LLM pour l'expansion de requête
         self.rewriter = CloudQueryRewriter(cloud_llm=self.cloud)
-        self.reranker = CrossEncoderReranker()  # V4 : Reranker sémantique
+        self.reranker = CrossEncoderReranker()  # : Reranker sémantique
         self.reranker.set_embedder(self.embedder)  # Connecte l'embedder
         self.last_top_score = 0.0
         self._init_db()
-        # V4.5 Phase 0 : seuils configurés pour reranker conditionnel
+        # Phase 0 : seuils configurés pour reranker conditionnel
         # V10.3k — audit Option C : seuil RAM lu depuis Config (surchargeable via yaml)
         self._rerank_min_score = 0.40   # En dessous : pas la peine
         self._rerank_max_score = 0.75   # Au dessus : déjà suffisant
@@ -353,7 +353,7 @@ class RAGEngine:
             
         conn = self._get_conn()
         
-        # 1. Vérification par filepath (compatible V4)
+        # 1. Vérification par filepath (compatible )
         row = conn.execute(
             "SELECT hash FROM indexed_files WHERE filepath = ?", (filepath,)
         ).fetchone()
@@ -612,7 +612,7 @@ class RAGEngine:
         logger.info(f"🗑️ Métadonnées supprimées : {source}")
 
     async def retrieve(self, query: str, k: int = None) -> Tuple[str, RAGResult]:
-        '''Recherche hybride avec confidence gate dynamique V4.
+        '''Recherche hybride avec confidence gate dynamique V8+.
         Retourne (contexte_formaté, RAGResult) pour le dashboard.'''
         t_start = time.time()
 
@@ -749,14 +749,14 @@ class RAGEngine:
                 result.retrieval_time_ms = (time.time() - t_start) * 1000
                 return "", result
 
-        # V4.5 Phase 0 : Reranker CONDITIONNEL
+        #  Phase 0 : Reranker CONDITIONNEL
         # N'active le cross-encoder QUE si le score est dans la zone grise
         # ET que la RAM disponible est suffisante.
         should_rerank = self._should_use_reranker(top1_score)
         reranked: list = []
         
         if should_rerank:
-            # V4.5 FIX PyTorch/MLX Conflict : Décharger l'embedder (MLX) AVANT
+            #  FIX PyTorch/MLX Conflict : Décharger l'embedder (MLX) AVANT
             # de charger le reranker (PyTorch/MPS) pour éviter le conflit GPU
             # entre les deux frameworks sur M1 8 Go.
             self.embedder.unload()
@@ -887,7 +887,7 @@ class RAGEngine:
         """Exécute les recherches vectorielle et FTS dans un thread séparé."""
         conn = self._get_conn()
         
-        # V4.5 Phase 0 : top_k réduit de 30 à 15 (moins de bruit, plus rapide)
+        # Phase 0 : top_k réduit de 30 à 15 (moins de bruit, plus rapide)
         # V6.1 : on récupère aussi chunk_date pour le freshness bonus
         vec_results = conn.execute("""
             SELECT content, source, distance, chunk_date

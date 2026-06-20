@@ -7,7 +7,7 @@ import gc
 import asyncio
 from typing import AsyncGenerator, Optional
 from src.config import config
-from src.core.model_manager import ModelManager  # V4.5 : Gestion RAM centralisée
+from src.core.model_manager import ModelManager  # : Gestion RAM centralisée
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class LocalLLM:
         self._tokenizer = None
         self._current_model_id = None
         self._last_temperature = 0.7
-        # V4.5 : Délégation au ModelManager
+        # : Délégation au ModelManager
         self._model_manager = ModelManager(keep_alive_seconds=300)
         # V10 Audit: Lock thread-safe pour generate_stream()
         self._gen_lock = asyncio.Lock()

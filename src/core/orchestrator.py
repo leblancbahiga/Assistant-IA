@@ -1,4 +1,4 @@
-"""NURU V4.5 — Orchestrateur asynchrone principal.
+"""NURU V8+ — Orchestrateur asynchrone principal.
 
 Point d'entrée du pipeline : reçoit une requête utilisateur,
 orchestre routage → RAG → génération → mémoire, et retourne
@@ -61,7 +61,7 @@ class OrchestratorResult:
 
 
 class NuruOrchestrator:
-    """Orchestrateur asynchrone du pipeline NURU V4.5.
+    """Orchestrateur asynchrone du pipeline NURU V8+.
 
     1. Reçoit une requête utilisateur
     2. Construit un QueryContext
@@ -87,8 +87,7 @@ class NuruOrchestrator:
         runtime_manager=None,
         web_search=None,
         context_budget=None,
-        reflection_engine=None,
-        system_prompt_builder=None,  # V4.5 : callback pour construire le prompt système
+        system_prompt_builder=None,  # Callback pour construire le prompt système
     ):
         self.router = router
         self.rag_engine = rag_engine
@@ -100,21 +99,20 @@ class NuruOrchestrator:
         self.runtime = runtime_manager
         self.web = web_search
         self.context_budget = context_budget
-        self.reflection = reflection_engine
         self._system_prompt_builder = system_prompt_builder
-        # NURU V5 : Mode Strict RAG depuis config
+        # NURU : Mode Strict RAG depuis config
         self.response_guard = StrictRAGGuard(config.response_mode)
-        # NURU V5 : Vérificateur de citations
+        # NURU : Vérificateur de citations
         self.evidence_verifier = EvidenceVerifier()
-        # NURU V6 : Middleware de compression de contexte (TokenJuice)
+        # NURU : Middleware de compression de contexte (TokenJuice)
         tj_enabled = getattr(config, 'token_juice_enabled', True)
         self.token_juice = TokenJuice(
             enabled=tj_enabled,
             max_chunk_chars=getattr(config, 'token_juice_max_chunk_chars', 2000),
         )
-        # NURU V6 : Learning Loop — collecteur de traces
+        # NURU : Learning Loop — collecteur de traces
         self.trace_collector = TraceCollector()
-        # NURU V4.5 : Long-Term Memory — faits utilisateur structurés
+        # NURU : Long-Term Memory — faits utilisateur structurés
         self.long_term_memory = None  # Initialisé via set_long_term_memory()
         # Suivi du dernier résultat RAG pour l'observabilité UI
         self.last_rag_result = None
@@ -275,7 +273,7 @@ class NuruOrchestrator:
             return
 
         # ── 6. Construction prompt ──
-        # NURU V4.5 : injection des faits utilisateur Long-Term Memory
+        # NURU : injection des faits utilisateur Long-Term Memory
         user_facts_str = ""
         if self.long_term_memory:
             relevant_facts = await self.long_term_memory.get_relevant_facts(query, limit=10)
@@ -406,18 +404,6 @@ class NuruOrchestrator:
             "score": rag_score_val,
             "sources": sources_list,
         })
-
-        # ── 9. Réflexion ──
-        if self.reflection:
-            analysis = await self.reflection.analyze(
-                query=query, response=response_content,
-                metadata={"intent": intent, "latency_ms": int(duration * 1000)},
-            )
-            analysis_dict = analysis if isinstance(analysis, dict) else {}
-            self.memory_store.add_reflection(
-                query=query, feedback=str(analysis),
-                score=1.0 - analysis_dict.get("hallucination_risk", 0),
-            )
 
         # ── 10. Mémoire ──
         if intent != "COMPLEX":

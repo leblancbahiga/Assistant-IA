@@ -1,4 +1,4 @@
-"""Document watcher pour auto-indexation temps réel (V4.5/V5).
+"""Document watcher pour auto-indexation temps réel.
 
 Utilise watchdog pour surveiller les dossiers de documents et indexer
 automatiquement les nouveaux fichiers et les modifications.

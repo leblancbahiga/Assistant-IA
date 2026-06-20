@@ -1,4 +1,4 @@
-"""Configuration des logs structurés avec loguru pour NURU V4.5.
+"""Configuration des logs structurés avec loguru pour NURU V8+.
 
 Intercepte les logs standard `logging` et les reformate avec loguru.
 S'installe en appelant `setup_logging()` au démarrage de l'application.

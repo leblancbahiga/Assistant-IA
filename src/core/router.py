@@ -1,4 +1,4 @@
-"""Router — Wrapper V4.5 autour de SemanticRouter avec PolicyEngine et stratégies hybrides."""
+"""Router — Wrapper autour de SemanticRouter avec PolicyEngine et stratégies hybrides."""
 import enum
 import logging
 from typing import Optional
@@ -39,7 +39,7 @@ class Router(SemanticRouter):
 
     Ajoute :
     - Intégration du PolicyEngine pour les décisions RAM-dépendantes
-    - Cache TTL (hérité de SemanticRouter V4.5 Phase 0)
+    - Cache TTL (hérité de SemanticRouter Phase 0)
     - Compatibilité ascendante
     - NURU V6 : HybridStrategy pour des stratégies local+cloud fines
     """

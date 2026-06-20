@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import AsyncGenerator
 from src.config import config
 from src.rag_engine import RAGEngine, RAGResult
-from src.semantic_router import SemanticRouter  # V4 : Remplace IntentClassifier
-from src.core.router import Router  # V5 : Routeur avec PolicyEngine et route_with_context
+from src.semantic_router import SemanticRouter  # Remplace IntentClassifier legacy
+from src.core.router import Router  # Routeur avec PolicyEngine
 from src.llm_local import LocalLLM
 from src.llm_cloud import CloudLLM
 from src.memory_store import MemoryStore
@@ -22,27 +22,16 @@ from src.core.events import EventBus
 # Si un vrai système de plugins est nécessaire un jour, il sera ajouté frais
 # dans un module dédié (src/plugins/) avec tests et DI explicite.
 from src.ingestion import IngestionEngine, SUPPORTED_EXTENSIONS
-from src.ram_monitor import RAMMonitor  # V4 : Monitoring RAM
-from src.document_watcher import DocumentWatcher  # V4.5 : Auto-indexation watchdog
-from src.core.orchestrator import NuruOrchestrator  # V4.5 : Nouvel orchestrateur
-from src.core.policies import PolicyEngine  # V4.5 : Moteur de politiques
-from src.extraction import PostSessionExtractor  # V4.5 : Extraction post-session
+from src.ram_monitor import RAMMonitor  # Monitoring RAM
+from src.document_watcher import DocumentWatcher  # Auto-indexation watchdog
+from src.core.orchestrator import NuruOrchestrator  # Orchestrateur principal
+from src.core.policies import PolicyEngine  # Moteur de politiques
+from src.extraction import PostSessionExtractor  # Extraction post-session
 from src.long_term_memory import LongTermMemory  # V10.1 : Mémoire long terme
 from src.memory_bridge import MemoryBridge  # V10.1 : Pont V5+V9
 
 logger = logging.getLogger(__name__)
 
-
-# ── Guard anti-conflit V8+ ──
-# NuruCore (ce module) ET NuruOrchestrator (importé ligne 29) cohabitent
-# pendant la migration V4.5→V8+. Ce guard avertit que les deux pipelines
-# sont chargés simultanément, ce qui consomme de la RAM inutilement.
-# À supprimer quand NuruCore sera entièrement migré vers l'orchestrateur.
-if "NuruOrchestrator" in dir():
-    logger.warning(
-        "⚠️ NuruCore ET NuruOrchestrator chargés — migration V4.5→V8+ en cours. "
-        "Les nouveaux pipelines doivent utiliser NuruOrchestrator directement."
-    )
 
 SYSTEM_PROMPT_STATIC = """
 Tu es NURU V8+, l'assistant IA personnel de Leblanc.
@@ -109,10 +98,14 @@ Privilégier les sources avant les connaissances mémorisées.
 """.strip()
 
 class NuruCore:
-    """Orchestrateur asynchrone principal de NURU V4."""
-    
+    """Orchestrateur asynchrone principal de NURU V8+.
+
+    Coordonne le pipeline : routing, RAG, LLM local/cloud,
+    mémoire, audio, extraction. Délègue à NuruOrchestrator
+    pour la boucle de traitement principale.
+    """
+
     def __init__(self):
-        # V4 : Routeur Sémantique Hybride (remplace le simple IntentClassifier)
         self.rag = RAGEngine()
         self.cloud_llm = CloudLLM()  # V10.1 : déplacé AVANT le router pour classification
         self.router = Router(rag_engine=self.rag, is_online_check=self._is_online,
@@ -152,9 +145,7 @@ class NuruCore:
             runtime_manager=self.runtime,
             web_search=self.web,
             context_budget=self.context_budget,
-            # V10.3 — AUDIT Arch-01 : reflection_engine=None (ref stubs supprimés)
-            reflection_engine=None,
-            system_prompt_builder=self.build_system_prompt,  # V4.5 : callback prompt
+            system_prompt_builder=self.build_system_prompt,  # Callback prompt système
         )
         logger.info("🚀 NuruOrchestrator V4.5 initialisé")
 
@@ -417,19 +408,4 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
     def warmup(self):
         """Initialisation préventive des modèles."""
         self.local_llm.warmup()
-
-    # ═══════════════════════════════════════════
-    # V4.5 : Pipeline via NuruOrchestrator
-    # ═══════════════════════════════════════════
-
-    async def process_query_v45(self, query: str, use_tts: bool = False) -> AsyncGenerator[str, None]:
-        """Version V4.5 du pipeline utilisant le NuruOrchestrator."""
-        async for token in self.orchestrator.process_query(
-            query=query, session_id="default",
-            use_tts=use_tts, audio_engine=self.audio if use_tts else None,
-        ):
-            yield token
-
-        # V10.3k — même correctif B-Task-Destroyed via _schedule_background_extraction
-        await self._schedule_background_extraction()
 

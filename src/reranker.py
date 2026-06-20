@@ -1,5 +1,5 @@
 """
-Reranker 2 étages pour NURU V4.
+Reranker 2 étages pour NURU V8+.
 
 Étape 1 - Retrieval : multilingual-e5-base → top 15 (via RAGEngine)
 Étape 2 - Reranking : cross-encoder/ms-marco-MiniLM-L-6-v2 → top 3

@@ -16,7 +16,7 @@ SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".csv", ".json"}
 
 
 class IngestionEngine:
-    """Moteur d'ingestion de documents pour le RAG V4."""
+    """Moteur d'ingestion de documents pour le RAG V8+."""
     
     def __init__(self):
         self.rag = RAGEngine()
@@ -100,7 +100,7 @@ class IngestionEngine:
                 if not text:
                     return
 
-                # V4.5 Phase 2 : Chunking sémantique contextuel
+                # Phase 2 : Chunking sémantique contextuel
                 from src.rag.chunking import SemanticChunker
                 chunker = SemanticChunker()
                 metadata = {"title": os.path.basename(filepath), "source": filepath}
@@ -165,7 +165,7 @@ class IngestionEngine:
             logger.error(f"❌ Erreur critique {filepath}: {e}")
 
     async def auto_index_loop(self):
-        """Boucle d'auto-indexation V4 : scan récursif et hachage."""
+        """Boucle d'auto-indexation V8+ : scan récursif et hachage."""
         dirs_to_index = [
             Path.home() / "Documents",
             Path.home() / "Desktop",
@@ -173,7 +173,7 @@ class IngestionEngine:
         ]
         
         while True:
-            logger.info("Scan auto-indexation V4 démarré...")
+            logger.info("Scan auto-indexation V8+ démarré...")
             for base_dir in dirs_to_index:
                 if not base_dir.exists():
                     continue

@@ -1,6 +1,6 @@
-"""Bus d'événements unifié pour NURU V4.5.
+"""Bus d'événements unifié pour NURU V8+.
 
-Fusion de src/event_bus.py (singleton V3/V4) et src/core/events.py (V4.5).
+Fusion de src/event_bus.py (singleton V3/V4) et src/core/events.py (V8+).
 Thread-safe, singleton, compatible UI Qt.
 """
 import asyncio
