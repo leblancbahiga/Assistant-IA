@@ -1995,12 +1995,13 @@ StatsPage (timer 5s) → lit performance.db → affiche métriques
 2. [Interface V12 — Z.ai Design System](#interface-v12-zai--design-system--presence-numerique)
 3. [Phase 0 — Consolidation (2 semaines)](#phase-0--consolidation)
 4. [Phase 1 — Action (6 semaines)](#phase-1--action)
-5. [Phase 2 — Multimodal (8 semaines)](#phase-2--multimodal)
-6. [Phase 3 — Proactivité (4 semaines)](#phase-3--proactivite)
-7. [Phase 4 — Écosystème (4 semaines)](#phase-4--ecosysteme)
-8. [TokenJuice — Stratégie de compression](#tokenjuice--strategie-de-compression)
-9. [Budget RAM — Contrainte M1 8 Go](#budget-ram)
-10. [Synthèse — Les 3 actions immédiates](#synthese--les-3-actions-immediates)
+5. [Phase 2a — Garde-fous (1 sprint)](#phase-2a--garde-fous--identite--privacy--persona-1-sprint-avant-la-voix)
+6. [Phase 2 — Multimodal (8 semaines)](#phase-2--multimodal)
+7. [Phase 3 — Proactivité (4 semaines)](#phase-3--proactivite)
+8. [Phase 4 — Écosystème (4 semaines)](#phase-4--ecosysteme)
+9. [TokenJuice — Stratégie de compression](#tokenjuice--strategie-de-compression)
+10. [Budget RAM — Contrainte M1 8 Go](#budget-ram)
+11. [Synthèse — Les 3 actions immédiates](#synthese--les-3-actions-immediates)
 
 ---
 
@@ -2320,6 +2321,24 @@ EXECUTION_MODEL = {
 
 ---
 
+### Phase 2a — Garde-fous & Identité : Privacy + Persona (1 sprint, AVANT la voix)
+
+**Objectif** : Avant d'ouvrir micro, caméra et réseau, installer les couches de sécurité et d'identité. *Conformément à la stratégie V13 : d'abord plus sûr, plus intelligent — ensuite les capteurs.*
+
+| Semaine | Sprint | Module | Description | RAM ajoutée |
+|---------|--------|--------|-------------|-------------|
+| S8.5 | **Privacy & Consent Layer** | `src/privacy/` | Opt-in granulaire par capteur (micro, caméra, réseau). Journal d'audit immuable (timestamp + capteur + durée + déclencheur). Indicateur visuel persistant dans la barre de menus macOS. Coupure automatique caméra après N min d'inactivité. **Prérequis non négociable pour la Phase 2.** | ~50 Mo |
+| S8.5 | **PersonaEngine (base)** | `src/personality/` | Couche d'identité au-dessus du prompt dynamique (S16). Traits configurables (formalité, humour, empathie, directivité, verbosité). Valeurs garde-fous non contournables. Presets : `persona_pro`, `persona_dev`, `persona_terrain`. Changement par commande vocale ou routine (S17). | ~10 Mo |
+
+**Critères de succès Phase 2a** :
+- ✅ NURU affiche une icône dans la barre de menus quand le micro est actif
+- ✅ Le journal d'audit est consultable dans le Dashboard
+- ✅ Changer de persona modifie observablement le ton des réponses sans toucher au contenu factuel
+- ✅ Les valeurs garde-fous (`ValueGuardrails`) sont dans un fichier séparé, non éditable par NURU
+- ✅ RAM combinée < 60 Mo
+
+---
+
 ### Phase 2 — Multimodal : Voix + Vision (8 semaines)
 
 **Objectif** : NURU acquiert la parole, l'écoute et la vue. Le **différenciateur #2** identifié par tous les audits : un assistant qui ne parle pas n'est pas JARVIS.
@@ -2403,20 +2422,25 @@ class ProactiveEngine:
 |---------|--------|--------|-------------|-------------|-----------|
 | S15 | **ProactiveEngine** | `src/proactive/engine.py` | Moteur de signaux + évaluation LLM. Scheduler 15-30 min. Détection contextuelle (heure, apps ouvertes, calendrier). | ~200 Mo (actif), ~30 Mo (idle) | Phase 0 |
 | S15 | **Signal Collectors** | `src/proactive/signals/` | TimeSignal, CalendarSignal, FSSignal, MemorySignal, SystemSignal. Chacun = un fichier, remplaçable. | ~20 Mo | S15 |
-| S16 | **Prompt dynamique** | `src/memory/dynamic_prompt.py` | Le prompt système n'est plus hardcodé. Il est construit dynamiquement depuis UserMemory + contexte courant. **Fin du hardcoding identifié par Z.ai.** | ~20 Mo | Phase 0 |
-| S16 | **Consolidation mémoire** | `src/memory/consolidation.py` | Curator (inspiré de Jarvis-OS) : decay temporel, fusion d'épisodes, détection contradictions. Tourne en période d'inactivité. | ~100 Mo (pic) | Phase 0 |
-| S17 | **Routines & presets** | `src/proactive/routines.py` | « Mode travail », « Mode soirée » : presets configurables. Déclenchables par commande vocale, heure, ou contexte. | ~50 Mo | Phase 1 + 2 |
+| S16 | **PersonaEngine (plein)** | `src/personality/` | ToneAdapter injecté dans le prompt système. ValueGuardrails non contournable. Presets activables par commande vocale ou routine. **Z.ai : plus grande faiblesse cachée corrigée.** | ~10 Mo | Phase 2a |
+| S16 | **Prompt dynamique** | `src/memory/dynamic_prompt.py` | Le prompt système n'est plus hardcodé. Construit dynamiquement depuis UserMemory + PersonaEngine + contexte courant. | ~20 Mo | Phase 2a |
+| S16 | **SleepCycleManager** | `src/memory/sleep_cycle.py` | Étend `ConsolidationWorker` (S16 existant) en 3 phases : **light** (dédup récent, existant), **deep** (résumé faits sémantiques + courbe de l'oubli, quotidien), **REM** (liens cross-domain proposés à l'utilisateur, hebdo). Journal de rêves exporté dans Nuru_Brain. Garde-fous : souvenirs `important` jamais supprimés sans confirmation. Harnais d'évaluation (vérification régression avant/après). | ~150 Mo (pic, nocturne) | S16 existant |
+| S17 | **Routines & presets** | `src/proactive/routines.py` | « Mode travail », « Mode soirée » : presets configurables. Déclenchables par commande vocale, heure, ou contexte. Changement de persona intégré. | ~50 Mo | Phase 1 + 2 |
 | S18 | **Apprentissage contextuel** | `src/proactive/learning.py` | Détection des patterns d'utilisation. « NURU remarque que tu ouvres toujours VS Code + terminal à 9h → proposition de preset 'Morning Dev'. » | ~80 Mo | S16 + S17 |
+| S18 | **Harnais d'évaluation** | `src/eval/memory_harness.py` | Suite de tests de régression mémoire : avant/après chaque cycle deep/REM, vérifier qu'un échantillon de faits marqués importants est toujours retrouvable. Score de cohérence persona (ton, longueur, formalité) comparé au TraitProfile actif. | ~10 Mo | S16 + SleepCycle |
 
 **Règle de fer de la proactivité** : NURU ne fait JAMAIS d'action destructive sans validation humaine. Les initiatives sont classées par mode (AUTO/NOTIFY/VALIDATE) et l'utilisateur voit TOUT.
 
 **Critères de succès Phase 3** :
 - ✅ NURU dit « Bonjour, ta réunion commence dans 10 min » sans qu'on lui demande
 - ✅ NURU suggère « Je vois que tu travailles sur le projet X, veux-tu que j'ouvre les fichiers de la session précédente ? »
-- ✅ Le prompt système change dynamiquement selon le contexte
-- ✅ La mémoire se consolide automatiquement (décay + fusion)
-- ✅ « Mode travail » est un preset fonctionnel
-- ✅ RAM proactive idle < 50 Mo (hors pic consolidation)
+- ✅ **PersonaEngine** : changer de persona modifie le ton des réponses sans toucher au contenu factuel
+- ✅ **SleepCycleManager** : le journal de rêves quotidien est lisible dans Nuru_Brain et reflète fidèlement ce qui a été consolidé/oublié
+- ✅ **Harnais d'évaluation** : avant/après chaque cycle deep/REM, les faits marqués importants sont toujours retrouvables
+- ✅ Le prompt système change dynamiquement selon le contexte + persona actif
+- ✅ La mémoire se consolide automatiquement en 3 phases (light/deep/REM)
+- ✅ « Mode travail » est un preset fonctionnel, change aussi la persona
+- ✅ RAM proactive idle < 50 Mo (hors pic consolidation nocturne)
 
 ---
 
@@ -2428,13 +2452,19 @@ class ProactiveEngine:
 |---------|--------|--------|-------------|-------------|-----------|
 | S19 | **MCP Client** | `src/mcp/client.py` | Connexion aux serveurs MCP existants. Découverte d'outils. Cache de schémas. | ~50 Mo | Phase 0 |
 | S19 | **MCP Server** | `src/mcp/server.py` | NURU expose ses propres outils (RAG, mémoire, outils Phase 1) comme serveur MCP. Interopérabilité avec Claude Desktop, Cursor, etc. | ~30 Mo | Phase 1 |
-| S20 | **Intégrations clés** | `src/mcp/integrations/` | Connecteurs MCP vers : Notion, Google Calendar, Gmail, Slack, GitHub, Spotify. Priorité : les 4 premiers. | ~100 Mo | Phase 1 + 3 |
+| S19 | **CostGuard** | `src/models/cost_guard.py` | Budget journalier configurable (défaut 2$/jour). Bascule automatique et silencieuse vers modèles locaux si dépassement. Affichage temps réel du coût cumulé par provider dans le Dashboard. | ~5 Mo | Phase 4 |
+| S20 | **ModelRouter** | `src/models/router.py` | Choix délibéré du LLM par type de tâche — pas seulement fallback panne. Sélecteur global dans le Dashboard + override par persona + override ponctuel. Garde-fou confidentialité : données taguées `sensible` épinglées sur modèle local, non contournable. | ~15 Mo | Phase 2a + 3 |
+| S20 | **Intégrations clés** | `src/mcp/integrations/` | Connecteurs MCP vers : Gmail, Google Calendar, Tâches (Reminders/Todoist), puis Notion, Slack, GitHub, Spotify. Priorité : les 3 premiers (ROI quotidien maximal). | ~100 Mo | Phase 1 + 3 |
 | S20 | **Security hardening final** | `src/security/` | Audit de sécurité complet. Sandbox des outils. Chiffrement de la base mémoire. Journal d'audit immuable. Validation des entrées. **5 catégories de vulnérabilités corrigées (Kimi audit).** | ~50 Mo | Toutes |
 
 **Critères de succès Phase 4** :
-- ✅ NURU lit/modiie un document Google Docs via MCP
+- ✅ NURU lit/modifie un document Google Docs via MCP
 - ✅ NURU consulte le calendrier Google et suggère des créneaux
+- ✅ NURU gère ses tâches (Reminders/Todoist) via connecteur générique
 - ✅ NURU expose son RAG comme serveur MCP → utilisable depuis Claude Desktop
+- ✅ ModelRouter sélectionne un modèle différent selon le type de tâche (local pour données sensibles, cloud pour analyse complexe)
+- ✅ CostGuard bascule automatiquement vers les modèles locaux si le budget journalier est atteint
+- ✅ Le Dashboard affiche le coût cloud cumulé en temps réel
 - ✅ Aucune vulnérabilité critique restante (fuite d'identité, path traversal, connection leaks)
 - ✅ RAM totale < 7.0 Go
 
@@ -2573,15 +2603,34 @@ Phase 0 ─ Consolidation (S1-S2) ── Nettoyage V4, routeur unique, prompt un
               ↓
 Phase 1 ─ Action (S3-S8) ── Shell sécurisé → Contrôle OS → Navigateur → Fichiers → MCP
               ↓
+Phase 2a ─ Garde-fous (S8.5) ── Privacy & Consent Layer → PersonaEngine 🆕
+              ↓
 Phase 2 ─ Multimodal (S9-S14) ── STT → TTS → Wake word → VAD → Vision écran → Vision doc
               ↓
-Phase 3 ─ Proactivité (S15-S18) ── ProactiveEngine → Prompt dynamique → Consolidation → Routines
+Phase 3 ─ Proactivité (S15-S18) ── ProactiveEngine → PersonaEngine → Prompt dynamique
+           SleepCycleManager → Routines → Apprentissage → Harnais d'évaluation
               ↓
-Phase 4 ─ Écosystème (S19-S20) ── MCP Client/Server → Intégrations → Security hardening
+Phase 4 ─ Écosystème (S19-S20) ── MCP Client/Server → ModelRouter 🆕 → CostGuard 🆕
+           Intégrations (Gmail, Calendar, Tâches) → Security hardening
 ```
 
-**Durée totale estimée** : 20 semaines (~5 mois solo intensif)
+**Durée totale estimée** : 21 semaines (~5 mois solo intensif)
 **RAM cible finale** : < 7.0 Go (tous modes confondus)
 **Investissement TokenJuice** : -40% à -50% tokens — le carburant qui rend tout ça possible sur M1.
+
+---
+
+> ### 📌 Modules V13-A/B absorbés dans V12
+> Conformément à la stratégie « formaliser, réconcilier, compléter », les modules suivants du plan V13 original sont intégrés dans V12 — ils rendent NURU plus intelligent et plus sûr **avec ce qui existe déjà**, avant d'ouvrir les capteurs et le réseau :
+>
+> - **PersonaEngine** → Phase 2a (base) + Phase 3 S16 (plein)
+> - **Privacy & Consent Layer** → Phase 2a S8.5
+> - **SleepCycleManager** (3 phases) → Phase 3 S16 (étend ConsolidationWorker)
+> - **ModelRouter** (choix délibéré) → Phase 4 S20
+> - **CostGuard** (budget cloud) → Phase 4 S19
+> - **Connecteur Tâches générique** → Phase 4 S20 (priorité haute)
+> - **Harnais d'évaluation mémoire & persona** → Phase 3 S18
+>
+> **Ce qui reste V13** (après V12) : LiveKit (voix distante), Médiatisation locale (MLX vision), Skills SDK + Vues. Voir `NURU_V13_VISION.md` pour le détail.
 
 ---
