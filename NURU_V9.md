@@ -1992,14 +1992,15 @@ StatsPage (timer 5s) → lit performance.db → affiche métriques
 ### Table des matières V12
 
 1. [V12 Vision — Le vrai gap](#v12-vision)
-2. [Phase 0 — Consolidation (2 semaines)](#phase-0-consolidation)
-3. [Phase 1 — Action (6 semaines)](#phase-1-action)
-4. [Phase 2 — Multimodal (8 semaines)](#phase-2-multimodal)
-5. [Phase 3 — Proactivité (4 semaines)](#phase-3-proactivite)
-6. [Phase 4 — Écosystème (4 semaines)](#phase-4-ecosysteme)
-7. [TokenJuice — Stratégie de compression](#tokenjuice-strategie)
-8. [Budget RAM — Contrainte M1 8 Go](#budget-ram)
-9. [Synthèse — Les 3 actions immédiates](#synthese-3-actions)
+2. [Interface V12 — Z.ai Design System](#interface-v12-zai--design-system--presence-numerique)
+3. [Phase 0 — Consolidation (2 semaines)](#phase-0--consolidation)
+4. [Phase 1 — Action (6 semaines)](#phase-1--action)
+5. [Phase 2 — Multimodal (8 semaines)](#phase-2--multimodal)
+6. [Phase 3 — Proactivité (4 semaines)](#phase-3--proactivite)
+7. [Phase 4 — Écosystème (4 semaines)](#phase-4--ecosysteme)
+8. [TokenJuice — Stratégie de compression](#tokenjuice--strategie-de-compression)
+9. [Budget RAM — Contrainte M1 8 Go](#budget-ram)
+10. [Synthèse — Les 3 actions immédiates](#synthese--les-3-actions-immediates)
 
 ---
 
@@ -2025,6 +2026,154 @@ La majorité des projets « JARVIS » open-source échouent parce qu'ils **ajout
 | **EventBus** (pub/sub existant) | Backbone tout fait pour la proactivité et la supervision parallèle | Les audits comparent aux standards (MCP), pas ce qui existe déjà |
 
 **Stratégie V12** : Exploiter ces 2 actifs uniques que **personne** dans les 6 rapports n'a vus, pour construire une architecture qui respecte la contrainte M1 8 Go.
+
+---
+
+### Interface V12 — Z.ai : Design System & Présence Numérique
+*Refonte de l'interface : du cockpit 3 colonnes à la présence numérique animée*
+
+**Design system fourni par Z.ai** | **PySide6 / Qt / QPainter** | **Cible : macOS M1 8 Go**
+
+> La V12 opère un changement radical de paradigme : NURU n'est plus un outil que l'on consulte, mais une présence que l'on ressent. L'interface passe d'un modèle d'affichage de données à un modèle de présence ambiante. (Z.ai, Spec Design V12)
+
+#### Paradigme : 3 colonnes → Présence « Ambient »
+
+| Avant (V10.3/V11) | Après (V12 — Z.ai) |
+|--------------------|--------------------|
+| Dashboard 3 colonnes technique (cockpit) | Écran minimal centré sur l'interaction |
+| Sidebar navigation + panneau métriques | **Menu contextuel** + mode debug Ctrl+D |
+| Métriques CPU/RAM/tokens visibles en permanence | **Tooltip inline**, panneau coulissant optionnel |
+| Barre d'outils horizontale | **Actions contextuelles** inline dans la conversation |
+| Onglets sessions multiples visibles | **Switcher Cmd+T**, un seul chat visible |
+
+#### Design System DM-1 Deep Cyan
+
+**Palette :**
+
+| Token | HEX | Rôle |
+|-------|-----|------|
+| `bg-deep` | `#070A10` | Fond principal |
+| `bg-card` | `#0D1117` | Cartes et surfaces |
+| `bg-surface` | `#151B26` | Surfaces surélevées |
+| `accent-cyan` | `#00D4FF` | Indicateurs d'état, focus, liens |
+| `accent-cyan-glow` | `rgba(0,212,255,0.15)` | Halo / glow d'animation |
+| `accent-warm` | `#E8A87C` | Notifications proactives, alertes douces |
+| `text-primary` | `#E8ECF1` | Texte principal |
+| `text-secondary` | `#8B95A5` | Légendes, métadonnées |
+| `accent-green` | `#00E599` | Confirmations, succès |
+| `accent-amber` | `#FFB800` | Attention, suggestions |
+| `accent-rose` | `#FF4D6A` | Erreurs, danger |
+
+**Typographie :**
+- **SF Pro / Inter** (300–700) : textes, conversations, titres
+- **JetBrains Mono** (400–500) : code, données techniques, métriques
+- Taille body : 13 pt, caption : 11 pt, titres : 18 pt, overlay prompt : 28 pt
+
+#### Architecture des composants
+
+**Nouveaux composants V12 :**
+
+| Composant | Taille | Rôle | État |
+|-----------|--------|------|------|
+| **NuruPresenceOrb** | 120/200/80 px | Cercle animé central — indicateur d'état | 🆕 |
+| **ConversationSurface** | fluide | Zone de chat avec bulles alignées (user droite, NURU gauche) | 🆕 |
+| **VoiceOverlay** | 60%×40% écran | Fenêtre frameless semi-transparente pour le mode vocal | 🆕 |
+| **NuruFloatingWidget** | 160×160 px | Widget always-on-top, drag-and-drop, auto-dim opacité | 🆕 |
+| **NuruMenuBarIcon** | 22×22 px | QSystemTrayIcon, icône change selon état | 🆕 |
+| **ContextStrip** | barre horizontale | Infos contextuelles (app active, fichier sélectionné) | 🆕 |
+| **ProactiveToast** | notification glissante | 400px déplacement, 300ms ease-out, 4s visibilité | 🆕 |
+
+**Supprimés :**
+- ❌ Sidebar complète → remplacée par menu contextuel
+- ❌ Panneau métriques permanent → Ctrl+D debug mode
+- ❌ Barre d'outils horizontale → actions contextuelles inline
+- ❌ Indicateurs CPU/RAM visibles → mode debug dédié
+
+#### NuruPresenceOrb : Le cœur visuel
+
+```python
+class NuruPresenceOrb(QWidget):
+    """Présence animée de NURU. 6 états avec QPropertyAnimation.
+    
+    Tailles : 120px (fenêtre), 200px (VoiceOverlay), 80px (FloatingWidget)
+    Rendu : QPainter custom (pas de 3D, pas de GPU)
+    CPU cible : < 5% par animation
+    """
+    
+    # États et animations
+    STATES = {
+        "idle":      {"anim": "pulse 4s",     "desc": "Respiration lente, opacité 0.8-1.0"},
+        "listening": {"anim": "sound_waves",  "desc": "3 cercles concentriques qui s'expandent"},
+        "thinking":  {"anim": "halo_spin 8s", "desc": "Arc 270° rotatif, dégradé radial cyan"},
+        "speaking":  {"anim": "particles",    "desc": "Particules calibrées au volume TTS"},
+        "action":    {"anim": "pulse_warm",   "desc": "Orb pulsant accent-warm"},
+        "error":     {"anim": "blink_red",    "desc": "Clignotant #FF4D6A, 2s fixes"},
+    }
+    
+    # Signaux EventBus
+    state_changed = Signal(str)  # → event_bus.emit("ui.state_change", state)
+```
+
+#### Mode vocal — Cycle de vie de l'overlay
+
+```
+EventBus signal               → VoiceOverlay réaction
+────────────────────────────────────────────────────
+voice.wake_detected           → overlay apparition (scale 0.8→1.0, opacity 0→1, 250ms)
+voice.transcript_update       → transcription temps réel
+voice.thinking_start          → Orb en mode halo rotatif cyan
+voice.response_start          → Orb en mode parole + TTS
+voice.session_end / timeout 8s → overlay disparition (scale 1.0→0.8, opacity 1→0)
+```
+
+#### Intégration macOS
+
+| Élément | Implémentation | Comportement |
+|---------|---------------|--------------|
+| **Menu Bar** | `QSystemTrayIcon` 22×22px | Icône gris (idle), cyan pulsant (écoute), orange (alerte proactive) |
+| **Floating Widget** | `Qt.Tool \| FramelessWindowHint \| WindowStaysOnTopHint` | 160×160px, drag-and-drop, opacité → 0.4 après 30s inactivité, revient à 1.0 au hover |
+| **Raccourcis** | `QShortcut` | ⌥␣ vocal, ⌘⇧N floating widget, ⌘N new chat, ⌘T switcher, ⎋ fermer overlay |
+
+#### Spécifications techniques PySide6
+
+```python
+class NuruWindow(QMainWindow):
+    """Conteneur principal V12. Routeur d'événements."""
+    def __init__(self, event_bus: EventBus):
+        self.current_mode = "chat"  # chat | voice | action
+        self.presence_orb = NuruPresenceOrb(self)        # 120px
+        self.conversation = ConversationSurface(self)
+        self.input_bar = NuruInputBar(self)
+        self.voice_overlay = VoiceOverlay()              # frameless
+        self.floating_widget = NuruFloatingWidget()       # 160×160px
+        self.context_strip = ContextStrip(self)
+        self._bind_events()                               # EventBus → UI
+
+class VoiceOverlay(QWidget):
+    """Fenêtre frameless pour le mode vocal.
+    
+    Flags : Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    Fond : rgba(13,17,23,0.92)
+    Rayon : 16px (sans QGraphicsBlurEffect = pas de coût GPU)
+    """
+    def show_overlay(self):
+        # Animation : scale 0.8→1.0, opacity 0→1, 250ms, OutCubic
+        ...
+    def hide_overlay(self):
+        # Animation : scale 1.0→0.8, opacity 1→0, 250ms, InCubic
+        # Timeout : 8s sans détection vocale
+        ...
+```
+
+#### Roadmap implémentation interface (Z.ai, 9 semaines)
+
+| Phase | Semaines | Livrables | Critères validation |
+|-------|----------|-----------|-------------------|
+| **P1 — Socle visuel** | 1-3 | NuruWindow sombre + coins arrondis, Orb idle/thinking (QPainter), ConversationSurface bulles, Design tokens (palette, typo, espacement) | Chat fonctionnel avec identité V12 |
+| **P2 — Expérience vocale** | 4-6 | VoiceOverlay frameless complet, Orb listening/speaking (ondes, halo), Menu bar QSystemTrayIcon, Raccourcis clavier | Activation vocale + overlay fonctionnel |
+| **P3 — Présence & polish** | 7-9 | Floating widget always-on-top, ProactiveToasts glissants, ContextStrip (NSWorkspace), Mode debug Ctrl+D, Micro-interactions (ease curves, hover, timing) | Tous modes actifs, micro-interactions fluides |
+
+> **Contrainte M1 8 Go** : Toutes les animations sont implémentées via `QPropertyAnimation` et `QPainter` — pas de 3D, pas de `QGraphicsBlurEffect`, pas de canvas lourd. Budget : < 5% CPU par animation. Vérifiable via Instruments macOS.
 
 ---
 
@@ -2105,7 +2254,8 @@ EXECUTION_MODEL = {
 | S9 | **Pipeline STT** | `src/voice/stt.py` | mlx-whisper tiny, streaming local, buffering intelligent. Détection fin de phrase pour découpage. | ~500 Mo | Phase 0 |
 | S10 | **Pipeline TTS** | `src/voice/tts.py` | Kokoro TTS local, streaming sentence-by-sentence. Fallback macOS `say` si RAM insuffisante. | ~300 Mo | Phase 0 |
 | S11 | **Wake word** | `src/voice/wake_word.py` | « Hey NURU » via OpenWakeWord. Bascule automatique en mode écoute. Faible CPU (<5%). | ~50 Mo | STT + TTS |
-| S12 | **VAD + Barge-in** | `src/voice/vad.py` | Silero VAD pour interruption naturelle. Priorité à la voix utilisateur sur la réponse en cours. | ~50 Mo | Pipeline voix |
+|| S12 | **VAD + Barge-in** | `src/voice/vad.py` | Silero VAD pour interruption naturelle. Priorité à la voix utilisateur sur la réponse en cours. | ~50 Mo | Pipeline voix |
+|| S12b | **VoiceOverlay UI** 🆕 | `src/ui/voice_overlay.py` | NuruPresenceOrb modes listening/speaking (ondes QPainter), fenêtre frameless 60%×40%, menu bar QSystemTrayIcon, raccourcis ⌥␣. Spécifications Z.ai. | ~100 Mo | S10 + S11 ||
 | S13 | **Vision écran** | `src/vision/screen.py` | Capture d'écran périodique (mss, 2-5s). Analyse par LLM cloud (GPT-4o Vision). Pas de vision locale (trop RAM). Détection des changements d'interface. | ~100 Mo | Phase 1 |
 | S14 | **Vision documents** | `src/vision/doc_vision.py` | OCR amélioré (pytesseract). Analyse d'images et screenshots via LLM cloud. Détection de tableaux dans les images. | ~80 Mo | Vision écran |
 
@@ -2115,7 +2265,9 @@ EXECUTION_MODEL = {
 - Mode dégradé : si RAM > 6.5 Go → désactiver la vision, basculer TTS sur `say` (0 Mo supplémentaire)
 
 **Critères de succès Phase 2** :
-- ✅ « Hey NURU, quelle heure est-il ? » → réponse vocale en < 3s
+- ✅ « Hey NURU, quelle heure est-il ? » → réponse vocale + VoiceOverlay visible en < 3s
+- ✅ VoiceOverlay s'affiche avec animation (scale 0.8→1.0, 250ms) et disparaît après 8s silence
+- ✅ NuruPresenceOrb change d'état visuellement : écoute (ondes), réflexion (halo), parole (particules)
 - ✅ NURU parle avec une voix naturelle (Kokoro)
 - ✅ L'utilisateur peut interrompre NURU en parlant (barge-in)
 - ✅ NURU analyse une capture d'écran et décrit ce qu'il voit
