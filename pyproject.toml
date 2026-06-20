@@ -1,42 +1,95 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "nuru"
-version = "12.0.0"
-description = "NURU V12 — Plan de Transformation JARVIS : assistant personnel vocal et visuel (Phi-4-mini / Groq / RAG multi-stratégie / EventBus)"
+name = "nuru-v12"
+version = "0.12.0"
+description = "NURU V12 - Personal Cognitive Operating System"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
 authors = [
-    { name = "Leblanc BAHIGA Mudarhi" }
-]
-dependencies = [
-    "mlx-lm",
-    "mlx-whisper",
-    "mlx-embeddings",
-    "sqlite-vec",
-    "pysqlite3-binary",
-    "pyside6",
-    "qasync",
-    "psutil",
-    "httpx",
-    "numpy",
-    "pymupdf",
-    "python-docx",
-    "loguru",
-    "sentence-transformers",
-    "sounddevice",
-    "soundfile",
-    "watchdog",
-    "pyyaml",
-    "pydantic-settings",
-    "keyring",
-    "cachetools",
-    "pytesseract",
-    "pdf2image",
+    {name = "leblancbahiga", email = "leblancbahiga@github.com"}
 ]
 
 [project.optional-dependencies]
-ocr = ["pytesseract", "pdf2image"]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.4.0",
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=1.2.0",
+]
+cloud = [
+    "groq>=0.7.0",
+    "openai>=1.3.0",
+    "anthropic>=0.7.0",
+]
+voice = [
+    "mlx-whisper>=0.1.0",
+    "pyttsx3>=2.90",
+]
+vision = [
+    "pillow>=10.0.0",
+    "opencv-python>=4.8.0",
+]
+ui = [
+    "PyQt6>=6.5.0",
+]
 
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+[tool.black]
+line-length = 120
+target-version = ['py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(\n  _archive\n  | _tools\n  | _references\n  | .idea\n  | .hermes\n)/\n'''
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.isort]
+profile = "black"
+line_length = 120
+skip_gitignore = true
+known_first_party = ["src"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-v --strict-markers --tb=short"
+markers = [
+    "unit: unit tests",
+    "integration: integration tests",
+    "slow: slow tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+omit = [
+    "*/__init__.py",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+target_percentage = 80
+precision = 2

@@ -1,0 +1,137 @@
+# NURU V12 Default Configuration
+# This file should NOT contain secrets - use .env for that
+
+app:
+  name: NURU V12
+  version: "0.12.0"
+  phase: 1
+
+models:
+  primary:
+    provider: groq
+    model: llama-3.3-70b-groq
+    temperature: 0.7
+    max_tokens: 2048
+  fallback:
+    provider: openai
+    model: gpt-4-turbo
+    temperature: 0.7
+    max_tokens: 2048
+  local:
+    provider: local
+    model: phi-4-mini
+    temperature: 0.7
+    max_tokens: 1024
+
+memory:
+  sleep_cycle:
+    light_phase_hours: 4
+    deep_phase_hours: 4
+    rem_phase_hours: 2
+  consolidation_frequency: daily
+  retention_policy: adaptive
+
+routing:
+  intent_confidence_threshold: 0.7
+  routing_timeout_ms: 100
+
+rag:
+  chunk_size: 512
+  chunk_overlap: 100
+  retrieval_threshold: 0.30
+  top_k_results: 5
+  strategies:
+    - vectorial
+    - fts5
+    - hyde
+  query_rewriting: true
+
+voice:
+  enabled: false
+  stt:
+    model: mlx-whisper
+    language: auto
+  tts:
+    model: kokoro
+    language: fr
+  wake_word:
+    keyword: nuru
+    sensitivity: 0.5
+  vad:
+    enabled: true
+    threshold: 0.3
+    timeout_ms: 500
+  barge_in: false
+
+vision:
+  enabled: false
+  screen_capture:
+    interval_seconds: 30
+    enabled: false
+  document_ocr: true
+  provider: cloud
+
+proactive:
+  enabled: false
+  signal_checks_per_hour: 6
+  routine_execution: true
+
+privacy:
+  mode: strict
+  audit_logging: true
+  encrypt_memory: true
+  data_retention_days: 90
+  granular_consent: true
+
+security:
+  shell_sandbox:
+    enabled: true
+    restrictions:
+      - rm -rf /
+      - sudo
+  file_access:
+    allowed_paths:
+      - ~/Documents
+      - ~/Downloads
+      - ./data
+    denied_extensions:
+      - .exe
+      - .sh
+
+ui:
+  theme: dark
+  accent_color: "#00D4FF"
+  corner_color: "#E8A87C"
+  presence_orb:
+    size_px: 120
+    animation_fps: 60
+  voice_overlay:
+    width_percent: 60
+    height_percent: 40
+    timeout_seconds: 8
+
+logging:
+  level: INFO
+  format: json
+  outputs:
+    - console
+    - file
+  file:
+    path: logs/nuru.log
+    max_size_mb: 50
+    backup_count: 5
+  audit:
+    path: logs/audit.log
+    max_size_mb: 100
+    backup_count: 10
+
+cost_guard:
+  daily_budget_usd: 2.0
+  token_budget_mode: adaptive
+  cost_tracking: true
+  auto_fallback_on_limit: true
+
+evaluation:
+  memory_fidelity_check: true
+  persona_consistency_check: true
+  check_frequency_sprints: 1
