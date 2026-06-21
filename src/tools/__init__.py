@@ -9,3 +9,13 @@ from src.tools.shell_exec import (
     ApprovalManager,
     register_shell_tools,
 )
+from src.tools.os_control import (
+    AppAction,
+    WindowAction,
+    SystemControlType,
+    AppResult,
+    WindowInfo,
+    AppInfo,
+    OSController,
+    register_os_tools,
+)
