@@ -58,6 +58,20 @@ SYSTEM_DIRS: tuple[str, ...] = (
     "/Program Files",
     "/Program Files (x86)",
     "/System32",
+    # macOS — Binaires système
+    "/usr/bin", "/usr/sbin", "/usr/libexec",
+    # macOS — Données navigateur / mail
+    "~/Library/Safari",
+    "~/Library/Mail",
+    # macOS — Conteneurs / sandbox
+    "~/Library/Containers",
+    "~/Library/Group Containers",
+    # Cloud credentials
+    "~/.aws", "~/.azure", "~/.config/gcloud",
+    # Docker
+    "~/.docker",
+    # Firefox profiles
+    "~/Library/Application Support/Mozilla",
 )
 
 # Chemins système élargis (vérification par préfixe)

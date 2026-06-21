@@ -65,6 +65,16 @@ FINANCIAL_KEYWORDS: set[str] = {
     "carte-bleue", "carte-de-credit", "credit-card",
     "numero-carte", "card-number", "cvv", "cvc",
     "expiration", "date-expiration",
+    # Crypto exchanges / wallets
+    "crypto.com", "coinbase.com", "binance.com", "kraken.com",
+    # Fintech / néobanques
+    "wise.com", "revolut.com", "n26.com",
+    # Cartes de crédit internationales
+    "americanexpress", "visa.com", "mastercard.com",
+    # Paiements / plateformes
+    "payoneer", "stripe.com/dashboard",
+    # Termes financiers génériques
+    "broker", "trading", "exchange",
 }
 
 # ── Enums ────────────────────────────────────────────────────────
