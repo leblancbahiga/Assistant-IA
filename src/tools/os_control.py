@@ -2334,6 +2334,14 @@ class OSController:
             r"chown\s+",
             r"passwd\s+",
             r"killall\s+-9\s+",
+            # macOS — Lancement / déchargement de services
+            r"launchctl\s+load",
+            r"launchctl\s+unload",
+            # macOS — Keychain (accès / modification)
+            r"security\s+authorize",
+            r"security\s+add-generic-password",
+            # macOS — Terminal escape vers shell non-sécurisé
+            r"open\s+-a\s+terminal",
         ]
 
         for pattern in blocked_patterns:

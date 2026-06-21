@@ -2289,7 +2289,8 @@ NURU V12 reste **nocturne par défaut** — c'est son identité et l'Orb perd 80
 **🟢 Sprint 4 — Contrôle OS terminé — 63 tests ✅**
 **🟢 Sprint 5 — Contrôle navigateur terminé — 95 tests ✅**
 **🟢 Sprint 6 — Gestion fichiers CRUD terminé — 79 tests ✅**
-**🟢 Sprint 7 — Intégration ToolRegistry terminé — 93 tests ✅ | S8 en attente**
+**🟢 Sprint 7 — Intégration ToolRegistry terminé — 93 tests ✅**
+**🟢 Sprint 8 — Tests + Sécurité terminé — 128 tests ✅ | Phase 1 complète !**
 **Objectif** : NURU passe de « répond à des questions » à « agit sur le monde ». C'est le **différenciateur #1** identifié par Z.ai. Sans action, NURU reste un chatbot.
 
 #### Architecture — Security-first
@@ -2311,9 +2312,9 @@ EXECUTION_MODEL = {
 | S3 | **Shell sécurisé** | `src/tools/shell_exec.py` | Exécution de commandes terminal avec sandbox, blocklist, allowlist, et approbation humaine. 5 couches de défense. Limité à `~/Nuru_Workspace/` par défaut. | ~50 Mo | Phase 0 |
 | S4 | **Contrôle OS** | `src/tools/os_control.py` | PyAutoGUI + AppleScript : ouvrir/fermer apps, lancer scripts, gérer fenêtres, volume, luminosité. Découverte automatique des apps installées. | ~80 Mo | Shell sécurisé |
 | S5 | **Contrôle navigateur** | `src/tools/browser_ctrl.py` | Playwright : navigation web, formulaires, scraping. Pas de contrôle financier sans approbation explicite. | ~150 Mo | Contrôle OS |
-| S6 | **Gestion fichiers CRUD** | `src/tools/file_ops.py` | Créer, modifier, déplacer, supprimer fichiers. Restreint à `~/Nuru_Workspace/` + dossiers explicitement autorisés. | ~30 Mo | Shell sécurisé |
-| S7 | **Intégration ToolRegistry** | Connecter les 4 outils au ToolRegistry existant + Exposition des outils via MCP. | ~20 Mo | Tous |
-| S8 | **Tests + Sécurité** | Tests d'intégration des 4 outils (min 40 tests). Audit de sécurité. Hardening du sandbox. | 0 | Tous |
+| S6 | **Gestion fichiers CRUD** | `src/tools/file_ops.py` | Créer, modifier, déplacer, supprimer fichiers. Restreint à `~/Nuru_Workspace/` + dossiers explicitement autorisés. Profils de sécurité. | ~30 Mo | Shell sécurisé |
+| S7 | **Intégration ToolRegistry** | `src/tools/orchestrator.py` | Orchestrateur central (ToolOrchestrator). 31 outils découverts. Schémas OpenAI function calling. | ~20 Mo | Tous |
+| S8 | **Tests + Sécurité** | Tests d'intégration cross-modules (128 tests). Audit de sécurité automatisé (shell_exec, os_control, browser_ctrl, file_ops). Hardening du sandbox. | 0 | Tous |
 
 **Critères de succès Phase 1** :
 - ✅ « NURU, ouvre VS Code » → VS Code s'ouvre

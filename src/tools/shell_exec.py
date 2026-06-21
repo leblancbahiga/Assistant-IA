@@ -57,6 +57,30 @@ BLOCKED_COMMANDS: set[str] = {
     "diskutil",
     # Périphériques
     "/dev/sd", "/dev/nvme", "/dev/disk",
+    # macOS — Montage / démontage
+    "mount", "umount",
+    # macOS — Lancement de services
+    "launchctl",
+    # macOS — AppleScript (contournement shell)
+    "osascript",
+    # macOS — Ouverture applicative (version complète, pas le verbe 'open' seul)
+    "open -a", "open /", "open .",
+    # macOS — Keychain (accès mots de passe)
+    "security",
+    # macOS — SIP (System Integrity Protection)
+    "csrutil",
+    # macOS — NVRAM / Paramètres de sécurité
+    "nvram", "spctl",
+    # macOS — Préférences système
+    "defaults write",
+    # macOS — Configuration réseau / système
+    "networksetup", "systemsetup",
+    # macOS — Empêche sommeil
+    "caffeinate",
+    # macOS — Time Machine
+    "tmutil",
+    # macOS — Mise à jour système
+    "softwareupdate",
 }
 
 SAFE_COMMANDS: set[str] = {
@@ -453,9 +477,12 @@ class ShellSandbox:
         ):
             return True, "Téléchargement avec exécution détecté"
 
-        # chmod 777 / chmod -R 777 (input déjà lowered)
-        if re.search(r'chmod\s+(-[rR]\s+)?777\b', cmd_lower):
-            return True, "Permissions 777 détectées"
+        # chmod 777 / chmod -R 777 / chmod 4777 (setuid) / chmod 2777 (setgid) / chmod 1777 (sticky)
+        # Autorise les modes sécuritaires : 644, 755, 600, 700, 444, etc.
+        if re.search(r'chmod\s+(-[rR]\s+)?[0-7]*7[0-7]*7[0-7]*7\b', cmd_lower):
+            return True, "Permissions dangereuses détectées (777/4777/2777)"
+        if re.search(r'chmod\s+(-[rR]\s+)?[124][0-7]{3}\b', cmd_lower):
+            return True, "Setuid/setgid/sticky bit détecté"
 
         # chown sur /
         if re.search(r'\bchown\b', cmd_lower) and re.search(
