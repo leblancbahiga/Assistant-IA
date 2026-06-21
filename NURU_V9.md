@@ -2287,7 +2287,8 @@ NURU V12 reste **nocturne par défaut** — c'est son identité et l'Orb perd 80
 ### Phase 1 — Action : Contrôle de l'environnement (6 semaines)
 **🟢 Sprint 3 — Shell sécurisé terminé — 74 tests ✅**
 **🟢 Sprint 4 — Contrôle OS terminé — 63 tests ✅**
-**🟢 Sprint 5 — Contrôle navigateur terminé — 95 tests ✅ | S6 en attente**
+**🟢 Sprint 5 — Contrôle navigateur terminé — 95 tests ✅**
+**🟢 Sprint 6 — Gestion fichiers CRUD terminé — 79 tests ✅ | S7 en attente**
 **Objectif** : NURU passe de « répond à des questions » à « agit sur le monde ». C'est le **différenciateur #1** identifié par Z.ai. Sans action, NURU reste un chatbot.
 
 #### Architecture — Security-first
