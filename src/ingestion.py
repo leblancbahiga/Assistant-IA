@@ -43,11 +43,25 @@ class IngestionEngine:
                         text = ocr_text
             elif ext == ".docx":
                 doc = Document(str(path))
-                # V10.1 : extraire aussi le contenu des tables
+                # V12 : extraire aussi le contenu des tables AVEC en-têtes de colonnes
                 parts = [p.text for p in doc.paragraphs]
                 for table in doc.tables:
-                    for row in table.rows:
-                        row_text = "\t".join(cell.text for cell in row.cells if cell.text.strip())
+                    if not table.rows:
+                        continue
+                    # Extraire les en-têtes de colonnes depuis la première ligne
+                    headers = [cell.text.strip() for cell in table.rows[0].cells]
+                    for i, row in enumerate(table.rows):
+                        cell_texts = []
+                        for j, cell in enumerate(row.cells):
+                            val = cell.text.strip()
+                            if not val:
+                                continue
+                            # Préfixer les cellules de données avec leur en-tête de colonne
+                            if i > 0 and j < len(headers) and headers[j]:
+                                cell_texts.append(f"{headers[j]}: {val}")
+                            else:
+                                cell_texts.append(val)
+                        row_text = "\t".join(cell_texts)
                         if row_text.strip():
                             parts.append(row_text)
                 text = "\n".join(parts)

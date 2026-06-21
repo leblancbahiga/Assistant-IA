@@ -34,6 +34,7 @@ MIN_RAM_FOR_HEAVY_SEARCH_MB = getattr(
     config, "heavy_search_min_ram_mb", 1000
 )
 RRF_K = 60                              # Constante RRF standard
+MAX_RRF_STRATEGIES = 5                  # Max théorique : vectoriel + FTS + metadata + grep + HyDE
 EARLY_STOP_SCORE = 0.75                 # Score FTS/Vectoriel > 0.75 → skip grep/HyDE
 DEDUP_COSINE_THRESHOLD = 0.90           # Seuil de déduplication sémantique
 MAX_GREP_RESULTS = 3                    # Résultats grep max
@@ -127,9 +128,11 @@ def reciprocal_rank_fusion(
     if not scores:
         return []
 
-    # Normaliser les scores [0, 1] par division par le max théorique
-    # Max si un doc apparaît en rang 1 dans toutes les stratégies
-    max_possible = len(strategy_results) * (1.0 / (k + 1))
+    # Normaliser les scores [0, 1] par division par le max théorique CONSTANT
+    # V12.1 : MAX_RRF_STRATEGIES = 5 au lieu de len(strategy_results) pour que
+    # les scores soient comparables entre requêtes (quel que soit le nombre de
+    # stratégies réellement exécutées).
+    max_possible = MAX_RRF_STRATEGIES * (1.0 / (k + 1))
     if max_possible <= 0:
         max_possible = 1.0
 
@@ -247,7 +250,9 @@ class MultiSearchOrchestrator:
         diag.ram_free_mb = ram_free
 
         effective_query = rewritten_query or query
-        is_weak = confidence_label in ("FAIBLE", "ABSENT")
+        # V12.1 : is_weak supprimé — le early_stopping (score >= EARLY_STOP_SCORE)
+        # est le seul garde-fou. HyDE+grep sont lancés dès que le score rapide
+        # est insuffisant, sans dépendre d'un confidence_label externe.
         early_stop = False
 
         # ── Round 1 : Stratégies RAPIDES (vectoriel + FTS + métadonnées) ──
@@ -309,21 +314,21 @@ class MultiSearchOrchestrator:
         else:
             # ── Round 2 : Stratégies LOURDES (grep + HyDE) ──
             # Lancées SEULEMENT si le score rapide est insuffisant
-            if is_weak and ram_ok and self._grep:
+            if ram_ok and self._grep:
                 grep_task = asyncio.create_task(self._run_grep(query))
                 diag.grep_called = True
 
-            if is_weak and ram_ok and self._cloud:
+            if ram_ok and self._cloud:
                 hyde_task = asyncio.create_task(self._run_hyde(query))
                 diag.hyde_called = True
 
             # Attendre grep et HyDE en parallèle
             heavy_tasks = []
             heavy_labels = []
-            if is_weak and ram_ok and self._grep:
+            if ram_ok and self._grep:
                 heavy_tasks.append(grep_task)
                 heavy_labels.append("grep")
-            if is_weak and ram_ok and self._cloud:
+            if ram_ok and self._cloud:
                 heavy_tasks.append(hyde_task)
                 heavy_labels.append("hyde")
 

@@ -641,7 +641,7 @@ class RAGEngine:
         ms_results, ms_diag = await self._multi_search.search(
             query=query,
             rewritten_query=optimized_query,
-            confidence_label="HAUTE",  # multi_search décide du early stopping via scores
+            confidence_label="HAUTE",  # V12.1 : non utilisé pour le gating — le early_stopping interne (score ≥ 0.75) décide seul du lancement de HyDE+grep
             top_k=k * 2,               # surplus pour que le reranker ait de la matière
         )
 

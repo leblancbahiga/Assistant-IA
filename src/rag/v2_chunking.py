@@ -72,22 +72,16 @@ class ChunkV2:
     total_chunks: int = 0
 
     def to_dict(self) -> dict:
-        context_parts = []
-        if self.level == "document":
-            context_parts.append(f"[RÉSUMÉ] {self.doc_title}")
-        elif self.section_title:
-            context_parts.append(f"[{self.doc_title} - {self.section_title}]")
-        else:
-            context_parts.append(f"[{self.doc_title}]")
-        if self.importance == "high":
-            context_parts.append("[IMPORTANT]")
-        content = " ".join(context_parts) + "\n" + self.content
+        # V12 : le préfixe contextuel [Doc - Section] n'est plus dans 'content'
+        # pour éviter le bruit dans les embeddings. Les métadonnées (title,
+        # level, section) permettent à l'affichage de le reconstruire.
         return {
-            "content": content,
+            "content": self.content,
             "source": self.source,
             "importance": self.importance,
             "level": self.level,
             "section": self.section_title,
+            "title": self.doc_title,
             "char_count": self.char_count,
         }
 

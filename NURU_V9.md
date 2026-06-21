@@ -2291,6 +2291,7 @@ NURU V12 reste **nocturne par défaut** — c'est son identité et l'Orb perd 80
 **🟢 Sprint 6 — Gestion fichiers CRUD terminé — 79 tests ✅**
 **🟢 Sprint 7 — Intégration ToolRegistry terminé — 93 tests ✅**
 **🟢 Sprint 8 — Tests + Sécurité terminé — 128 tests ✅ | Phase 1 complète !**
+**🟢 R1 — Fondation RAG : 4 correctifs qualité appliqués (HyDE+réactivés, RRF normalisé, tableaux DOCX+en-têtes, embeddings nettoyés)**
 **Objectif** : NURU passe de « répond à des questions » à « agit sur le monde ». C'est le **différenciateur #1** identifié par Z.ai. Sans action, NURU reste un chatbot.
 
 #### Architecture — Security-first
