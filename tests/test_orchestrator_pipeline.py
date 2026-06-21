@@ -174,7 +174,7 @@ def _make_orchestrator(**overrides):
         "runtime_manager": MockRuntime(),
         "web_search": MagicMock(),
         "context_budget": MockContextBudget(),
-        "reflection_engine": None,
+        # V10.3 — reflection_engine supprimé (stubs YAGNI, AUDIT Arch-01)
         "system_prompt_builder": lambda intent, facts=None, procedures="": (
             "Tu es NURU, assistant de Leblanc."
         ),

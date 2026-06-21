@@ -25,12 +25,13 @@ import pytest
 
 def test_qui_est_leblanc_doit_router_vers_rag():
     """'Qui est Leblanc Bahiga ?' doit aller vers RAG (le CV est dans l'index)."""
-    from src.semantic_router import SemanticRouter
     import asyncio
 
     async def go():
-        router = SemanticRouter(rag_engine=None, is_online_check=None, cloud_llm=None)
-        result = await router.route("Qui est Leblanc Bahiga ?", rag_context="", rag_result=None)
+        # V12 — migration SemanticRouter → Router (src/routing/router.py)
+        from src.routing.router import Router
+        router = Router(rag_engine=None, is_online_check=lambda: True)
+        result = await router.route("Qui est Leblanc Bahiga ?")
         return result.decision, result.confidence
 
     decision, conf = asyncio.run(go())
@@ -44,15 +45,12 @@ def test_qui_est_leblanc_doit_router_vers_rag():
 
 def test_qui_president_france_pas_rag():
     """'Qui est le président de la France ?' doit PAS être RAG (c'est culture générale)."""
-    from src.semantic_router import SemanticRouter
     import asyncio
+    from src.routing.router import Router
 
     async def go():
-        router = SemanticRouter(rag_engine=None, is_online_check=None, cloud_llm=None)
-        result = await router.route(
-            "Qui est le président de la France ?",
-            rag_context="", rag_result=None
-        )
+        router = Router(rag_engine=None, is_online_check=lambda: True)
+        result = await router.route("Qui est le président de la France ?")
         return result.decision
 
     decision = asyncio.run(go())
