@@ -1,202 +1,322 @@
 <div align="center">
-  <img src="https://img.shields.io/badge/NURU-V12-00D4FF?style=for-the-badge&logo=python&logoColor=white" alt="NURU V12"/>
-  <img src="https://img.shields.io/badge/Platform-macOS%20M1-39FF14?style=for-the-badge&logo=apple&logoColor=white" alt="macOS M1"/>
-  <img src="https://img.shields.io/badge/RAM-8%20Go%20Unified-FFB000?style=for-the-badge" alt="8 Go RAM"/>
-  <img src="https://img.shields.io/badge/Tests-66%20%F0%9F%94%B4%20Phase%200-success?style=for-the-badge" alt="66 Tests"/>
-  <img src="https://img.shields.io/badge/Status-V12%20Actif%20(Phase%200%20%E2%9C%85)-00D4FF?style=for-the-badge" alt="Status V12"/>
+
+<img src="src/ui/assets/nuru_logo_v5.png" width="160" alt="NURU V12"/>
+
+<br/>
+
+# 🌀 NURU — Personal Cognitive OS
+
+<i>De l'assistant IA agentic au système d'exploitation cognitif personnel.<br/>
+Conçu pour tourner en local d'abord, sur un MacBook Pro M1 de 8 Go de RAM unifiée.</i>
+
+<br/>
+
+<p>
+  <a href="NURU_V9.md"><img src="https://img.shields.io/badge/V12%20Spec-NURU_V9.md-00D4FF?style=for-the-badge" alt="V12 Spec"/></a>
+  <a href="NURU_V14_VISION.md"><img src="https://img.shields.io/badge/V14%20Vision-NURU_V14_VISION.md-a855f7?style=for-the-badge" alt="V14 Vision"/></a>
+  <img src="https://img.shields.io/badge/Platform-macOS%20M1%208GB-39FF14?style=for-the-badge&logo=apple&logoColor=white" alt="macOS M1 8GB"/>
+  <img src="https://img.shields.io/badge/LLM-Phi--4--mini%20(MLX)-FFB000?style=for-the-badge" alt="LLM Phi-4-mini"/>
+  <img src="https://img.shields.io/badge/Tests-50%20fichiers-success?style=for-the-badge" alt="50 test files"/>
+  <img src="https://img.shields.io/badge/Phase%200-%E2%9C%85-success?style=for-the-badge" alt="Phase 0 done"/>
+  <img src="https://img.shields.io/badge/Status-V12%20actif-00D4FF?style=for-the-badge" alt="Status V12"/>
+</p>
+
 </div>
 
 <br/>
 
-<h1 align="center">🌀 NURU — Personal Cognitive OS V12</h1>
-<p align="center">
-  <i>De l'assistant IA agentic au système d'exploitation cognitif personnel</i>
-</p>
+---
 
-<p align="center">
-  <b>🇫🇷 Français</b> · Conçu pour MacBook Pro M1 (8 Go RAM unifiée) · <b>Privacy-first</b>
-</p>
+## Why NURU?
+
+La plupart des assistants IA promettent d'être "personnels". Leur implémentation concrète : ils envoient vos prompts vers un serveur cloud qui appartient à quelqu'un d'autre. Le "personnel" est dans le marketing, pas dans l'architecture.
+
+NURU part du postulat inverse — **le personnel commence par l'exécution locale**. Le router envoie les requêtes simples vers **Phi-4-mini (4-bit MLX)** qui tourne sur le GPU M1. Le cloud — Groq, OpenRouter, DeepSeek — n'est contacté que **quand c'est vraiment nécessaire** (questions d'actualité, tâches que le local ne sait pas tenir, ou RAM sous le seuil critique).
+
+Ce qui rend NURU différent d'un wrapper LLM local :
+
+- **Système d'exploitation cognitif**, pas chatbot — la mémoire (Episodic/Semantic/User/Error), le sommeil (SleepCycleManager 3 phases light/deep/REM), et la persona (PersonaEngine) sont des citoyens de première classe du système, pas des add-ons.
+- **Privacy Layer** + opt-in granulaire par capteur (voix, vision écran, calendrier). Zéro fuite par défaut.
+- **Agent Loop** sandboxé : planner → executor → verifier → recovery, avec approbation humaine pour les actions à risque.
+- **Pipeline vocal local** (STT/TTS/VAD/wake word), présence animée Z.ai-style, latency sub-seconde sans réseau.
+
+Le but est simple : **vivre avec un JARVIS personnel sur la machine qu'on a déjà**, sans céder ses données à chaque requête.
 
 ---
 
-## ✨ Vision
-
-**NURU V12** est la fondation d'un **Personal Cognitive Operating System** — une présence numérique qui comprend, anticipe et agit pour son utilisateur. Pas un chatbot, pas un copilote : **un JARVIS personnel**.
-
-| Pilier | V10 → V12 | Différenciateur |
-|--------|-----------|-----------------|
-| **Identité** | Prompt hardcodé → **PersonaEngine** + traits configurables | Z.ai : « plus grande faiblesse cachée » |
-| **Mémoire** | Faits utilisateur simples → **SleepCycleManager** (3 phases light/deep/REM) | Courbe de l'oubli, journal de rêves |
-| **Action** | « Copilote qui parle » → **Agent Loop** (planner → executor → verifier → recovery) | Contrôle OS, navigateur, shell sandboxé |
-| **Voix/Vision** | Texte seul → **Pipeline vocal local** (STT+TTS+wake word+VAD+barge-in) + vision écran/doc | Présence Z.ai animée (Orb 7 états) |
-| **Proactivité** | Attend qu'on lui parle → **ProactiveEngine** + signaux + routines | Rappels, suggestions, surveillance |
-| **Écosystème** | Îlot → **MCP Client/Server** + intégrations Gmail/Calendar/Tâches | Interopérabilité Claude Desktop, Cursor |
-| **Sécurité** | Correctifs ponctuels → **Privacy Layer** + CostGuard + Harnais d'évaluation | Opt-in granulaire, budget cloud |
-
----
-
-## 🏗️ Architecture V12
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                    PHASE 2a — GARDE-FOUS & IDENTITÉ                   │
-│  PrivacyLayer · ConsentManager · AuditLog · PersonaEngine · Traits   │
-├──────────────────────────────────────────────────────────────────────┤
-│                    PHASE 2 — MULTIMODAL                               │
-│  STT (mlx-whisper) · TTS (Kokoro) · Wake word · VAD · Barge-in       │
-│  Vision écran (cloud) · Vision doc (OCR+LLM) · VoiceOverlay Z.ai     │
-├──────────────────────────────────────────────────────────────────────┤
-│                    PHASE 3 — PROACTIVITÉ & MÉMOIRE                    │
-│  ProactiveEngine · SleepCycleManager · Prompt dynamique               │
-│  PersonaEngine (plein) · Routines · Harnais d'évaluation              │
-├──────────────────────────────────────────────────────────────────────┤
-│                    PHASE 4 — ÉCOSYSTÈME                               │
-│  MCP Client/Server · ModelRouter · CostGuard · Intégrations           │
-│  (Gmail, Calendar, Tâches, Spotify, GitHub, Notion, Slack)           │
-├──────────────────────────────────────────────────────────────────────┤
-│                    PHASE 1 — AGENT LOOP (ACTION)                      │
-│  ToolRegistry · Shell sandboxé · Navigateur · Contrôle OS · Fichiers │
-├──────────────────────────────────────────────────────────────────────┤
-│                    PHASE 0 — CONSOLIDATION (✅ TERMINÉE)               │
-│  Router unique · DynamicPromptBuilder · 66 tests · Design Z.ai V12   │
-├──────────────────────────────────────────────────────────────────────┤
-│                    FONDATIONS V9-V10 (existant)                       │
-│  RAG hybride · Mémoire V9 · Multi-provider cloud · TokenJuice        │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-### 🎨 Design Z.ai — Présence Numérique
-
-Le design V12 remplace le cockpit 3 colonnes par une **présence animée** :
-
-| Composant | Description |
-|-----------|-------------|
-| **NuruPresenceOrb** | Orbe 120px animé QPainter, **7 états** (idle, listening, thinking, speaking, acting, error, sleeping), cycle EventBus |
-| **VoiceOverlay** | Fenêtre frameless 60%×40%, animations de transition (scale 0.8→1.0, 250ms), disparition après 8s silence |
-| **FloatingWidget** | Widget flottant 160px, parallélisable (Phase 3) |
-| **macOS native** | Menu bar QSystemTrayIcon, raccourcis ⌥␣ ⌘⇧N |
-| **Palette** | `#0D1117` (fond) / `#00D4FF` (cyan) / `#E8A87C` (corail accent) |
-| **Performance** | < 5% CPU (QPainter), max 5% CPU animations |
-
----
-
-## 🚀 Roadmap V12 (21 sprints, ~5 mois)
-
-```text
-Phase 0   ✅ Consolidation       (S1-S2)    Nettoyage V4, routeur unique, 66 tests
-Phase 1   🔄 Agent Loop          (S3-S8)    Shell → OS → Navigateur → Fichiers → MCP
-Phase 2a  🔜 Garde-fous         (S8.5)     Privacy Layer + PersonaEngine (base)
-Phase 2   🔜 Multimodal          (S9-S14)   STT → TTS → Wake word → VAD → Vision
-Phase 3   🔜 Proactivité         (S15-S18)  Proactive → PersonaEngine → SleepCycle → Routines
-Phase 4   🔜 Écosystème          (S19-S20)  MCP → ModelRouter → CostGuard → Intégrations
-```
-
-### 🧬 V13 — Absorption dans V12
-
-Conformément à la stratégie « formaliser, réconcilier, compléter », les modules V13-A/B sont **intégrés dans V12** :
-
-| Module V13 | Absorbé dans V12 | Sprint |
-|------------|------------------|--------|
-| **PersonaEngine** | Identité NURU (traits, presets, ToneAdapter) | Phase 2a (base) + S16 (plein) |
-| **Privacy & Consent Layer** | Opt-in capteurs, journal d'audit, indicateur macOS | Phase 2a S8.5 |
-| **SleepCycleManager** | 3 phases mémoire (light/deep/REM) | Phase 3 S16 |
-| **ModelRouter** | Choix délibéré du LLM par tâche | Phase 4 S20 |
-| **CostGuard** | Budget cloud (2$/jour) + bascule auto locale | Phase 4 S19 |
-| **Connecteur Tâches** | Reminders/Todoist générique | Phase 4 S20 |
-| **Harnais d'évaluation** | Tests régression mémoire + cohérence persona | Phase 3 S18 |
-
-**Ce qui reste V14** (après V12) : GoalMemory, ProjectMemory, LiveKit, Media Intelligence, Skills SDK, LifeOS. Voir `NURU_V14_VISION.md`.
-
----
-
-## 📁 Structure du projet
-
-```
-src/
-├── core/                     # Cœur (orchestrateur, policies, exceptions)
-├── routing/                  # Routeur N0-N6 + DynamicPromptBuilder (Phase 0)
-├── agent/                    # Agent Loop : TaskPlanner, Executor, Verifier (Phase 1)
-├── personality/              # PersonaEngine : traits, presets, ValueGuardrails
-├── privacy/                  # Privacy & Consent Layer, audit log (Phase 2a)
-├── voice/                    # Pipeline vocal : STT, TTS, wake word, VAD (Phase 2)
-├── vision/                   # Vision écran, documents (Phase 2)
-├── proactive/                # ProactiveEngine, signaux, routines (Phase 3)
-├── memory/                   # MemoryManager V9, SleepCycleManager (Phase 3)
-├── mcp/                      # MCP Client/Server, intégrations (Phase 4)
-├── models/                   # ModelRouter, CostGuard (Phase 4)
-├── security/                 # Security hardening, sandbox (Phase 4)
-├── eval/                     # Harnais d'évaluation mémoire & persona (Phase 3)
-├── ui/                       # Dashboard, VoiceOverlay, NuruPresenceOrb
-│   └── assets/               # Logos V5
-├── rag/                      # Multi-stratégie, chunking, HyDE
-├── cache/                    # Cache LLM multi-niveau (L1 RAM + L2 SQLite)
-├── token_juice.py            # Compression tokens (-40% à -50%)
-├── config.py                 # Configuration
-└── nuru_core.py              # Orchestrateur principal
-```
-
----
-
-## 🧠 Modules clés
-
-### Routeur Intent-First (V10+)
-Classification LLM (~100ms) : `GENERAL_KNOWLEDGE` / `RAG` / `WEB` / `SIMPLE` / `COMPLEX` — décide **avant** tout appel d'outil.
-
-### RAG Hybride V10
-Vectoriel + FTS5 + HyDE + Query Rewriting + RRF. Gate de score ≥ 0.30. Extraction DOCX complète (tableaux inclus). Profil auto-détecté (cv/rapport/note).
-
-### Mémoire V9
-- **EpisodicMemory** — souvenirs datés et contextuels
-- **SemanticMemory** — faits structurés clé/valeur/confiance
-- **UserMemory** — préférences utilisateur persistantes
-- **ErrorMemory** — historique des erreurs pour auto-correction
-- **SleepCycleManager** — consolidation en 3 phases (light/deep/REM)
-
-### Multi-Provider Cloud
-Groq (Llama 3.3 70B, primaire) → OpenRouter → DeepSeek → Phi-4-mini (local). Circuit breaker + fallback + **ModelRouter** (choix délibéré par tâche).
-
-### TokenJuice
-Compression adaptative -40% à -50% tokens selon le contexte — l'avantage compétitif qui rend tout possible sur M1 8 Go.
-
----
-
-## 📊 État d'avancement
-
-| Phase | Statut | Modules | Tests |
-|-------|--------|---------|-------|
-| **Phase 0** — Consolidation | ✅ Terminée | 3 (routing/, prompt_builder, tests/) | **66 ✅** |
-| **Phase 1** — Agent Loop | 🔄 En cours | ToolRegistry, executor, planner | — |
-| **Phase 2a** — Garde-fous | 🔜 Planifié | Privacy, PersonaEngine base | — |
-| **Phase 2** — Multimodal | 🔜 Planifié | STT, TTS, Wake word, VAD, Vision | — |
-| **Phase 3** — Proactivité | 🔜 Planifié | Proactive, SleepCycle, Routines, Éval | — |
-| **Phase 4** — Écosystème | 🔜 Planifié | MCP, ModelRouter, CostGuard, Intégs | — |
-
-**RAM cible finale** : < 7.0 Go (tous modes confondus)
-**V13 Vision** : `NURU_V13_VISION.md` — LiveKit, médiatisation locale, skills SDK
-
----
-
-## 🚀 Démarrage rapide
+## Installation
 
 ```bash
-# Lancer le dashboard
-python3 src/ui/dashboard.py
+git clone https://github.com/leblancbahiga/NURU.git
+cd NURU
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+```
 
-# Tests Phase 0
-python3 -m pytest tests/ -v
+Configuration des clés API dans votre Keychain macOS (jamais dans le repo) :
+
+```bash
+# Une seule fois
+security add-generic-password -a nuru -s com.nuru.assistant/groq -w "VOTRE_CLE_GROQ"
+security add-generic-password -a nuru -s com.nuru.assistant/openrouter -w "VOTRE_CLE_OPENROUTER"
+security add-generic-password -a nuru -s com.nuru.assistant/deepseek -w "VOTRE_CLE_DEEPSEEK"
+```
+
+Pré-requis validés :
+- **macOS 13+** sur architecture Apple Silicon (M1/M2/M3)
+- **8 Go de RAM unifiée** minimum — conçu spécifiquement pour ce budget
+- **Python 3.11** ou supérieur
+- HuggingFace CLI actif (`huggingface-cli login`) pour le téléchargement initial des modèles MLX (~3.5 Go)
+
+---
+
+## Quick Start
+
+```bash
+# Lancer le dashboard PySide6
+python3 nuru_dashboard.py
+
+# Chat CLI simple (léger, sans UI)
+python3 cli.py
+
+# Réindexation de vos documents (première fois ou nouveau dossier)
+python3 reindex_personal.py
+
+# Tests Phase 0 en isolation
+python3 -m pytest tests/test_v45_modules.py -v
+```
+
+| Commande | Effet |
+|----------|-------|
+| `python3 nuru_dashboard.py` | Lance l'UI 3 colonnes (Z.ai design) avec chat, métriques RAM et présence animée |
+| `python3 cli.py` | Mode terminal pour usage SSH / serveur headless |
+| `python3 reindex_personal.py` | Indexe vos documents personnels (whitelist Leblanc, ~104 chunks V2) |
+| `python3 reindex_all.py` | Indexe tout le workspace (~450 sources, plus large) |
+| `python3 tests/test_v45_modules.py` | 12 modules V4.5 (sans MLX) — PolicyEngine, RRF, Citation, EventBus |
+| `python3 tests/test_rag.py` | Suite RAG (Reranker, FTS, embedding safety) |
+| `python3 tests/test_orchestrator_pipeline.py` | Pipeline end-to-end (online + offline) |
+
+---
+
+## What's inside — catalog of modules
+
+NURU V12 absorbe V13-A/B (les modules "PersonaEngine", "SleepCycle", "CostGuard" sont déjà en codebase, pas en roadmap). Cette liste reflète **le code réel**, pas la wishlist.
+
+### 🧠 Cognitive core
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **Router** (routeur unifié) | 6 niveaux — trivial (regex) → patterns → LLM classify → Spotlight → cloud fallback → clarification. Cache TTL 256 entrées. | [`src/routing/router.py`](src/routing/router.py) |
+| **PolicyEngine** | Seuils RAM/Reranker/Score centralisés. `should_rerank()`, `should_use_cloud()`, `route_from_score()`. | [`src/core/policies.py`](src/core/policies.py) |
+| **PromptGuard** | Anti-injection — neutralise 50+ motifs (`Ignore les instructions`, `<|im_start|>system`, etc.), échappe les délimiteurs de bloc, normalisation Unicode. | [`src/core/prompt_guard.py`](src/core/prompt_guard.py) |
+| **StrictRAGGuard** | Modes STRICT/HYBRID/FREE. En STRICT, bloque les réponses non-citées par les chunks. | [`src/core/response_guard.py`](src/core/response_guard.py) |
+| **EvidenceVerifier** | Valide que chaque `[Source: X]` dans la réponse existe dans les chunks RAG injectés. | [`src/ai/verifier.py`](src/ai/verifier.py) |
+| **DynamicPromptBuilder** | Construit le prompt dynamiquement selon intent/facts/procedures — pas de prompt monolithique. | [`src/routing/prompt_builder.py`](src/routing/prompt_builder.py) |
+
+### 📚 Memory & learning
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **EpisodicMemory** | Souvenirs datés et contextuels (ce qui s'est passé). | `src/memory/episodic.py` |
+| **SemanticMemory** | Faits structurés clé/valeur/confiance (ce qui est vrai). | `src/memory/semantic.py` |
+| **UserMemory** | Préférences utilisateur persistantes (comment Leblanc aime les choses). | `src/memory/user.py` |
+| **ErrorMemory** | Historique d'erreurs pour auto-correction (ce qui a foiré et pourquoi). | `src/memory/manager.py` |
+| **MemoryBridge** | Pont entre MemoryStore (legacy V3) et MemoryManager V9. | `src/memory_bridge.py` |
+| **GoldMemory** | Corrections utilisateur persistantes. Recherche exacte ou embedding (seuil 0.92). | `src/gold_memory.py` |
+| **PostSessionExtractor** | Extrait préférences/entités après chaque session et les stocke comme `user_profile`. | `src/extraction.py` |
+
+### 🔍 RAG hybride
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **RAGEngine** | Pipeline 2-passes — HyDE OR query rewriting, vector + FTS5, RRF, reranker conditionnel. | `src/rag_engine.py` |
+| **MultiSearchOrchestrator** | Single source de search — vector + BM25 + grep + HyDE en parallèle, fusion par rangs. | `src/rag/multi_search.py` |
+| **ProfileBoost** *(retiré en V10.1)* | — | — |
+| **Spotlight** | Recherche fichiers locaux via `mdfind`, fallback si RAG échoue (sans LLM). | `src/rag/spotlight.py` |
+| **HyDE** | Expansion hypothétique — génère des passages fictifs pour mieux embedder la query. | `src/rag/hyde.py` |
+| **Decomposer** | Décompose les queries multi-hop en sous-questions avant retrieval. | `src/rag/decomposer.py` |
+| **FactChecker** | Vérification factuelle post-génération sur les chunks sourcés. | `src/rag/fact_checker.py` |
+| **HierarchicalChunker V2** | 4 niveaux (document/section/subsection/paragraph), max 4000 chars/chunk. | `src/rag/v2_chunking.py` |
+
+### 🎙️ Voice & vision
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **AudioEngine** | STT (mlx-whisper) + TTS (Piper/Kokoro). Auto-stop 15s. | `src/audio.py` |
+| **OCR** | Tesseract + fallback cloud. Lecture d'images / scans. | `src/ocr.py` |
+
+### 🤖 Agent Loop
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **AgentOrchestrator** | ReAct (Thought-Action-Observation loop) avec mémoire. | `src/agent/orchestrator.py` |
+| **TaskPlanner** | Décompose un objectif en steps exécutables. | `src/agent/planner.py` |
+| **Executor** | Exécute les steps. Sandbox shell, approbation humaine pour les actions risquées. | `src/agent/executor.py` |
+| **Verifier** | Valide le résultat d'une exécution avant de continuer. | `src/agent/verifier.py` |
+| **RecoveryEngine** | Reprend l'exécution après une erreur — diagnostique, retry, escalade. | `src/agent/recovery.py` |
+| **ToolRegistry** | Catalogue des tools disponibles — shell, navigatuer, fichiers, calendrier. | `src/tools/registry.py` |
+| **ShellExec** | Sandbox shell avec 5 couches de défense + approbation humaine. | `src/tools/shell_exec.py` |
+| **OSControl** | Contrôle macOS local (Notifications, Spotlight, fenêtre active). | `src/tools/os_control.py` |
+
+### 🧩 Cloud routing
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **CloudLLM** | Multi-provider avec Circuit Breaker — Groq primaire, OpenRouter/DeepSeek en fallback. | `src/llm_cloud.py` |
+| **LocalLLM** | MLX Phi-4-mini 4-bit. Keep-alive 5 min, déchargement auto si RAM critique. | `src/llm_local.py` |
+| **TokenJuice** | Compression tokens -40% à -50% (regex). 0 coût d'inférence. | `src/token_juice.py` |
+
+### 📊 Observability
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **RAMMonitor** | Surveillance continue, callbacks de déchargement auto. Seuils V10.3k calibrés pour M1 8 Go. | `src/ram_monitor.py` |
+| **EventBus** | Bus d'événements thread-safe async. Singlet instance — fusion V3/V4.5. | `src/core/events.py` |
+| **Learning — TraceCollector** | Queue async des traces de session vers `~/.nuru/traces.db`. | `src/learning/trace_collector.py` |
+| **Learning — Optimizer** | Mining périodique des traces → improvements auto. | `src/learning/optimizer.py` |
+
+---
+
+## Project structure
+
+```
+nuru/
+├── nuru_dashboard.py           # Entry point PySide6 (qasync)
+├── cli.py                      # Entry point CLI
+├── pyproject.toml              # Python ≥3.11 · pytest · pydantic · mlx-lm
+├── config/
+│   ├── settings.yaml           # Config user (clés sensibles dans Keychain)
+│   └── default.yaml            # Defaults infra
+├── src/
+│   ├── nuru_core.py            # V12 orchestrator (compatibility facade)
+│   ├── llm_local.py            # MLX Phi-4-mini
+│   ├── llm_cloud.py            # Groq/OpenRouter/DeepSeek
+│   ├── rag_engine.py           # RAG factory + types
+│   ├── routing/
+│   │   ├── router.py           # Routeur unifié 6-niveaux
+│   │   └── prompt_builder.py   # DynamicPromptBuilder
+│   ├── core/
+│   │   ├── orchestrator.py     # NuruOrchestrator — pipeline réel
+│   │   ├── policies.py         # PolicyEngine — seuils centralisés
+│   │   ├── prompt_guard.py     # Anti-injection
+│   │   ├── response_guard.py   # StrictRAGGuard
+│   │   ├── model_manager.py    # Cycle de vie modèles MLX
+│   │   ├── query_context.py    # Immutable context (QueryContext/EvidencePack)
+│   │   ├── events.py           # EventBus singleton
+│   │   ├── exceptions.py       # Hiérarchie d'exceptions typées
+│   │   └── inference_worker.py # TokenReceiver (legacy QThread compat)
+│   ├── rag/
+│   │   ├── multi_search.py     # Single source of truth retrieval
+│   │   ├── v2_chunking.py      # Hierarchical chunker
+│   │   ├── query_rewriter.py   # HyDE / expansion de query
+│   │   ├── hyde.py             # Hypothetical Document Embeddings
+│   │   ├── decomposer.py       # Multi-hop decomposition
+│   │   ├── fact_checker.py     # Vérification post-génération
+│   │   ├── diagnostics.py      # Diagnostic persistant
+│   │   ├── index_health.py     # Santé de l'index
+│   │   └── spotlight.py        # Recherche fichiers locaux
+│   ├── agent/                  # Agent Loop V12
+│   ├── memory/                 # MemoryManager V9
+│   ├── cloud.py                # WebSearch
+│   ├── audio.py                # STT/TTS
+│   ├── ocr.py                  # Vision OCR
+│   ├── tools/                  # ToolRegistry + SandboxShell
+│   └── ui/
+│       ├── dashboard.py        # PySide6 3 colonnes (Z.ai)
+│       ├── styles.qss          # QSS — palette anthracite + cyan
+│       ├── components/         # ChatBubble, ConsolePage, etc.
+│       └── assets/
+│           ├── nuru_logo_v5.png       # Hero
+│           ├── gemini-logo.svg        # Logo animé SVG
+│           └── fond.jpg               # Fond paysage
+├── tests/                       # 50 fichiers, ~800 assertions (réel mesuré)
+├── NURU_V9.md                   # Spec V12 détaillée (140 Ko)
+├── NURU_V14_VISION.md           # Vision V14 (GoalMemory, LiveKit, Skills SDK)
+├── NURU_AUDIT_SYNTHESE.md       # 7 audits experts consolidés
+└── NURU_AUDIT_2026-06-21_V12.md # Audit live post-V12 (10 P0...)
 ```
 
 ---
 
-## 📜 Documentation
+## V14 — what's coming next
 
-| Document | Contenu |
-|----------|---------|
-| `NURU_V9.md` | Plan V12 détaillé (phases, sprints, design Z.ai) |
-| `NURU_V14_VISION.md` | Vision long terme (après V12) — GoalMemory, LiveKit, Skills SDK |
-| `NURU_AUDIT_SYNTHESE.md` | 7 rapports d'audit, 88 trouvailles |
-| `ROADMAP.md` | Roadmap unifiée V12→V13 |
+V14 est **strictement additif** sur V12. Voir [`NURU_V14_VISION.md`](NURU_V14_VISION.md) pour le détail.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│               V14 — COUCHES ADDITIVES                       │
+├─────────────────────────────────────────────────────────────┤
+│  LifeOS — Fusion auto agenda/tâches/projets/objectifs        │
+├─────────────────────────────────────────────────────────────┤
+│  Skills Ecosystem (SDK + marketplace local)                  │
+├─────────────────────────────────────────────────────────────┤
+│  Media Intelligence (MediaPipe + VLM diagnostic agro)       │
+├─────────────────────────────────────────────────────────────┤
+│  LiveKit — Voix distante multi-appareils (pont, pas replace) │
+├─────────────────────────────────────────────────────────────┤
+│  GoalMemory & ProjectMemory                                  │
+╞═════════════════════════════════════════════════════════════╡
+│               V12 — FONDATIONS (achevée)                    │
+│  PersonaEngine · Privacy Layer · SleepCycleManager          │
+│  ModelRouter · CostGuard · Connecteurs · Pipeline vocal     │
+│  Vision écran/doc · MCP                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Module V14 | But | Effort |
+|-----------|-----|--------|
+| **GoalMemory** | NURU sait tes objectifs long terme (MBA, projets pro) et où tu en es. | 6 sem |
+| **ProjectMemory** | Lie documents/tâches/agenda à chaque projet actif. | 2 sem |
+| **LiveKit** | Voix distante — depuis téléphone, autre Mac, Goma↔Kampala. Auto-hébergé. | 3 sem |
+| **Skills SDK** | Marketplace local de skills (à la OpenJarvis). | 4 sem |
+| **Media Intelligence** | Diagnostique agro via Mediapipe + VLM local. | 6 sem |
+| **LifeOS** | Fusion automatique — agenda + tâches + projets + objectifs. | 8 sem |
 
 ---
 
-*Document mis à jour le 20 juin 2026 — NURU V12 — Phase 0 ✅ — V13-A/B absorbé — V14 vision long terme*
+## Documentation
+
+| Document | Lire si... |
+|----------|-----------|
+| [`NURU_V9.md`](NURU_V9.md) | Tu veux la spec V12 complète (phases, sprints, décisions) — **140 Ko, dense, c'est le carnet de sprint** |
+| [`NURU_V14_VISION.md`](NURU_V14_VISION.md) | Tu veux ce qui vient après V12 — GoalMemory, LiveKit, Skills |
+| [`NURU_AUDIT_SYNTHESE.md`](NURU_AUDIT_SYNTHESE.md) | Tu lis une décision d'architecture, et tu veux le contexte des 7 audits experts qui l'ont motivée |
+| [`NURU_AUDIT_2026-06-21_V12.md`](NURU_AUDIT_2026-06-21_V12.md) | Tu ouvres le repo aujourd'hui et tu veux savoir quels sont les P0 du moment |
+| [`RAPPORT_AUDIT_V4.md`](RAPPORT_AUDIT_V4.md) | Tu es curieux de voir d'où vient le projet (état V4) |
+| [`question_zai_interface_V12.md`](question_zai_interface_V12.md) | Tu veux comprendre les choix d'interface Z.ai |
+| [`ROADMAP.md`](ROADMAP.md) | Un vue macro de la roadmap unifiée V12→V13 |
+
+---
+
+## Contributing
+
+NURU est actuellement **un projet personnel de Leblanc BAHIGA Mudarhi** — ingénieur agronome et informaticien travaillant dans les chaînes de valeur agricoles en Afrique centrale et orientale (IITA, FAO, USAID). Il n'est pas ouvert aux contributions externes pour le moment.
+
+Si vous utilisez NURU ou voulez échanger sur l'architecture :
+
+- **Issues** : ouvrez sur GitHub, je lis régulièrement
+- **Discussions** : pour les questions d'architecture
+
+Pour les forks personnels, le code est sous licence MIT — voir [`LICENSE`](LICENSE) (à ajouter si désiré).
+
+---
+
+## Built on the shoulders of
+
+NURU ne pourrait pas tourner sur un M1 de 8 Go sans ces acteurs :
+
+- **Apple MLX** — l'équipe d'Apple pour le framework MLX qui rend Phi-4-mini viable sur M1
+- **Microsoft** — pour le modèle **Phi-4-mini-instruct-4bit** (3.8B params, qualité remarquable pour sa taille)
+- **Groq, OpenRouter, DeepSeek** — pour la couche cloud optionnelle (les clés vivotent dans le Keychain macOS, jamais dans git)
+- **Stanford SAIL** — pour les inspirations architecturales — *OpenJarvis* (`open-jarvis/OpenJarvis`) et *Open Humanoid* ont directement inspiré le pattern local-first + eval framework + skills catalog
+- **HuggingFace** — pour l'hébergement des modèles et embeddings
+
+---
+
+## License
+
+MIT. Voir [`LICENSE`](LICENSE) (à ajouter).
+
+---
+
+*Document mis à jour le 21 juin 2026 — NURU V12 Phase 0 ✅ — V13-A/B absorbé — V14 vision long terme*
