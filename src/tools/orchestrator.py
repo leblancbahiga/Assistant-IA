@@ -175,7 +175,7 @@ class ToolOrchestrator:
             Liste de dictionnaires représentant les outils.
 
         Exemple:
-            >>> schema = orch.get_tools_json()
+            >>> schema = orhelloch.get_tools_json()
             >>> schema[0]["name"]
             'shell_exec'
         """

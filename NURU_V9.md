@@ -2293,6 +2293,7 @@ NURU V12 reste **nocturne par défaut** — c'est son identité et l'Orb perd 80
 **🟢 Sprint 8 — Tests + Sécurité terminé — 128 tests ✅ | Phase 1 complète !**
 **🟢 R1 — Fondation RAG : 4 correctifs qualité appliqués (HyDE+réactivés, RRF normalisé, tableaux DOCX+en-têtes, embeddings nettoyés)** 
 **🟢 R2 — Mémoire vectorielle : MemoryManager intégré dans RAGEngine + 6 outils mémoire ToolRegistry + 15 tests mémoire existants (413l)**
+**🟢 R3 — Agent Loop : AgentOrchestrator boucle Plan→Execute→Verify→Synthesize + 3 outils agent + 46 tests**
 **Objectif** : NURU passe de « répond à des questions » à « agit sur le monde ». C'est le **différenciateur #1** identifié par Z.ai. Sans action, NURU reste un chatbot.
 
 #### Architecture — Security-first

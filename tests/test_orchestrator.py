@@ -44,9 +44,10 @@ EXPECTED_MODULES: dict[str, int] = {
     "memory_tools": 6,  # memory_recall, memory_store_episode,
     #   memory_user_profile, memory_stats, memory_check_errors,
     #   memory_full_context
+    "agent_tools": 3,  # agent_query, agent_plan, agent_verify
 }
 
-TOTAL_EXPECTED_TOOLS = sum(EXPECTED_MODULES.values())  # 37
+TOTAL_EXPECTED_TOOLS = sum(EXPECTED_MODULES.values())  # 40
 
 EXPECTED_TOOL_NAMES: list[str] = [
     # shell
@@ -91,6 +92,10 @@ EXPECTED_TOOL_NAMES: list[str] = [
     "memory_stats",
     "memory_error_check",
     "memory_store_fact",
+    # agent
+    "agent_query",
+    "agent_plan",
+    "agent_verify",
 ]
 
 SHELL_TOOLS = ["shell_exec", "shell_dry_run"]
@@ -368,9 +373,9 @@ class TestCategories:
     """Vérification des catégories."""
 
     def test_two_categories_total(self, orch: ToolOrchestrator) -> None:
-        """Il y a exactement 2 catégories : 'system' et 'web'."""
+        """Il y a exactement 4 catégories : 'system', 'web', 'memory' et 'agent'."""
         cats = orch.list_categories()
-        assert set(cats.keys()) == {"system", "web", "memory"}, (
+        assert set(cats.keys()) == {"system", "web", "memory", "agent"}, (
             f"Catégories inattendues: {set(cats.keys())}"
         )
 
@@ -403,7 +408,7 @@ class TestCategories:
 
     def test_all_tools_have_system_or_web_category(self, orch: ToolOrchestrator) -> None:
         """Tous les outils sont dans une catégorie valide."""
-        valid_categories = {"system", "web", "memory"}
+        valid_categories = {"system", "web", "memory", "agent"}
         for tool in orch.get_registry().list_tools():
             assert tool.category in valid_categories, (
                 f"Outil {tool.name} a une catégorie invalide: {tool.category}"

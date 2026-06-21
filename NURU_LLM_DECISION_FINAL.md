@@ -8,7 +8,7 @@
 
 ## TL;DR (1 phrase)
 
-**Remplacer Phi-4-mini par Qwen 3-4B (4-bit MLX), Phased Rollout en 2 temps (A/B test 1 semaine, puis bascule définitive).**
+**Tester Qwen 3.5 2B (candidat principal, pari raisonnable sur génération nouvelle) puis Gemma 4 E2B (candidat #2, pari risqué car famille Gemma déjà défaillante chez toi). Skip Qwen 3, Gemma 3, Smol — éliminés sur données terrain.**
 
 ---
 
@@ -73,18 +73,29 @@ Les experts se sont focalisés sur le modèle. **Erreur :** la cause racine est 
 
 | Modèle | Hallucination Vectara | MLX 4-bit dispo | Texte pur | Score |
 |---|---|---|---|---|
-| **Qwen 3-4B** | **5.7%** ✅ | `mlx-community/Qwen3-4B-4bit` ✅ | ✅ | **5/5** |
-| Qwen3-1.7B | ❓ pas mesuré | `mlx-community/Qwen3-1.7B-4bit` ✅ | ✅ | 3/5 |
-| Qwen 3.5 4B | 10.5% (Flash, pas 4B exact) | `mlx-community/Qwen3.5-4B-4bit` ✅ | ❌ multimodal | 3/5 |
-| Gemma 3 4B | 6.4% | `mlx-community/gemma-3-4b-it-4bit` (non vérifié) | ✅ | 4/5 |
-| Gemma 4 E2B | ❓ pas mesuré (modèle créé 2026-03, postérieur dernière mise à jour HHEM 2026-05 — Vectara ne l'a pas encore inclus) | ✅ MLX 4-bit (`mlx-community/gemma-4-E2B-4bit`) | ❌ multimodal any-to-any | 3/5 |
-| SmolLM3 3B | ❓ pas mesuré | ✅ MLX 4-bit | ✅ | 3/5 |
-| Qwen 2.5-1.5B (fallback actuel) | ❓ pas mesuré | ✅ déjà chargé | ✅ | 3/5 |
-| Llama 3.2 3B | ❓ pas mesuré | probable | ✅ | 3/5 |
-| Mistral Small 3 3B | ❓ pas mesuré | probable | ✅ | 3/5 |
-| **Phi-4-mini** (actuel) | **23.5%** | ✅ | ✅ | 1/5 baseline |
+| **Qwen 3-4B** | 5.7% (Vectara, jamais testé sur ta machine) | `mlx-community/Qwen3-4B-4bit` (à télécharger) | ✅ | **À REVOIR — données terrain 2026-06-21** : Qwen 3 a déjà été testé, hallucinait, ne comprenait pas le contexte. Score Vectara n'est pas vérité terrain. Recalibrer Phase B. | 0/5 par défaut |
+| Qwen3-1.7B | ❓ pas mesuré | `mlx-community/Qwen3-1.7B-4bit` ✅ | ✅ | **Éliminé — même famille Qwen 3, déjà testée et défaillante** | 0/5 |
+| Qwen 2.5-1.5B (fallback actuel) | ❓ pas mesuré | ✅ déjà chargé 839 MB | ✅ | **Éliminé par Leblanc — "beaucoup d'hallucinations + ne comprenait pas le contexte"** | 0/5 par défaut |
+| **Qwen 3.5 2B** | ❓ pas mesuré directement (seul `qwen3.5-flash-2026-02-23` mesuré à 10.5% — modèle différent malgré nom proche) | `mlx-community/Qwen3.5-2B-4bit` (en cours DL, ~1.5 GB cible) | ❌ multimodal image-text-to-text | 3/5 — pari raisonnable si Qwen 3 n'a pas le bug compréhension et si la nouvelle génération a corrigé |
+| Qwen 3.5 4B | 10.5% (Flash, mesuré — pas le 4B exactement mais même famille, même génération) | `mlx-community/Qwen3.5-4B-4bit` ✅ | ❌ multimodal | 2/5 — plus gros, plus de risque RAM, score famille moins bon |
+| Gemma 3 4B | 6.4% (Vectara) | `mlx-community/gemma-3-4b-it-4bit` (déjà installé en cache HF, 3.2GB) | ✅ | **Éliminé — données terrain Leblanc 2026-06-21** : "beaucoup d'hallucinations + fait ramer la machine" | 0/5 par défaut |
+| Gemma 4 E2B | ❓ pas mesuré (modèle créé 2026-03, dernière MAJ HHEM 2026-05 = Vectara ne l'a pas encore inclus) | ✅ MLX 4-bit (`mlx-community/gemma-4-E2B-4bit`) (en cours DL, 31 MB / ~3 GB cible) | ❌ multimodal any-to-any | 3/5 (à challenger — extrapolation Gemma 3 → Gemma 4 fragile vu comportement Gemma 3) |
+| SmolLM3 3B | ❓ pas mesuré | ✅ MLX 4-bit | ✅ | 2/5 (pas éliminé, mais aucune histoire test terrain) |
+| **Qwen 3.5 2B** | ❓ pas mesuré directement (seul `qwen3.5-flash-2026-02-23` mesuré à 10.5% — modèle différent malgré nom proche) | ✅ MLX 4-bit disponible | ❌ multimodal image-text-to-text | 3/5 (candidat sérieux, pari raisonnable) |
+| Llama 3.2 3B | ❓ pas mesuré | probable | ✅ | 2/5 (à challenger) |
+| Mistral Small 3 3B | ❓ pas mesuré | probable | ✅ | 2/5 (à challenger) |
+| **Phi-4-mini** (actuel) | **23.5%** | ✅ | ✅ | 2/5 (baseline à remplacer) — pas 1/5, le défaut connu est documenté mais le use-case голос/TTS etc. est fonctionnel |
 
-**Important** : mon évaluation initiale de Gemma 4 E2B à 2/5 était trop sévère. **L'absence de score HHEM est due à la jeunesse du modèle (mars 2026), pas à un mauvais score.** Un audit user-side a challengé ce point — l'évaluation honnête est **3/5** plutôt que 2/5, à condition d'ajouter les réserves ci-dessous.
+**Important — révision méthodologique suite à 2 challenges user-side** :
+
+J'avais pénalisé **Gemma 4 E2B et Qwen 3.5 2B** sur la base de l'argument "pas de score HHEM". Pour Gemma 4 E2B, je l'ai admis au challenge 1 : l'absence HHEM vient de la **jeunesse du modèle** (créé mars 2026), pas d'un mauvais score.
+
+Pour Qwen 3.5 2B, je dois admettre le **même type de biais**, sous une forme différente :
+- J'ai écrit que "Qwen 3.5 hallucine 10.5%". **Faux** : le 10.5% mesuré sur HHEM est sur `qwen3.5-flash-2026-02-23` (modèle Flash, propriétaire, plus gros = différent du 2B).
+- Aucune mesure HHEM n'est disponible **directement** pour Qwen 3.5 2B.
+- Mon raisonnement l'a écarté implicitement sur la base d'une moyenne familiale contestable.
+
+**Donc Qwen 3.5 2B n'est pas disqualifié sur "score HHEM"** — ce qu'il a : c'est multimodal (image-text-to-text) ET petit (2.27B params). Sur M1 8GB, **c'est en fait l'un des plus intéressants** : léger, multimodal, téléchargé 1.6M fois (preuve de traction).
 
 ### Réserves sur Gemma 4 E2B que j'ai usurpé
 
@@ -113,17 +124,47 @@ Gemma 4 E2B est un **candidat de second tier solide** :
 
 **Revised ranking** : Qwen 3-4B (1er choix) > Gemma 4 E2B (2e choix) > SmolLM3 3B (3e choix) > Gemma 3 4B (4e choix méconnu) > Phi-4-mini (5e choix actuel).
 
-### Pourquoi pas Qwen 3.5 4B ? (rapport #4)
+### Pourquoi pas Qwen 3.5 4B ? (rapport #4) — révisé
 
-1. **Score hallucination Vectara HHEM = 10.5%** (mauvais vs 5.7% pour Qwen 3 4B).
-2. **Multimodal** (vision + texte) — RAM gaspillée pour NURU qui n'utilise pas la vision LLM (la vision OCR est dans `src/ocr.py` séparé).
-3. **Très récent** (mars 2026) — peu de retours communautaires sur M1 8GB.
+**Position initiale** (trop rigide) : "Qwen 3 4B (5.7%) bat Qwen 3.5 4B". 
+**Position corrigée** : nuance importante — le 10.5% HHEM est sur `qwen3.5-flash-2026-02-23`, **un modèle différent** (Flash, optimisé vitesse, ~date proche mais modèle distinct du Qwen 3.5 4B-Instruct général).
 
-### Pourquoi pas Gemma 4 E2B ? (rapport #2)
+Le Vectara HHEM ne contient **aucun Qwen 3.5 4B-Instruct** mesuré directement. Tous les "Qwen 3.5" du leaderboard sont des variantes API distantes :
+- `qwen3.5-flash-2026-02-23` (10.5%) — optimisé vitesse, pas le 4B-Instruct
+- `qwen3.5-35b-a3b` (10.5%) — MoE 35B
+- `qwen3.5-plus-2026-02-15` (10.7%) — modèle propriétaire "Plus"
+- `qwen3.5-122b-a10b` (11.2%) — MoE 122B
+- `qwen3.5-27b` (12.1%) — 27B dense
 
-1. Non testé sur Vectara HHEM (vérifié).
-2. Multimodal (any-to-any).
-3. Commandes Ollama cassées (non listé).
+Donc l'extrapolation "Qwen 3.5 4B Inherit = 10.5%" est aussi une **extrap moyenne contestable**, comme pour Qwen 3.5 2B.
+
+**Raisons pratiques pour écarter Qwen 3.5 4B-Instruct (à défaut de HHEM)** :
+1. **Multimodal** (image-text-to-text, comme Qwen 3.5 2B) — surcoût RAM pour NURU qui n'utilise pas la vision LLM.
+2. **Plus récent que Qwen 3** (fév 2026 vs avril 2025) — moins de retours communautaires consolidés.
+3. **Moins de traction** (à confirmer — pas vérifié ici).
+
+**Mais** : sur le critère RAM/text-pur, Qwen 3.5 4B = pire que Qwen 3-4B. Ce sont les **vraies raisons de l'écarter**, pas un score HHEM qui ne s'applique pas directement. Mon raisonnement initial mélangeait les deux — c'était confus.
+
+### Position finale révisée sur Qwen 3.5 2B (et leçon méthodologique)
+
+Mêmes leçons que Gemma 4 E2B :
+- **Pas disqualifié sur HHEM absent** — modèle trop jeune (créé 28 février 2026, dernière MAJ HHEM = 11 mai 2026), pas testé.
+- **Score révisé 3/5**, plus haut que l'implicite antérieur (confondu avec Qwen 3.5 Flash 10.5%, qui est un modèle différent).
+- **Inclus dans Phase B** comme candidat à tester (Test 3 dans l'ordre de priorité après Qwen 3-4B et Gemma 4 E2B).
+- **Forces :** 2.27B params, MLX 4-bit = ~1.5 GB sur M1 8GB, 1.6M téléchargements (traction prouvée), le plus léger des candidats testés.
+- **Faiblesses :** multimodal (image-text-to-text) — surcoût RAM potentiel pour rien en usage NURU classique.
+
+### Pourquoi pas Gemma 4 E2B ? (rapport #2) — révisé
+
+
+Raisons retenues (nuancées) :
+- **N'a pas de score HHEM mesuré** — mais parce que Vectara ne l'a pas encore testé, pas parce qu'il est mauvais. La famille Gemma 3 = 6.4% hallucination, l'extrapolation vers Gemma 4 est favorable.
+- **Multimodal any-to-any** (texte + image + audio + vidéo) — surcoût RAM théorique, ~5.1B params totaux dont seulement ~2.3B actifs. En 4-bit = ~2.5-3 GB sur M1 8GB. **Viable mais moins efficient que Qwen 3-4B dense.**
+- **Maturité limitée** — créé mars 2026, peu de retours MLX communautaires.
+
+**Raison de le mettre en 2ᵉ position** : la famille Gemma 3 a une **excellente calibration anti-hallucination** (souvent citée par les experts), et Gemma 4 hérite probablement de cette philosophie. **C'est un pari raisonnable**, mais non vérifié.
+
+**Donc** : dans le plan de test A/B (Phase B), Gemma 4 E2B est **inclus comme candidat alternatif**. Si Qwen 3-4B ne convainc pas → tester Gemma 4 E2B en Phase B2.
 
 ### Pourquoi pas SmolLM3 3B ? (rapport #3)
 
@@ -156,27 +197,38 @@ Avant de changer le modèle, **vérifier si le pipeline NURU actuel amplifie le 
 
 **Critère de succès** : avec Phi-4-mini encore en place, le taux d'hallucination sur le test set doit baisser d'au moins 30%. Si oui → le modèle n'était pas le seul problème. Si non → passer en Phase B.
 
-### Phase B — A/B Test Qwen 3-4B vs Phi-4-mini (1 semaine)
+### Phase B — A/B Test (Qwen 3.5 2B → Gemma 4 E2B) vs Phi-4-mini (1 semaine)
 
-**Setup** : 
+**Setup itératif** :
 ```bash
 # Backup
 cp config/settings.yaml config/settings.yaml.phi4-backup
 
-# Switch
-# config/settings.yaml — test
-local_model: mlx-community/Qwen3-4B-4bit
+# Test 1 : Qwen 3.5 2B (candidat #1 révisé — pari raisonnable sur génération nouvelle)
+# config/settings.yaml
+local_model: mlx-community/Qwen3.5-2B-4bit
 local_model_fallback: mlx-community/Phi-4-mini-instruct-4bit
 ```
 
-**Test** : lancer les **25 questions** de `tests/rag_eval_dataset.yaml`, comparer :
-- Réponse grounded correcte (oui/non/parcial)
+**Test 1** : lancer les **25 questions** de `tests/rag_eval_dataset.yaml`, comparer vs Phi-4-mini (fallback).
+
+**Si Qwen 3.5 2B gagne** (≥80% réponses correctes, ≥50% hallucinations en moins, RAM peak raisonnable) → **bascule Phase C**.
+
+**Si Qwen 3.5 2B déçoit**, Test 2 (paris risqués, dernière chance) :
+```yaml
+local_model: mlx-community/gemma-4-E2B-4bit  # Gemma 4 E2B (paris sur famille Gemma malgré failure Gemma 3)
+```
+
+**Si les deux échouent** : Phi-4-mini reste — pas d'autre candidat raisonnable disponible aujourd'hui. Retour à Phase A (fix pipeline) en priorité.
+
+**Mesures pour chaque modèle** :
+- Réponse grounded correcte (oui/non/partiel)
 - Tokens/s
-- RAM pic observée
-- Hallucination manifeste
+- RAM pic observée (CRITÈRE DUR — élimination si > 4 GB)
+- Hallucination manifeste (Leblanc évalue subjectivement)
 - Temps de cold start
 
-**Critère bascule** : Qwen 3-4B doit gagner sur ≥80% des questions tout en ne perdant pas en fluidité.
+**Critère bascule** : le modèle retenu doit gagner sur ≥80% des questions ET ne pas faire ramer la machine ET citer correctement les sources.
 
 ### Phase C — Bascule définitive (1 jour)
 
@@ -215,8 +267,9 @@ Documentation :
 
 | Alternative écartée | Pourquoi |
 |---|---|
-| **Gemma 4 E2B** (rapport #2) | Multimodal, score HHEM absent, commande Ollama cassée. |
-| **Qwen 3.5 4B** (rapport #4) | Plus mauvais que Qwen 3 sur hallucination HHEM (10.5% vs 5.7%), multimodal. |
+| **Qwen 3.5 4B** (rapport #4) | Multimodal (surcoût RAM), plus récent que Qwen 3 (moins retours), et le score HHEM 10.5% s'applique à `qwen3.5-flash-2026-02-23` (modèle Flash API distant, ≠ Qwen 3.5 4B-Instruct). Pas disqualifié sur HHEM, disqualifié sur RAM moins efficient que Qwen 3-4B dense. |
+| **Qwen 3.5 2B** (rapport #4) | **Révision** : trop pénalisé au challenge #2. Score révisé 3/5 (vs confusion antérieure avec Flash 10.5%). Inclus maintenant en Phase B test 3. Plus léger des candidats (1.5 GB 4-bit), 1.6M téléchargements — pari légitime pour RAM budget serré. |
+| **Gemma 4 E2B** (rapport #2) | **Révision** : trop pénalisé au challenge #1. C'est un candidat de tier 2 raisonnable. Inclus maintenant en Phase B test 2. Multimodal any-to-any (~5.1B params → ~2.5 GB 4-bit sur M1 8GB, viable). Famille Gemma 3 = 6.4% hallucination. **PAS disqualifié sur "pas de HHEM"**, mais en second car : moins efficient qu'un dense texte pur, maturité limitée. |
 | **SmolLM3 3B** (rapport #3) | Très bien noté mais non testé HHEM — à tester en Phase D2. |
 | **Llama 3.2 3B** | Stable mais hallucinations moins contrôlées que Qwen 3. |
 | **Ministral 3B** | Communauté plus petite, peu de retours M1. |
@@ -294,5 +347,84 @@ Si tu valides l'option A dans son ensemble, je commence par les P0 audit V12 + P
 
 ---
 
-*Auteur : Hermes — synthèse post-4-audits. Date : 2026-06-21.*
+## 9. Leçon méthodologique (depuis les 2 challenges user-side)
+
+Les 2 challenges Leblanc ont mis en évidence **mon biais d'over-disqualification** sur les modèles sans score HHEM mesuré.
+
+**Pattern biaisé** : 
+- Gemma 4 E2B : disqualifié pour "pas de HHEM" — alors que l'absence vient de la **jeunesse** du modèle (mars 2026, dernière MAJ HHEM = mai 2026).
+- Qwen 3.5 2B : disqualifié implicitement via confusion avec `qwen3.5-flash-2026-02-23` (modèle **différent**, propriétaire Alibaba API).
+
+**Le vrai piège** : appliquer un raisonnement de "ce qui n'a pas été mesuré ne vaut rien". C'est faux. Dans un domaine où les modèles sortent tous les 3-6 mois, **les plus récents n'ont simplement pas eu le temps d'être audités**.
+
+**Règle révisée pour les audits LLM futurs** :
+1. Vérifier l'âge du modèle (HF createdAt) vs dernière MAJ HHEM.
+2. Si l'absence HHEM est due à un **décalage temporel** → challenger plutôt que disqualifier.
+3. Utiliser le **proxy familial** (Gemma 3 → Gemma 4, Qwen 3 → Qwen 3.5) comme indice, pas comme preuve.
+4. **Tester empiriquement** (Phase B) avant de disqualifier définitivement.
+
+**Leçon transversale** : l'architecte senior doit challenger ses propres raccourcis autant que ceux des experts externes. Le rapport a été plus solide grâce aux challenges, pas grâce à mon premier jet.
+
+---
+
+## 10. Leçon terrain (challenge #3 Leblanc)
+
+**Observation Leblanc sur Gemma 3 4B** :
+- "Beaucoup d'hallucinations" → contredit score Vectara HHEM 6.4%
+- "Fait ramer la machine" → confirme surcoût RAM opérationnel
+
+**Analyse critique** :
+1. **Hallucinations perçues > score HHEM** — Le score Vectara HHEM mesure les hallucinations sur résumés de documents longs (formulation synthétique). Si NURU pose des questions courtes/interactives, le pattern peut être différent. **Le HHEM est un proxy, pas la vérité terrain.**
+2. **"Fait ramer"** — 3.2 GB Phi-4 + 3.2 GB Gemma 3 = 6.4 GB sur M1 8 GB. Swap probable. Cohérent avec un système sous pression (15 Mo RAM libre au moment du test). Possible aussi : keeps-alive surchargé, embedder/RAG qui pompe de la RAM en parallèle.
+3. **HW non 16GB** — Mon rapport parlait "M1 8GB" mais j'ai parfois sous-entendu que ça tiendrait un 4B confortablement. Avec 8GB total (PySide6, OS, embeddings), **le budget local est plus serré que les estimations**.
+
+**Conséquences sur le plan** :
+- **Gemma 3 4B** = **recalibrer en Phase B** avec mesure réelle avant de l'écrire quelquepart
+- **Critère "RAM peak"** doit être mesuré explicitement (pas juste "viable sur le papier")
+- **Stay focused** : la comparaison doit être faite sur ton hardware, dans ton contexte
+
+**Implication méthodologique forte** : Mes recommandations Phase B doivent produire **des mesures terrain**, pas se contenter de "c'est noté sur un benchmark". Le scope du Phase B s'élargit légèrement pour intégrer RAM et tokens/s comme critères durs du ranking.
+
+---
+
+## 11. Leçon 4 — Pourquoi Qwen 3.5 2B devient le 1er choix après les 4 challenges
+
+**Cumulatif des challenges Leblanc** :
+1. Gemma 4 E2B : "pas disqualifié sur absence HHEM" (révision)
+2. Qwen 3.5 2B : idem (révision)
+3. Gemma 3 4B : éliminé sur données terrain (hallucinations + ram)
+4. **Qwen 3 (et 2.5) : déjà testés, défaite "hallucine + pas de compréhension contexte"**
+
+**Ce que ça change** :
+- Qwen 3-4B passe du 1er choix au pari "à retester avec extrême prudence" — ta famille Qwen 3 a déjà échoué
+- Qwen 3.5 2B (génération **nouvelle**, février 2026) devient le pari raisonnable sur la présomption qu'Alibaba a corrigé les bugs
+- Gemma 4 E2B reste pari #2, fragilisé par le pattern Gemma 3 (à tester quand même, parce que Gemma 4 = refonte)
+
+**Pourquoi Qwen 3.5 pourrait réussir** :
+- Alibaba a publié `qwen3-235b-a22b` thinking, `qwen3.5-35b-a3b`, `qwen3.5-122b-a10b` (MoE, plus gros, HHEM mesurés) — signe que la roadmap Qwen 3.5 est pensée agent-first
+- Qwen 3.5 est probablement une **réécriture majeure** ciblant spécifiquement les faiblesses utilisateur (pas juste un nouveau fine-tune)
+- Score Vectara HHEM partiel (Flash = 10.5%) suggère que **ça reste perfectible mais pas catastrophique**
+
+**Pourquoi on peut basculer directement sur Qwen 3.5 2B** :
+- Tu as déjà intention de tester (c'est pour ça que tu m'as demandé de le télécharger)
+- Phase A (fix pipeline) reste valide quel que soit le modèle → on peut lancer les deux en parallèle
+- Si Qwen 3.5 2B échoue, on n'a rien d'autre raisonnable sauf Gemma 4 (pari risqué)
+
+---
+
+## 12. Conclusion réaliste
+
+À l'issue de **5 audits critiques + 4 challenges Leblanc**, on arrive à un constat modeste :
+
+1. **Aucune recommandation universelle** — chaque famille modèle a ses forces/faiblesses
+2. **Les benchmarks Vectara sont des proxies**, pas des vérités
+3. **Les données terrain (Leblanc) priment** sur tous les rapports experts
+4. **Qwen 3.5 2B est notre meilleur pari actuel** mais reste un pari
+5. **Phase A (fix pipeline) doit se faire en parallèle**, sans attendre les résultats Phase B
+
+**Décision finale révisée** : lancer Phase A en parallèle de la fin des téléchargements Qwen 3.5 2B + Gemma 4 E2B. Tests A/B Phase B dès que les deux modèles sont disponibles.
+
+---
+
+*Auteur : Hermes — synthèse post-4-audits + 4 challenges Leblanc. Date : 2026-06-21.*
 *Sources primaires citées : Vectara HHEM Leaderboard (mai 2026), HuggingFace API (vérifs multiples 2026-06-21), NURU Audit Synthèse (juin 14), NURU Audit Live V12 (juin 21).*
