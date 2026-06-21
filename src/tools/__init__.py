@@ -19,3 +19,12 @@ from src.tools.os_control import (
     OSController,
     register_os_tools,
 )
+from src.tools.browser_ctrl import (
+    BrowserAction,
+    BrowserResult,
+    BrowserPage,
+    FormField,
+    NavigateResult,
+    BrowserController,
+    register_browser_tools,
+)
