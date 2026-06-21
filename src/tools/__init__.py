@@ -28,3 +28,9 @@ from src.tools.browser_ctrl import (
     BrowserController,
     register_browser_tools,
 )
+from src.tools.file_ops import (
+    PathSafety,
+    FileOpResult,
+    FileOpsController,
+    register_file_tools,
+)
