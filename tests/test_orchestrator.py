@@ -41,9 +41,12 @@ EXPECTED_MODULES: dict[str, int] = {
     #   file_move, file_copy, file_mkdir, file_list,
     #   file_info, file_search, file_workspace_info,
     #   file_authorize_directory
+    "memory_tools": 6,  # memory_recall, memory_store_episode,
+    #   memory_user_profile, memory_stats, memory_check_errors,
+    #   memory_full_context
 }
 
-TOTAL_EXPECTED_TOOLS = sum(EXPECTED_MODULES.values())  # 31
+TOTAL_EXPECTED_TOOLS = sum(EXPECTED_MODULES.values())  # 37
 
 EXPECTED_TOOL_NAMES: list[str] = [
     # shell
@@ -81,6 +84,13 @@ EXPECTED_TOOL_NAMES: list[str] = [
     "file_search",
     "file_workspace_info",
     "file_authorize_directory",
+    # memory
+    "memory_recall",
+    "memory_store_episode",
+    "memory_user_profile",
+    "memory_stats",
+    "memory_error_check",
+    "memory_store_fact",
 ]
 
 SHELL_TOOLS = ["shell_exec", "shell_dry_run"]
@@ -360,7 +370,7 @@ class TestCategories:
     def test_two_categories_total(self, orch: ToolOrchestrator) -> None:
         """Il y a exactement 2 catégories : 'system' et 'web'."""
         cats = orch.list_categories()
-        assert set(cats.keys()) == {"system", "web"}, (
+        assert set(cats.keys()) == {"system", "web", "memory"}, (
             f"Catégories inattendues: {set(cats.keys())}"
         )
 
@@ -393,7 +403,7 @@ class TestCategories:
 
     def test_all_tools_have_system_or_web_category(self, orch: ToolOrchestrator) -> None:
         """Tous les outils sont dans une catégorie valide."""
-        valid_categories = {"system", "web"}
+        valid_categories = {"system", "web", "memory"}
         for tool in orch.get_registry().list_tools():
             assert tool.category in valid_categories, (
                 f"Outil {tool.name} a une catégorie invalide: {tool.category}"
@@ -814,10 +824,11 @@ class TestIntegration:
         assert orch.get_tools_by_category("unknown_xyz") == []
 
     def test_list_categories_contains_all(self, orch: ToolOrchestrator) -> None:
-        """list_categories() contient 'system' et 'web'."""
+        """list_categories() contient 'system', 'web', 'memory'."""
         cats = orch.list_categories()
         assert "system" in cats
         assert "web" in cats
+        assert "memory" in cats
         assert sum(cats.values()) == TOTAL_EXPECTED_TOOLS
 
     def test_tool_schema_name_equals_definition_name(self, orch: ToolOrchestrator) -> None:

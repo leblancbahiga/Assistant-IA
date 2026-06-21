@@ -34,3 +34,6 @@ from src.tools.file_ops import (
     FileOpsController,
     register_file_tools,
 )
+from src.tools.memory_tools import (
+    register_memory_tools,
+)

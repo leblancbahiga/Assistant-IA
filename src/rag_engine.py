@@ -122,6 +122,8 @@ class RAGEngine:
         )  # RAM minimale pour activer le cross-encoder
         # V8+ Sprint 4 : Orchestrateur multi-stratégie (initialisé paresseusement)
         self._multi_search = None
+        # V12 — Intégration mémoire V9 (initialisé paresseusement)
+        self._memory = None
 
     def _ensure_multi_search(self):
         """V8+ Sprint 4.8 : Initialise paresseusement le MultiSearchOrchestrator."""
@@ -139,6 +141,31 @@ class RAGEngine:
             grep_fn=grep_documents,
             get_doc_meta_fn=self.search_doc_meta,
         )
+
+    # ── V12 Intégration mémoire V9 ──────────────────────────────────
+
+    def _init_memory(self):
+        """Initialisation paresseuse du MemoryManager V9.
+
+        Appelée au premier besoin pour éviter de casser l'initialisation
+        de RAGEngine si la base mémoire n'est pas encore disponible.
+        """
+        if self._memory is not None:
+            return
+        try:
+            from src.memory.manager import MemoryManager
+            self._memory = MemoryManager()
+            logger.info("🧠 RAGEngine: MemoryManager V9 initialisé")
+        except Exception as e:
+            logger.warning("⚠️ RAGEngine: MemoryManager non disponible (%s)", e)
+            self._memory = None
+
+    @property
+    def memory(self):
+        """Accès paresseux au MemoryManager V9."""
+        if self._memory is None:
+            self._init_memory()
+        return self._memory
 
     def _ms_vector_search(self, query: str, search_type: str = "vector") -> list:
         """Wrapper sync pour la recherche vectorielle/FTS (appelé par MultiSearchOrchestrator).
@@ -822,6 +849,19 @@ class RAGEngine:
             context = confidence_header + "Aucun document pertinent trouvé dans l'index."
         else:
             context = confidence_header + "\n" + context
+
+        # V12 — Intégration mémoire V9 : injecter les souvenirs dans le contexte
+        try:
+            mem = self.memory  # accès paresseux
+            if mem is not None:
+                memory_context = mem.get_full_context(query)
+                if memory_context and memory_context.strip():
+                    memory_block = "\n\n=== SOUVENIRS (MÉMOIRE V9) ===\n" + memory_context
+                    context = memory_block + "\n\n" + context
+                    result.tokens_injected += len(memory_block) // 4
+                    logger.debug("🧠 Contexte mémoire V9 injecté (%d chars)", len(memory_context))
+        except Exception as e:
+            logger.debug("⚠️ Injection mémoire V9 ignorée: %s", e)
         result.tokens_injected = len(context) // 4
         result.retrieval_time_ms = (time.time() - t_start) * 1000
 

@@ -24,6 +24,7 @@ from src.tools.shell_exec import register_shell_tools
 from src.tools.os_control import register_os_tools
 from src.tools.browser_ctrl import register_browser_tools
 from src.tools.file_ops import register_file_tools
+from src.tools.memory_tools import register_memory_tools
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,7 @@ class ToolOrchestrator:
         register_os_tools(self._registry, self._executor)
         register_browser_tools(self._registry, self._executor)
         register_file_tools(self._registry, self._executor)
+        register_memory_tools(self._registry, self._executor)
 
         self._setup_done = True
         logger.info(
