@@ -22,7 +22,7 @@
 10. [Architecture des outils](#10-architecture-des-outils)
 11. [Recommandations UI/UX](#11-recommandations-uiux)
 12. [Plan d'implémentation](#12-plan-dimplémentation)
-13. [Priorisation](#13-priorisation)
+13. [Priorhelloisation](#13-priorisation)
 14. [Risques et atténuations](#14-risques-et-atténuations)
 15. [Synthèse exécutive](#15-synthèse-exécutive)
 

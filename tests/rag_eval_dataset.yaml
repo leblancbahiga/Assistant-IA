@@ -126,3 +126,273 @@
   expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
   expected_keywords: ["Environnement", "Gestion", "Ressources", "Naturelles"]
   doc_type: cv
+
+# ──────────────────────────────────────────────────────────────────────────────
+# QUESTIONS RAG — Documents techniques / rapports terrain
+# ──────────────────────────────────────────────────────────────────────────────
+
+- question: "Quels sont les objectifs du projet YARID ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["YARID", "objectif", "formation", "jeunes"]
+  doc_type: rapport
+
+- question: "Quel est le budget du projet BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["budget", "coût", "USD", "financement"]
+  doc_type: technique
+
+- question: "Quelle méthodologie utilise le Sustainable Agriculture Monitoring tool ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["méthodologie", "indicateurs", "suivi", "évaluation"]
+  doc_type: technique
+
+- question: "Quels sont les résultats attendus de l'étude de vulnérabilité climatique ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["résultats", "vulnérabilité", "adaptation", "recommandations"]
+  doc_type: technique
+
+- question: "Qui finance le projet BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["bailleur", "financement", "Fonds", "Mondial"]
+  doc_type: technique
+
+- question: "Quelle est la zone d'intervention du projet YARID ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["zone", "intervention", "territoire", "Walikale"]
+  doc_type: rapport
+
+- question: "Quels indicateurs suit le Sustainable Agriculture Monitoring tool ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["indicateurs", "rendement", "sol", "climat"]
+  doc_type: technique
+
+- question: "Quelle est la durée du projet BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["durée", "mois", "ans", "calendrier"]
+  doc_type: technique
+
+- question: "Quels partenaires techniques pour le projet YARID ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["partenaires", "ONG", "institutions", "collaboration"]
+  doc_type: rapport
+
+- question: "Comment le changement climatique affecte-t-il l'agriculture à Walikale ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["changement", "climatique", "agriculture", "impact", "Walikale"]
+  doc_type: technique
+
+# ──────────────────────────────────────────────────────────────────────────────
+# QUESTIONS RAG — Agronomie / pratiques agricoles
+# ──────────────────────────────────────────────────────────────────────────────
+
+- question: "Quelles cultures sont prioritaires pour la sécurité alimentaire dans la région ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["maïs", "manioc", "riz", "haricot", "prioritaire"]
+  doc_type: agronomie
+
+- question: "Quelles techniques d'agroforesterie sont recommandées ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["agroforesterie", "arbres", "cultures", "association"]
+  doc_type: agronomie
+
+- question: "Comment améliorer la fertilité des sols acides ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["chaux", "calcaire", "pH", "amendement", "fertile"]
+  doc_type: agronomie
+
+- question: "Quels sont les ravageurs principaux du maïs à Walikale ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["chute", "légumineuse", "chenille", "ravageur", "maïs"]
+  doc_type: agronomie
+
+- question: "Quelle rotation culturale pour le système maïs-légumineuse ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["rotation", "maïs", "légumineuse", "soja", "arachide"]
+  doc_type: agronomie
+
+- question: "Comment gérer l'eau de pluie pour l'agriculture ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["eau", "pluie", "récupération", "irrigation", "bassins"]
+  doc_type: agronomie
+
+- question: "Quels engrais organiques sont produits localement ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["compost", "fumier", "engrais", "organique", "local"]
+  doc_type: agronomie
+
+- question: "Quelle est la période de semis optimale pour le riz pluvial ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["semis", "riz", "pluvial", "saison", "septembre"]
+  doc_type: agronomie
+
+- question: "Comment lutter contre l'érosion des sols en pente ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["érosion", "pente", "bandes", "herbes", "terrasses"]
+  doc_type: agronomie
+
+- question: "Quelles variétés de manioc résistantes à la mosaïque ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["manioc", "mosaïque", "résistant", "variété", "TME"]
+  doc_type: agronomie
+
+# ──────────────────────────────────────────────────────────────────────────────
+# QUESTIONS RAG — Administrative / lettres
+# ──────────────────────────────────────────────────────────────────────────────
+
+- question: "Quelle est la date de l'attestation de service de Leblanc ?"
+  expected_source: "ATTESTATION DE SERVICE RENDU LEBLANC.pdf"
+  expected_keywords: ["date", "2024"]
+  doc_type: administrative
+
+- question: "Quel poste visait la lettre de motivation Enabel ?"
+  expected_source: "lettre de motivation Enabel.pdf"
+  expected_keywords: ["poste", "expert", "agronome", "Enabel"]
+  doc_type: lettre
+
+- question: "Quelle expérience est mise en avant pour IITA ?"
+  expected_source: "lettre de motivation IITa.docx"
+  expected_keywords: ["expérience", "IITA", "projet", "agricole"]
+  doc_type: lettre
+
+- question: "Combien d'années d'expérience a Leblanc selon son CV ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["ans", "expérience", "senior", "expert"]
+  doc_type: cv
+
+- question: "Quelles langues parle Toussaint Omombo ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["français", "anglais", "lingala", "swahili"]
+  doc_type: cv
+
+- question: "Quel est l'organisme émetteur de l'attestation de service ?"
+  expected_source: "ATTESTATION DE SERVICE RENDU LEBLANC.pdf"
+  expected_keywords: ["organisme", "émetteur", "YARID", "ONG"]
+  doc_type: administrative
+
+- question: "Quels sont les mots-clés de la lettre pour Enabel ?"
+  expected_source: "lettre de motivation Enabel.pdf"
+  expected_keywords: ["développement", "rural", "communautés", "résilience"]
+  doc_type: lettre
+
+- question: "Quelle formation a suivi Leblanc en gestion de projet ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["formation", "gestion", "projet", "certificat"]
+  doc_type: cv
+
+- question: "Quelles certifications Toussaint Omombo détient-il ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["certification", "formation", "diplôme"]
+  doc_type: cv
+
+- question: "Quel est l'objet de la lettre pour IITA ?"
+  expected_source: "lettre de motivation IITa.docx"
+  expected_keywords: ["candidature", "poste", "IITA", "motivation"]
+  doc_type: lettre
+
+# ──────────────────────────────────────────────────────────────────────────────
+# QUESTIONS RAG — Edge cases / multi-hop / complexes
+# ──────────────────────────────────────────────────────────────────────────────
+
+- question: "Compare l'approche YARID et BEACCOM face au changement climatique"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["YARID", "BEACCOM", "changement", "climatique", "approche", "différence"]
+  doc_type: complexe
+
+- question: "Quels sont les points communs entre les CV de Leblanc et Toussaint ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["agronome", "environnement", "gestion", "ressources", "expérience"]
+  doc_type: complexe
+
+- question: "Le Sustainable Agriculture Monitoring tool peut-il s'appliquer au projet YARID ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["Sustainable", "Agriculture", "Monitoring", "YARID", "applicable", "indicateurs"]
+  doc_type: complexe
+
+- question: "Quelle complémentarité entre BEACCOM et YARID à Walikale ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["BEACCOM", "YARID", "Walikale", "complémentarité", "synergie"]
+  doc_type: complexe
+
+- question: "Synthèse : quels sont les 3 principaux défis agricoles identifiés dans tous les docs ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["défis", "agricoles", "changement", "climatique", "sols", "ravageurs"]
+  doc_type: complexe
+
+- question: "Existe-t-il une attestation de service pour Toussaint Omombo ?"
+  expected_source: "ATTESTATION DE SERVICE RENDU LEBLANC.pdf"
+  expected_keywords: ["attestation", "Toussaint", "Omombo", "non", "aucun"]
+  doc_type: edge_case
+
+- question: "Le CV de Leblanc mentionne-t-il le projet BEACCOM ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["BEACCOM", "non", "pas", "mention"]
+  doc_type: edge_case
+
+- question: "Quel document mentionne le formulaire TECH-3 ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["TECH-3", "formulaire", "non", "existe", "pas"]
+  doc_type: edge_case
+
+- question: "Y a-t-il des documents sur la pêche dans l'index ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["pêche", "non", "aucun", "agriculture", "seulement"]
+  doc_type: edge_case
+
+- question: "Quel est le numéro de téléphone exact de Leblanc BAHIGA ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["téléphone", "contact", "non", "pas", "indiqué"]
+  doc_type: edge_case
+
+# ──────────────────────────────────────────────────────────────────────────────
+# QUESTIONS RAG — Requêtes multi-intentions / fact-checking
+# ──────────────────────────────────────────────────────────────────────────────
+
+- question: "Le projet YARID inclut-il une composante genre ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["genre", "femmes", "inclusion", "égalité", "jeunes filles"]
+  doc_type: fact_check
+
+- question: "Quel est le taux de réussite visé par BEACCOM pour les agriculteurs ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["taux", "réussite", "objectif", "%", "cible"]
+  doc_type: fact_check
+
+- question: "Le monitoring tool prévoit-il des alertes SMS pour les agriculteurs ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["SMS", "alerte", "notification", "mobile", "agriculteur"]
+  doc_type: fact_check
+
+- question: "Combien de bénéficiaires directs pour le projet YARID ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["bénéficiaires", "directs", "nombre", "jeunes", "familles"]
+  doc_type: fact_check
+
+- question: "Quelle est la superficie couverte par l'étude BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["hectares", "superficie", "zone", "couverture", "Walikale"]
+  doc_type: fact_check
+
+- question: "Le CV de Toussaint mentionne-t-il une publication scientifique ?"
+  expected_source: "1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf"
+  expected_keywords: ["publication", "article", "recherche", "scientifique", "non"]
+  doc_type: fact_check
+
+- question: "Leblanc a-t-il travaillé pour la FAO ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["FAO", "Organisation", "Nations", "Unies", "non", "pas"]
+  doc_type: fact_check
+
+- question: "Y a-t-il une lettre de motivation pour la Banque Mondiale ?"
+  expected_source: "lettre de motivation Enabel.pdf"
+  expected_keywords: ["Banque", "Mondiale", "World", "Bank", "non", "aucun"]
+  doc_type: fact_check
+
+- question: "Quelle est la date de début du projet BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["date", "début", "démarrage", "2024", "janvier"]
+  doc_type: fact_check
+
+- question: "Le concept note YARID mentionne-t-il le numérique / digital ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["numérique", "digital", "technologie", "application", "mobile"]
+  doc_type: fact_check
