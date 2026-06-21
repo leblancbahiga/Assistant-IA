@@ -37,3 +37,9 @@ from src.tools.file_ops import (
 from src.tools.memory_tools import (
     register_memory_tools,
 )
+from src.tools.agent_orchestrator import (
+    AgentOrchestrator, AgentTrace, PlanResult, VerifyResult,
+)
+from src.tools.agent_tools import (
+    register_agent_tools,
+)
