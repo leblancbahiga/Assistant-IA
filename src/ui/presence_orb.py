@@ -96,6 +96,8 @@ class PresenceOrb(QWidget):
         # Smooth state transition
         self._target_orb_opacity = 1.0
         self._target_glow_opacity = 0.8
+        self._target_rotation = 0.0
+        self._current_rotation = 0.0
 
         self.setState(OrbState.IDLE)
 
@@ -128,17 +130,19 @@ class PresenceOrb(QWidget):
         """Applique la configuration visuelle pour l'état actuel."""
         state = self._state
         state_configs = {
-            OrbState.IDLE:      {"orb": 1.0, "glow": 0.6},
-            OrbState.LISTENING: {"orb": 1.0, "glow": 1.0},
-            OrbState.THINKING:  {"orb": 0.7, "glow": 0.4},
-            OrbState.SPEAKING:  {"orb": 1.0, "glow": 0.9},
-            OrbState.ACTING:    {"orb": 1.0, "glow": 0.9},
-            OrbState.ERROR:     {"orb": 0.8, "glow": 0.7},
+            OrbState.IDLE:      {"orb": 1.0, "glow": 0.6, "rot_spd": 0.00},
+            OrbState.LISTENING: {"orb": 1.0, "glow": 1.0, "rot_spd": 0.02},
+            OrbState.THINKING:  {"orb": 0.9, "glow": 0.5, "rot_spd": 0.06},
+            OrbState.SPEAKING:  {"orb": 1.0, "glow": 0.9, "rot_spd": 0.03},
+            OrbState.ACTING:    {"orb": 1.0, "glow": 0.9, "rot_spd": 0.04},
+            OrbState.ERROR:     {"orb": 0.8, "glow": 0.7, "rot_spd": 0.02},
         }
         config = state_configs.get(state, state_configs[OrbState.IDLE])
         self._target_orb_opacity = config["orb"]
         self._target_glow_opacity = config["glow"]
+        self._target_rotation = config["rot_spd"]
         self._ring_count = STATE_RING_COUNT.get(state, 1)
+        self._state_color = STATE_COLORS.get(state, QColor(0, 212, 255))
 
     def _update_pulse(self):
         """Animation frame update — called at 20 FPS."""
@@ -149,6 +153,7 @@ class PresenceOrb(QWidget):
         # Smooth interpolation toward targets
         self._orb_opacity += (self._target_orb_opacity - self._orb_opacity) * 0.08
         self._glow_opacity += (self._target_glow_opacity - self._glow_opacity) * 0.08
+        self._current_rotation += (self._target_rotation - self._current_rotation) * 0.08
 
         self.update()
 
@@ -187,8 +192,9 @@ class PresenceOrb(QWidget):
                 painter.drawEllipse(QPointF(x, y), dot_r, dot_r)
 
     def _draw_glow_rings(self, painter: QPainter, cx: float, cy: float):
-        """3 anneaux concentriques avec glow décroissant (30%/15%/5%)."""
+        """Anneaux concentriques avec la couleur de l'état actuel."""
         base_radius = min(self.width(), self.height()) * 0.32
+        c = self._state_color if hasattr(self, '_state_color') else self.COLOR_CYAN
 
         ring_configs = [
             {"radius_mult": 1.0,  "opacity": 0.30, "width": 2.0},
@@ -203,39 +209,54 @@ class PresenceOrb(QWidget):
             pulse = 0.02 * (1 + self._pulse_phase) * self._glow_opacity
             radius = base_radius * cfg["radius_mult"] + pulse * base_radius
             opacity = cfg["opacity"] * self._glow_opacity
+            rotation = self._current_rotation * (i + 1) * 30  # degrés
 
-            color = QColor(0, 212, 255, int(255 * opacity))
+            color = QColor(c.red(), c.green(), c.blue(), int(255 * opacity))
             pen = QPen(color, cfg["width"])
             pen.setStyle(Qt.SolidLine)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(QPointF(cx, cy), radius, radius)
+            painter.save()
+            painter.translate(cx, cy)
+            painter.rotate(rotation)
+            painter.drawEllipse(QPointF(0, radius * 0.1), radius, radius * 0.85)
+            painter.restore()
 
         # Soft radial glow behind orb (single-level shadow, M1 friendly)
         glow_radius = base_radius * 1.5
         gradient = QRadialGradient(cx, cy, glow_radius)
         glow_alpha = int(STATE_GLOW_ALPHA.get(self._state, 40) * self._glow_opacity)
-        gradient.setColorAt(0.0, QColor(0, 212, 255, glow_alpha))
-        gradient.setColorAt(0.5, QColor(0, 212, 255, glow_alpha // 3))
-        gradient.setColorAt(1.0, QColor(0, 212, 255, 0))
+        gcolor = self._state_color if hasattr(self, '_state_color') else self.COLOR_CYAN
+        gradient.setColorAt(0.0, QColor(gcolor.red(), gcolor.green(), gcolor.blue(), glow_alpha))
+        gradient.setColorAt(0.5, QColor(gcolor.red(), gcolor.green(), gcolor.blue(), glow_alpha // 3))
+        gradient.setColorAt(1.0, QColor(gcolor.red(), gcolor.green(), gcolor.blue(), 0))
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(gradient))
         painter.drawEllipse(QPointF(cx, cy), glow_radius, glow_radius)
 
     def _draw_orb(self, painter: QPainter, cx: float, cy: float, radius: float):
-        """Sphère cyan avec gradient radial (blanc center → cyan edge)."""
+        """Sphère avec gradient radial — couleur de l'état actuel."""
         pulse = 1.0 + 0.03 * (1 + self._pulse_phase)
         r = radius * pulse
+        c = self._state_color if hasattr(self, '_state_color') else self.COLOR_CYAN
 
         # Main orb gradient
         gradient = QRadialGradient(cx - r * 0.2, cy - r * 0.2, r * 1.2)
         alpha = int(255 * self._orb_opacity)
 
-        # Center highlight (white-ish)
-        gradient.setColorAt(0.0, QColor(200, 240, 255, alpha))
-        gradient.setColorAt(0.3, QColor(0, 212, 255, alpha))
-        gradient.setColorAt(0.7, QColor(0, 160, 200, int(alpha * 0.8)))
-        gradient.setColorAt(1.0, QColor(0, 100, 140, int(alpha * 0.3)))
+        # Couleurs dérivées de l'état
+        bright = QColor(min(255, c.red() + 80), min(255, c.green() + 80),
+                        min(255, c.blue() + 100), alpha)
+        mid = QColor(c.red(), c.green(), c.blue(), alpha)
+        dark = QColor(max(0, c.red() - 80), max(0, c.green() - 80),
+                      max(0, c.blue() - 60), int(alpha * 0.8))
+        edge = QColor(max(0, c.red() - 140), max(0, c.green() - 140),
+                      max(0, c.blue() - 120), int(alpha * 0.3))
+
+        gradient.setColorAt(0.0, bright)
+        gradient.setColorAt(0.3, mid)
+        gradient.setColorAt(0.7, dark)
+        gradient.setColorAt(1.0, edge)
 
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(gradient))

@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 import keyring
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
@@ -211,9 +211,11 @@ class PreferencesDialog(QDialog):
         self._build_apikeys()
         # 4 — Recherche & RAG
         self._build_rag()
-        # 5 — Stockage
+        # 5 — Indexation
+        self._build_indexing()
+        # 6 — Stockage
         self._build_storage()
-        # 6 — À propos
+        # 7 — À propos
         self._build_about()
 
     def _build_general(self):
@@ -375,6 +377,125 @@ class PreferencesDialog(QDialog):
 
         cl = self._content_layout
         cl.addWidget(card)
+
+    # ── Indexation ──
+
+    def _build_indexing(self):
+        """Section Indexation — choisir dossiers à indexer et lancer une analyse."""
+        card = SectionCard("INDEXATION")
+
+        # Dossiers surveillés
+        dirs_frame = QFrame()
+        dirs_frame.setStyleSheet("background: transparent;")
+        dirs_layout = QVBoxLayout(dirs_frame)
+        dirs_layout.setContentsMargins(0, 0, 0, 0)
+        dirs_layout.setSpacing(6)
+
+        self._index_dirs = [
+            str(Path.home() / "Downloads" / "Assistant IA" / "documents"),
+            str(Path.home() / "Documents"),
+            str(Path.home() / "Desktop"),
+        ]
+        self._index_checks = []
+        for d in self._index_dirs:
+            cb = QCheckBox(d)
+            cb.setChecked(Path(d).exists())
+            cb.setStyleSheet(self._check_style())
+            self._index_checks.append(cb)
+            dirs_layout.addWidget(cb)
+
+        card.add_row("Dossiers", dirs_frame)
+
+        # Exclusions
+        excl_frame = QFrame()
+        excl_frame.setStyleSheet("background: transparent;")
+        excl_layout = QHBoxLayout(excl_frame)
+        excl_layout.setContentsMargins(0, 0, 0, 0)
+        excl_layout.setSpacing(6)
+        excl_lbl = QLabel("Exclure motifs :")
+        excl_lbl.setStyleSheet(f"color: {Color.TEXT_MUTED}; background: transparent;")
+        self._exclude_pattern = QLineEdit("*.tmp,*.log,__pycache__")
+        self._exclude_pattern.setStyleSheet(self._input_style())
+        excl_layout.addWidget(excl_lbl)
+        excl_layout.addWidget(self._exclude_pattern, stretch=1)
+        card.add_row("", excl_frame)
+
+        # Boutons d'action
+        actions = QFrame()
+        actions.setStyleSheet("background: transparent;")
+        act_layout = QHBoxLayout(actions)
+        act_layout.setContentsMargins(0, 0, 0, 0)
+        act_layout.setSpacing(8)
+
+        scan_btn = QPushButton("🔍 Analyser maintenant")
+        scan_btn.setStyleSheet(self._btn_style())
+        scan_btn.clicked.connect(self._on_scan_now)
+        act_layout.addWidget(scan_btn)
+
+        reindex_btn = QPushButton("🔄 Réindexer tout")
+        reindex_btn.setStyleSheet(self._btn_style())
+        reindex_btn.clicked.connect(self._on_reindex_all)
+        act_layout.addWidget(reindex_btn)
+
+        reset_idx_btn = QPushButton("🗑️ Vider l'index")
+        reset_idx_btn.setStyleSheet(self._btn_danger_style())
+        reset_idx_btn.clicked.connect(self._on_reset_index)
+        act_layout.addWidget(reset_idx_btn)
+
+        card.add_row("", actions)
+
+        cl = self._content_layout
+        cl.addWidget(card)
+
+    def _on_scan_now(self):
+        """Lance une analyse des dossiers cochés (en arrière-plan)."""
+        dirs = [cb.text() for cb in self._index_checks if cb.isChecked()]
+        if not dirs:
+            self._set_status("❌ Aucun dossier sélectionné")
+            return
+        self._set_status("🔍 Indexation lancée en arrière-plan...")
+        # L'indexation asynchrone continue via IngestionEngine.auto_index_loop
+
+    def _on_reindex_all(self):
+        """Vide l'index existant et relance une analyse complète."""
+        from src.ingestion import reset_index
+        reset_index()
+        self._set_status("🔄 Index réinitialisé — redémarre NURU pour réindexer")
+
+    def _on_reset_index(self):
+        """Vide l'index sans relancer d'analyse."""
+        from src.ingestion import reset_index
+        reset_index()
+        self._set_status("🗑️ Index vidé — redémarre NURU")
+
+    def _set_status(self, msg: str):
+        """Affiche un message dans le footer."""
+        status = self.findChild(QLabel, "pref_status")
+        if status:
+            status.setText(msg)
+            QTimer.singleShot(5000, lambda: status.setText(""))
+
+    @staticmethod
+    def _btn_style():
+        return f"""
+            QPushButton {{
+                background: {Color.BG_SURFACE2}; color: {Color.TEXT_PRIMARY};
+                border: 1px solid {Color.BORDER}; border-radius: 6px;
+                padding: 6px 16px; font-size: 11pt;
+            }}
+            QPushButton:hover {{ background: {Color.CYAN_GLOW}; border-color: {Color.CYAN}; }}
+        """
+
+    @staticmethod
+    def _btn_danger_style():
+        return f"""
+            QPushButton {{
+                background: rgba(255,77,106,0.15); color: {Color.ROSE};
+                border: 1px solid rgba(255,77,106,0.3); border-radius: 6px;
+                padding: 6px 16px; font-size: 11pt;
+            }}
+            QPushButton:hover {{ background: rgba(255,77,106,0.25); }}
+        """
 
     def _build_storage(self):
         card = SectionCard("STOCKAGE & CHEMINS")

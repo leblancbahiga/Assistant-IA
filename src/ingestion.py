@@ -222,3 +222,21 @@ class IngestionEngine:
             
             logger.info("Cycle d'auto-indexation terminé. Prochain scan dans 1h.")
             await asyncio.sleep(3600) # 1 heure
+
+
+def reset_index():
+    """Vide l'index RAG existant (supprime les fichiers de base)."""
+    import sqlite3
+    db_paths = [
+        str(Path.home() / ".nuru" / "nuru_brain.db"),
+        str(Path.home() / ".nuru" / "rag_index.db"),
+        str(Path.home() / ".nuru" / "memory_v9.db"),
+    ]
+    for db in db_paths:
+        try:
+            if Path(db).exists():
+                os.remove(db)
+                logger.info(f"🗑️ Base supprimée: {db}")
+        except Exception as e:
+            logger.warning(f"⚠️ Impossible de supprimer {db}: {e}")
+    logger.info("Index RAG réinitialisé — redémarrage nécessaire")

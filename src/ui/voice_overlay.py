@@ -110,7 +110,8 @@ class VoiceOverlay(QWidget):
         super().__init__(parent)
         self._overlay_opacity = 1.0
         self._visible = False
-        self._timeout_seconds = 8
+        self._timeout_seconds = 60  # temps max d'une session vocale
+        self._silence_threshold = 4.0  # secondes de silence avant coupure
 
         # Fenêtre frameless
         self.setWindowFlags(
@@ -144,14 +145,30 @@ class VoiceOverlay(QWidget):
         self._hide_anim.setEasingCurve(QEasingCurve.InCubic)
         self._hide_anim.finished.connect(self._on_hidden)
 
-        # Timeout 8s
+        # Timeout session max 60s
         self._timeout_timer = QTimer(self)
         self._timeout_timer.setSingleShot(True)
         self._timeout_timer.setInterval(self._timeout_seconds * 1000)
-        self._timeout_timer.timeout.connect(self.hide_overlay)
+        self._timeout_timer.timeout.connect(self._on_timeout)
+
+        # Timer silence 4s — se déclenche quand aucun audio utile n'est reçu
+        self._silence_timer = QTimer(self)
+        self._silence_timer.setSingleShot(True)
+        self._silence_timer.setInterval(int(self._silence_threshold * 1000))
+        self._silence_timer.timeout.connect(self._on_silence_timeout)
 
         # Layout
         self._build_ui()
+
+    def _on_timeout(self):
+        """Temps max de session atteint."""
+        self.update_state("⏱ Temps écoulé")
+        self.hide_overlay()
+
+    def _on_silence_timeout(self):
+        """Silence prolongé détecté — on coupe l'écoute."""
+        self.update_state("🔇 Silence — fermeture")
+        self.hide_overlay()
 
     def _build_ui(self):
         """Construit les composants overlay."""
@@ -211,15 +228,17 @@ class VoiceOverlay(QWidget):
     def show_overlay(self):
         """Apparition animée — scale + opacity 250ms."""
         self._timeout_timer.stop()
+        self._silence_timer.stop()
         self.show()
         self.raise_()
         self._show_anim.start()
         self._visible = True
-        self._reset_timeout()
+        self._timeout_timer.start()  # session max 60s
 
     def hide_overlay(self):
         """Disparition animée."""
         self._timeout_timer.stop()
+        self._silence_timer.stop()
         if not self._visible:
             return
         self._hide_anim.start()
@@ -227,21 +246,28 @@ class VoiceOverlay(QWidget):
     def _on_hidden(self):
         self.hide()
         self._visible = False
+        self._timeout_timer.stop()
+        self._silence_timer.stop()
         self.closed.emit()
 
     def update_transcript(self, text: str):
-        """Met à jour la transcription temps réel."""
+        """Met à jour la transcription temps réel.
+        
+        Si le texte est non-vide (parole détectée), on réarme
+        le timer silence. Si vide, on le laisse courir.
+        """
         self._transcript.setText(text)
-        self._reset_timeout()
+        if text.strip():
+            self._reset_silence_timer()
 
     def update_state(self, state_label: str):
         """Met à jour la StatusPill."""
         self._status_pill.setText(state_label)
 
-    def _reset_timeout(self):
-        """Réinitialise le timeout 8s."""
-        self._timeout_timer.stop()
-        self._timeout_timer.start()
+    def _reset_silence_timer(self):
+        """Réinitialise le timer silence 4s (parole détectée)."""
+        self._silence_timer.stop()
+        self._silence_timer.start()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
