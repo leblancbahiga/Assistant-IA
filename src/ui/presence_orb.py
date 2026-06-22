@@ -4,7 +4,7 @@ NURU V12 — NuruPresenceOrb (Z.ai design exact).
 Cœur visuel de l'interface. Sphere cyan translucide avec halo radial doux
 et GlowRing (anneau lumineux concentrique).
 
-7 états : idle → listening → thinking → respond → speaking → acting → error
+6 états Z.ai : idle → listening → thinking → speaking → acting → error
 
 Contrainte M1 8 Go : QPainter only, pas de QGraphicsBlurEffect,
 pas de 3D, CPU < 5% par animation, single-level shadows.
@@ -27,7 +27,6 @@ class OrbState(str, Enum):
     IDLE = "idle"
     LISTENING = "listening"
     THINKING = "thinking"
-    RESPOND = "respond"
     SPEAKING = "speaking"
     ACTING = "acting"
     ERROR = "error"
@@ -127,7 +126,6 @@ class NuruPresenceOrb(QWidget):
             OrbState.ACTING: self._apply_acting,
             OrbState.ERROR: self._apply_error,
             OrbState.LISTENING: self._apply_listening,
-            OrbState.RESPOND: self._apply_respond,
             OrbState.SPEAKING: self._apply_speaking,
         }.get(new_state, self._apply_idle)
 
@@ -152,18 +150,11 @@ class NuruPresenceOrb(QWidget):
         self._pulse_anim.start()
 
     def _apply_thinking(self):
-        """Halo rotatif 3s + léger pulse."""
+        """Halo rotatif 8s + léger pulse (Z.ai doc: spin 8s)."""
         self._halo_anim.setDuration(AnimDuration.ORB_HALO_SPIN)
         self._halo_anim.start()
         self._pulse_anim.setDuration(AnimDuration.ORB_PULSE)
         self._pulse_anim.setStartValue(0.92)
-        self._pulse_anim.setEndValue(1.0)
-        self._pulse_anim.start()
-
-    def _apply_respond(self):
-        """Pulse accéléré 1.5s."""
-        self._pulse_anim.setDuration(AnimDuration.ORB_PULSE_ACCEL)
-        self._pulse_anim.setStartValue(0.88)
         self._pulse_anim.setEndValue(1.0)
         self._pulse_anim.start()
 

@@ -26,7 +26,7 @@ from PySide6.QtCore import Qt, QTimer, QPointF, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QPainter, QColor, QRadialGradient, QPen, QFont, QFontDatabase
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QApplication
 
-from src.ui.tokens import Color, Typography, Radius, WidgetSizes, AnimDuration
+from src.ui.tokens import Color, Typography, Radius, WindowSizes, AnimDuration, Spacing
 
 logger = logging.getLogger(__name__)
 
@@ -122,8 +122,8 @@ class VoiceOverlay(QWidget):
         screen = QApplication.primaryScreen()
         if screen:
             geo = screen.availableGeometry()
-            w = int(geo.width() * WidgetSizes.OVERLAY_WIDTH_PCT)
-            h = int(geo.height() * WidgetSizes.OVERLAY_HEIGHT_PCT)
+            w = int(geo.width() * WindowSizes.OVERLAY_WIDTH_PCT)
+            h = int(geo.height() * WindowSizes.OVERLAY_HEIGHT_PCT)
             self.setFixedSize(w, h)
             # Centrer
             x = geo.x() + (geo.width() - w) // 2
@@ -158,7 +158,7 @@ class VoiceOverlay(QWidget):
         # Fond
         self.setStyleSheet(f"""
             VoiceOverlay {{
-                background: rgba(7, 10, 16, 0.92);
+                background: {Color.BG_OVERLAY};
                 border-radius: {Radius.LARGE}px;
             }}
         """)
@@ -196,9 +196,9 @@ class VoiceOverlay(QWidget):
         self._status_pill.setStyleSheet(f"""
             QLabel {{
                 color: {Color.CYAN};
-                font-size: {Typography.SIZE_STATUS}px;
+                font-size: {Typography.SIZE_CAPTION}px;
                 font-family: {Typography.FAMILY_CODE};
-                background: rgba(0, 212, 255, 0.15);
+                background: {Color.CYAN_GLOW};
                 border: 1px solid {Color.BORDER};
                 border-radius: {Radius.SMALL}px;
                 padding: 6px 16px;

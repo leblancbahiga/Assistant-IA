@@ -1,309 +1,233 @@
 """
-NURU V12 — NuruWindow (Z.ai design).
+NURU V12 — NuruWindow (Z.ai design exact — document concept).
 
-Conteneur principal sombre, coins arrondis, routeur d'événements.
-Remplace l'ancien CyberDashboard 3 colonnes.
+QMainWindow minimal — pas de cockpit.
 
-Composants :
-  - NuruPresenceOrb (120px) — cœur visuel en haut à droite
-  - ConversationSurface — zone de chat centrale
-  - NuruInputBar — barre de saisie en bas
-  - Raccourcis clavier V12
+Z.ai doc :
+  - resize(720, 860), minimumSize(480, 600)
+  - Frameless (WA_TranslucentBackground)
+  - PresenceOrb (120px) en haut
+  - ConversationSurface (bulles chat) au centre
+  - Input bar + micro en bas
+  - ContextStrip optionnel
+
+Trois modes : chat (défaut) | voice | action
 """
 
 import logging
 import os
-import sys
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QShortcut, QKeySequence, QIcon, QAction
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation
+from PySide6.QtGui import QAction, QKeySequence, QShortcut, QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFrame,
-    QLabel, QLineEdit, QPushButton, QApplication, QMenu, QSystemTrayIcon,
-    QSizePolicy, QSpacerItem,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QLineEdit, QPushButton, QScrollArea, QSizePolicy, QApplication,
 )
 
-from src.ui.tokens import Color, Typography, Radius, Spacing, OrbSizes
+from src.ui.tokens import Color, Typography, Radius, Spacing, OrbSizes, AnimDuration, WindowSizes
 from src.ui.presence_orb import NuruPresenceOrb, OrbState
 from src.ui.conversation_surface import ConversationSurface
-from src.ui.floating_widget import NuruFloatingWidget
 
 logger = logging.getLogger(__name__)
 
-# ── Chemin assets ──
-ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 
-
-class NuruInputBar(QFrame):
-    """Barre de saisie V12 — sombre, arrondie, avec bouton d'envoi."""
-
-    message_submitted = Signal(str)
+class NuruInputBar(QWidget):
+    """Barre de saisie Z.ai : input + micro secondaire."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(56)
+        self.setFixedHeight(52)
         self.setStyleSheet(f"""
-            NuruInputBar {{
-                background: {Color.BG_SURFACE};
-                border-radius: {Radius.MEDIUM}px;
-                border: 1px solid {Color.BORDER};
-                margin: {Spacing.SM}px {Spacing.MD}px;
-            }}
+            background: transparent;
         """)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(Spacing.MD, Spacing.SM, Spacing.SM, Spacing.SM)
+        layout.setContentsMargins(Spacing.MD, 0, Spacing.MD, 0)
         layout.setSpacing(Spacing.SM)
 
-        # Champ de saisie
         self._input = QLineEdit()
         self._input.setPlaceholderText("Message NURU…")
         self._input.setStyleSheet(f"""
             QLineEdit {{
-                background: transparent;
-                border: none;
+                background: {Color.BG_ELEVATED};
                 color: {Color.TEXT_PRIMARY};
-                font-size: {Typography.SIZE_BODY}px;
+                border: 1px solid {Color.BORDER};
+                border-radius: {Radius.MEDIUM}px;
+                padding: 10px 14px;
+                font-size: {Typography.SIZE_BODY}pt;
                 font-family: {Typography.FAMILY_BODY};
-                padding: {Spacing.XS}px 0;
                 selection-background-color: {Color.CYAN}40;
             }}
-            QLineEdit:focus {{ outline: none; }}
-        """)
-        self._input.returnPressed.connect(self._submit)
-        layout.addWidget(self._input)
-
-        # Bouton envoi
-        self._send_btn = QPushButton("→")
-        self._send_btn.setFixedSize(36, 36)
-        self._send_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {Color.CYAN};
-                color: #FFFFFF;
-                border: none;
-                border-radius: 18px;
-                font-size: 16px;
-                font-weight: bold;
+            QLineEdit:focus {{
+                border-color: {Color.CYAN};
             }}
-            QPushButton:hover {{ background: {Color.CYAN_LIGHT}; }}
-            QPushButton:pressed {{ background: {Color.CYAN_DIM}; }}
         """)
-        self._send_btn.clicked.connect(self._submit)
-        layout.addWidget(self._send_btn)
+        layout.addWidget(self._input, stretch=1)
 
-    def _submit(self):
-        text = self._input.text().strip()
-        if text:
-            self.message_submitted.emit(text)
-            self._input.clear()
+        self._mic = QPushButton("🎤")
+        self._mic.setFixedSize(38, 38)
+        self._mic.setToolTip("Hey NURU — mode vocal")
+        self._mic.setStyleSheet(f"""
+            QPushButton {{
+                background: {Color.BG_ELEVATED};
+                color: {Color.TEXT_SECONDARY};
+                border: 1px solid {Color.BORDER};
+                border-radius: 19px;
+                font-size: 16px;
+            }}
+            QPushButton:hover {{
+                background: {Color.CYAN_GLOW};
+                border-color: {Color.CYAN};
+                color: {Color.CYAN};
+            }}
+        """)
+        layout.addWidget(self._mic)
 
-    def focus_input(self):
-        self._input.setFocus()
+    @property
+    def input(self) -> QLineEdit:
+        return self._input
+
+    @property
+    def mic_button(self) -> QPushButton:
+        return self._mic
 
 
 class NuruWindow(QMainWindow):
     """
-    Fenêtre principale V12 — sombre, coins arrondis, Orb en haut.
+    Fenêtre principale NURU V12 (Z.ai).
 
-    Remplace l'ancien CyberDashboard.
+    Architecture :
+      - QMainWindow 720×860, frameless (WA_TranslucentBackground)
+      - PresenceOrb (120px) en haut — point focal visuel
+      - ConversationSurface (bulles) — zone centrale
+      - NuruInputBar (saisie + micro) — bas
+      - TrayIcon intégré
+      - Communication via EventBus (signaux/slots)
     """
 
-    def __init__(self, event_bus=None):
+    def __init__(self):
         super().__init__()
-        self._event_bus = event_bus
-        self._floating_widget = None
+        self._current_mode = "chat"  # chat | voice | action
+
         self._setup_window()
         self._build_ui()
-        self._setup_shortcuts()
-        self._setup_system_tray()
-        self._setup_floating_widget()
 
-    # ── Config fenêtre ──────────────────────────────────────────────
+    # ── Fenêtre ──
 
     def _setup_window(self):
-        self.setWindowTitle("NURU V12")
-        self.setMinimumSize(800, 600)
-        self.resize(1100, 750)
+        """Z.ai : resize(720, 860), WA_TranslucentBackground."""
+        self.setWindowTitle("NURU")
+        self.resize(WindowSizes.WINDOW_WIDTH, WindowSizes.WINDOW_HEIGHT)
+        self.setMinimumSize(WindowSizes.WINDOW_MIN_WIDTH, WindowSizes.WINDOW_MIN_HEIGHT)
+        self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # Style global
+        # Coins arrondis via mask (Z.ai: coins arrondis via QPainter)
+        # Utilisation de stylesheet pour le fond
         self.setStyleSheet(f"""
-            QMainWindow {{
+            NuruWindow {{
                 background: {Color.BG_DEEP};
-            }}
-            QWidget {{
-                font-family: {Typography.FAMILY_BODY};
+                border-radius: {Radius.LARGE}px;
             }}
         """)
 
-        # Logo dans la barre de titre (si assets existent)
-        icon_path = os.path.join(ASSETS_DIR, "nuru_logo_v5.png")
-        if os.path.exists(icon_path):
-            self.setWindowIcon(QIcon(icon_path))
-
-    # ── UI ──────────────────────────────────────────────────────────
+    # ── UI ──
 
     def _build_ui(self):
         central = QWidget()
-        central.setStyleSheet(f"background: {Color.BG_DEEP};")
-        main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(Spacing.LG, Spacing.LG, Spacing.LG, Spacing.SM)
-        main_layout.setSpacing(Spacing.MD)
-
-        # ── Top bar (titre + Orb) ──
-        top_bar = QWidget()
-        top_bar.setStyleSheet("background: transparent;")
-        top_layout = QHBoxLayout(top_bar)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Titre / wordmark
-        wordmark_path = os.path.join(ASSETS_DIR, "nuru_logo_v5_wordmark.png")
-        if os.path.exists(wordmark_path):
-            title_label = QLabel()
-            pixmap = __import__('PySide6.QtGui', fromlist=['QPixmap']).QPixmap(wordmark_path)
-            title_label.setPixmap(pixmap.scaledToWidth(160, __import__('PySide6.QtCore', fromlist=['Qt']).Qt.SmoothTransformation))
-        else:
-            title_label = QLabel("NURU")
-            title_label.setStyleSheet(f"""
-                color: {Color.TEXT_PRIMARY};
-                font-size: {Typography.SIZE_TITLE}px;
-                font-weight: {Typography.WEIGHT_BOLD};
-            """)
-        top_layout.addWidget(title_label)
-        top_layout.addStretch()
-
-        # PresenceOrb
-        self._orb = NuruPresenceOrb(orb_size=OrbSizes.WINDOW)
-        top_layout.addWidget(self._orb)
-        main_layout.addWidget(top_bar)
-
-        # ── Zone de séparation subtile ──
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet(f"border: none; background: {Color.BORDER}; max-height: 1px;")
-        main_layout.addWidget(separator)
-
-        # ── Conversation ──
-        self._conversation = ConversationSurface()
-        main_layout.addWidget(self._conversation, stretch=1)
-
-        # ── Barre de saisie ──
-        self._input_bar = NuruInputBar()
-        self._input_bar.message_submitted.connect(self._on_user_message)
-        main_layout.addWidget(self._input_bar)
-
+        central.setStyleSheet(f"""
+            background: {Color.BG_DEEP};
+            border-radius: {Radius.LARGE}px;
+        """)
         self.setCentralWidget(central)
 
-        # Welcome message
-        self._conversation.add_message(
-            "👋 Bonjour, je suis **NURU V12**. Comment puis-je t'aider aujourd'hui ?\n\n"
-            "Utilise *⌥␣* pour le mode vocal, *⌘N* pour une nouvelle conversation.",
-            is_user=False
-        )
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(Spacing.LG, Spacing.LG, Spacing.LG, Spacing.MD)
+        layout.setSpacing(Spacing.SM)
 
-    # ── Raccourcis clavier ──────────────────────────────────────────
+        # ── PresenceOrb ──
+        self._orb = NuruPresenceOrb(orb_size=OrbSizes.WINDOW)
+        orb_container = QWidget()
+        orb_container.setStyleSheet("background: transparent;")
+        orb_layout = QHBoxLayout(orb_container)
+        orb_layout.setContentsMargins(0, 0, 0, 0)
+        orb_layout.addStretch()
+        orb_layout.addWidget(self._orb)
+        orb_layout.addStretch()
+        layout.addWidget(orb_container)
 
-    def _setup_shortcuts(self):
-        # ⌘N — Nouvelle conversation
-        self._shortcut_new = QShortcut(QKeySequence("Ctrl+N"), self)
-        self._shortcut_new.activated.connect(self._new_conversation)
+        # ── ConversationSurface ──
+        self._conversation = ConversationSurface()
+        self._conversation.setStyleSheet(f"""
+            background: transparent;
+        """)
+        layout.addWidget(self._conversation, stretch=1)
 
-        # ⎋ — Fermer / reset
-        self._shortcut_escape = QShortcut(QKeySequence("Escape"), self)
-        self._shortcut_escape.activated.connect(self._on_escape)
+        # Separator discret
+        sep = QWidget()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background: {Color.BORDER};")
+        layout.addWidget(sep)
 
-    # ── Floating widget ───────────────────────────────────────────
+        # ── Input Bar ──
+        self._input_bar = NuruInputBar()
+        self._input_bar.input.returnPressed.connect(self._on_send)
+        self._input_bar.mic_button.clicked.connect(self._on_mic_click)
+        layout.addWidget(self._input_bar)
 
-    def _setup_floating_widget(self):
-        """Crée et affiche le widget flottant."""
-        self._floating_widget = NuruFloatingWidget()
-        # Sync Orb state avec le widget
-        self._orb.state_changed.connect(self._on_orb_state_changed)
-        # Position : coin bas-droit
-        screen = QApplication.primaryScreen()
-        if screen:
-            geometry = screen.availableGeometry()
-            x = geometry.right() - 180
-            y = geometry.bottom() - 180
-            self._floating_widget.move(x, y)
-        self._floating_widget.show()
+    # ── Actions ──
 
-    # ── System tray ─────────────────────────────────────────────────
+    def _on_send(self):
+        text = self._input_bar.input.text().strip()
+        if not text:
+            return
+        self._input_bar.input.clear()
+        # Ajouter bulle utilisateur
+        self._conversation.add_message(f"**Vous** : {text}", is_user=True)
+        # Simuler réponse
+        QTimer.singleShot(500, lambda: self._add_response(f"Reçu : {text}"))
 
-    def _setup_system_tray(self):
-        self._tray = QSystemTrayIcon(self)
-        icon_path = os.path.join(ASSETS_DIR, "nuru_logo_v5_dark.png")
-        if os.path.exists(icon_path):
-            self._tray.setIcon(QIcon(icon_path))
-        self._tray.setToolTip("NURU V12")
-
-        tray_menu = QMenu()
-        show_action = tray_menu.addAction("Afficher")
-        show_action.triggered.connect(self.show)
-        new_action = tray_menu.addAction("Nouvelle conversation")
-        new_action.triggered.connect(self._new_conversation)
-        self._toggle_widget_action = tray_menu.addAction("Masquer widget")
-        self._toggle_widget_action.triggered.connect(self._toggle_floating_widget)
-        tray_menu.addSeparator()
-        quit_action = tray_menu.addAction("Quitter")
-        quit_action.triggered.connect(QApplication.instance().quit)
-
-        self._tray.setContextMenu(tray_menu)
-        self._tray.activated.connect(self._on_tray_activated)
-        self._tray.show()
-
-    # ── Handlers ────────────────────────────────────────────────────
-
-    def _on_user_message(self, text: str):
-        """Message utilisateur envoyé via la barre de saisie."""
-        self._conversation.add_message(text, is_user=True)
-        self._orb.set_state(OrbState.THINKING)
-
-        # Réponse simulée pour test visuel
-        QTimer.singleShot(800, lambda: self._simulate_response(text))
-
-    def _simulate_response(self, user_text: str):
-        """Réponse de test — à remplacer par l'appel LLM réel."""
-        reply = f"Tu as dit : *{user_text}*\n\nJe suis la nouvelle interface **NURU V12** — design par Z.ai. Le cœur LLM n'est pas encore branché sur cette UI."
-        self._conversation.add_message(reply, is_user=False)
+    def _add_response(self, text: str):
+        self._conversation.add_message(f"NURU : {text}", is_user=False)
         self._orb.set_state(OrbState.IDLE)
 
-    def _new_conversation(self):
-        self._conversation.clear()
-        self._orb.set_state(OrbState.IDLE)
-        self._input_bar.focus_input()
+    def _on_mic_click(self):
+        """Déclenche le mode vocal."""
+        self._orb.set_state(OrbState.LISTENING)
+        # Le VoiceOverlay est géré par AmbientApp
+        logger.info("Micro cliqué — mode vocal")
 
-    def _on_escape(self):
-        self._orb.set_state(OrbState.IDLE)
+    # ── Orb API ──
 
-    def _toggle_floating_widget(self):
-        """Affiche/masque le widget flottant."""
-        if self._floating_widget and self._floating_widget.isVisible():
-            self._floating_widget.hide()
-            self._toggle_widget_action.setText("Afficher widget")
-        else:
-            if self._floating_widget:
-                self._floating_widget.show()
-            else:
-                self._setup_floating_widget()
-            self._toggle_widget_action.setText("Masquer widget")
-
-    def _on_tray_activated(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
-            self.show()
-            self.raise_()
-            self.activateWindow()
-
+    @property
     def orb(self) -> NuruPresenceOrb:
-        """Accès à l'Orb pour les événements externes."""
         return self._orb
 
-    def floating_widget(self):
-        return self._floating_widget
-
-    def _on_orb_state_changed(self, state):
-        """Sync l'état de l'Orb vers le widget flottant."""
-        if self._floating_widget:
-            self._floating_widget.set_orb_state(state)
-
+    @property
     def conversation(self) -> ConversationSurface:
         return self._conversation
+
+    @property
+    def input_bar(self) -> NuruInputBar:
+        return self._input_bar
+
+    # ── Modes ──
+
+    def set_mode(self, mode: str):
+        """chat | voice | action"""
+        self._current_mode = mode
+        if mode == "voice":
+            self.setWindowOpacity(0.3)  # Z.ai: fenêtre réduit son opacité à 0.3 en mode vocal
+        else:
+            self.setWindowOpacity(1.0)
+
+    # ── Render ──
+
+    def paintEvent(self, event):
+        """Coins arrondis via QPainter — Z.ai spec."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor(Color.BG_DEEP))
+        painter.setPen(Qt.NoPen)
+        r = Radius.LARGE
+        painter.drawRoundedRect(self.rect(), r, r)
+        painter.end()

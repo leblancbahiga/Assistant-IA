@@ -29,7 +29,7 @@ class BubbleWidget(QFrame):
         self._is_user = is_user
 
         # Style
-        bg = Color.CYAN + "25" if is_user else Color.BG_SURFACE
+        bg = Color.CYAN + "25" if is_user else Color.BG_ELEVATED
         text_color = "#FFFFFF" if is_user else Color.TEXT_PRIMARY
         radius = f"{Radius.LARGE}px"
         if is_user:
@@ -140,12 +140,12 @@ class ConversationSurface(QWidget):
                 border: none;
             }}
             QScrollBar:vertical {{
-                background: {Color.BG_SURFACE};
+                background: {Color.BG_ELEVATED};
                 width: 6px;
                 border-radius: 3px;
             }}
             QScrollBar::handle:vertical {{
-                background: {Color.TEXT_DISABLED};
+                background: {Color.TEXT_MUTED};
                 border-radius: 3px;
                 min-height: 20px;
             }}

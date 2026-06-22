@@ -149,10 +149,10 @@ class DynamicPromptBuilder:
             full_prompt += (
                 f"\n\n## INSTRUCTION STRICTE — RAG UNIQUEMENT\n"
                 f"Tu dois répondre UNIQUEMENT à partir du CONTEXTE ci-dessus "
-                f"(entre === DÉBUT DU CONTEXTE === et === FIN DU CONTEXTE ===).\n"
+                f"(entre <<DOC_CONTENT_START>> et <<DOC_CONTENT_END>>).\n"
                 f"- N'utilise PAS tes connaissances internes.\n"
-                f"- Si l'information n'est pas dans le contexte, dis "
-                f"\"Je ne trouve pas cette information dans les documents.\"\n"
+                f"- Si l'information n'est pas dans le contexte, dis \""
+                f"Je ne trouve pas cette information dans les documents.\"\n"
                 f"- N'invente RIEN. Ne complète PAS.\n"
                 f"- Cite la source avec [Source: nom_du_fichier].\n\n"
                 f"{safe_query}<|end|>\n<|assistant|>\n"

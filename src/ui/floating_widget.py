@@ -18,7 +18,7 @@ from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, Propert
 from PySide6.QtGui import QPainter, QColor, QLinearGradient, QPen, QEnterEvent, QMouseEvent, QFont
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QApplication
 
-from src.ui.tokens import Color, Typography, Radius, Spacing, OrbSizes, AnimDuration, WidgetSizes
+from src.ui.tokens import Color, Typography, Radius, Spacing, OrbSizes, AnimDuration, WindowSizes
 from src.ui.presence_orb import NuruPresenceOrb, OrbState
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class NuruFloatingWidget(QWidget):
             Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(WidgetSizes.FLOATING_WIDTH, WidgetSizes.FLOATING_HEIGHT)
+        self.setFixedSize(WindowSizes.FLOATING_SIZE, WindowSizes.FLOATING_SIZE)
 
         # Layout
         layout = QVBoxLayout(self)
