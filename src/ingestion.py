@@ -9,6 +9,7 @@ from docx import Document
 from src.config import config
 from src.rag_engine import RAGEngine
 from src.embedder import Embedder
+from src.document_extractor import extract_document, detect_doc_type
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,24 @@ class IngestionEngine:
                 except Exception:
                     pass  # WikiWriter est optionnel, ne pas casser l'ingestion
                 logger.info(f"✅ Ingestion OK: {os.path.basename(filepath)}")
+
+                # NURU V12+ : Extraction structurée LLM (doc_structured / cv_structured)
+                # Ne pas casser l'ingestion si l'extraction échoue
+                try:
+                    source_name = os.path.basename(filepath)
+                    if not self.rag.is_doc_indexed(source_name, file_hash):
+                        meta = await extract_document(text, filepath)
+                        if meta:
+                            self.rag.save_doc_meta(
+                                source=source_name,
+                                file_hash=file_hash,
+                                doc_type=meta.doc_type,
+                                json_data=meta.structured_json,
+                            )
+                            if meta.doc_type == "CV" and not self.rag.is_cv_indexed(source_name, file_hash):
+                                self.rag.save_cv(source_name, file_hash, meta.structured_json)
+                except Exception as e:
+                    logger.warning(f"⚠️ Extraction structurée échouée pour {os.path.basename(filepath)}: {e}")
 
         except asyncio.TimeoutError:
             logger.error(f"⏱ Timeout sur {filepath} (>30s).")
