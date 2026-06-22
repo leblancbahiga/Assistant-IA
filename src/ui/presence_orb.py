@@ -1,270 +1,266 @@
 """
-NURU V12 — NuruPresenceOrb (Z.ai design exact).
+NURU V12 — Presence Orb Component
+Design System DM-1 "Deep Cyan"
+PySide6 / QPainter / QPropertyAnimation
+Target: macOS M1 8GB
 
-Cœur visuel de l'interface. Sphere cyan translucide avec halo radial doux
-et GlowRing (anneau lumineux concentrique).
-
-6 états Z.ai : idle → listening → thinking → speaking → acting → error
-
-Contrainte M1 8 Go : QPainter only, pas de QGraphicsBlurEffect,
-pas de 3D, CPU < 5% par animation, single-level shadows.
+Specs extraites du mockup board V12:
+  - Background: #0A0E17, dot grid at 4% opacity
+  - Orb: Cyan sphere #00D4FF with radial gradient (white center → cyan edge)
+  - GlowRing: 3 concentric rings, 30%/15%/5% opacity, QPainter radialGradient
+  - Shadows: single-level only (M1 8GB constraint)
+  - Animations: QPropertyAnimation, max 5% CPU
 """
 
-import math
-import logging
-from enum import Enum
+from enum import Enum, auto
 
-from PySide6.QtCore import Qt, QTimer, QPointF, QRectF, QPropertyAnimation, QEasingCurve, Property, Signal
-from PySide6.QtGui import QPainter, QPainterPath, QColor, QRadialGradient, QPen, QFont
+from PySide6.QtCore import (
+    Qt, QRectF, QPointF, QTimer, QPropertyAnimation, Property, QEasingCurve, Signal
+)
+from PySide6.QtGui import (
+    QPainter, QColor, QRadialGradient, QPen, QBrush, QFont, QPainterPath, QPolygonF
+)
 from PySide6.QtWidgets import QWidget
 
-from src.ui.tokens import Color, OrbSizes, AnimDuration
 
-logger = logging.getLogger(__name__)
-
-
-class OrbState(str, Enum):
-    IDLE = "idle"
-    LISTENING = "listening"
-    THINKING = "thinking"
-    SPEAKING = "speaking"
-    ACTING = "acting"
-    ERROR = "error"
+class OrbState(Enum):
+    """États de l'orb — DM-1."""
+    IDLE = auto()
+    LISTENING = auto()
+    THINKING = auto()
+    SPEAKING = auto()
+    ACTING = auto()
+    ERROR = auto()
 
 
-class NuruPresenceOrb(QWidget):
-    """
-    PresenceOrb — Sphere cyan translucide avec GlowRing.
+# Couleurs DM-1 par état
+STATE_COLORS = {
+    OrbState.IDLE:     QColor(0, 212, 255),    # Cyan
+    OrbState.LISTENING: QColor(0, 229, 153),   # Green
+    OrbState.THINKING: QColor(255, 184, 0),    # Amber
+    OrbState.SPEAKING: QColor(0, 212, 255),    # Cyan
+    OrbState.ACTING:   QColor(0, 212, 255),    # Cyan
+    OrbState.ERROR:    QColor(255, 77, 106),   # Rose
+}
 
-    Tailles Z.ai :
-      - 120 px (ambiance)
-      - 200 px (VoiceOverlay)
-      - 80 px  (FloatingWidget)
+STATE_GLOW_ALPHA = {
+    OrbState.IDLE:      40,
+    OrbState.LISTENING: 80,
+    OrbState.THINKING:  30,
+    OrbState.SPEAKING:  60,
+    OrbState.ACTING:    60,
+    OrbState.ERROR:     90,
+}
 
-    Composants :
-      - GlowRing : anneau lumineux concentrique (QRadialGradient)
-      - Core : cercle central cyan translucide
-      - Halo externe : soft radial glow
-    """
+STATE_RING_COUNT = {
+    OrbState.IDLE:      1,
+    OrbState.LISTENING: 3,
+    OrbState.THINKING:  2,
+    OrbState.SPEAKING:  2,
+    OrbState.ACTING:    2,
+    OrbState.ERROR:     1,
+}
 
-    state_changed = Signal(OrbState)
 
-    # ── Propriétés animables ──
+class PresenceOrb(QWidget):
+    """Sphère cyan translucide avec halo radial doux et pulsing."""
 
-    def _get_pulse(self) -> float:
-        return self._pulse_value
+    state_changed = Signal(OrbState)  # émet OrbState au lieu de str
 
-    def _set_pulse(self, val: float):
-        self._pulse_value = max(0.80, min(1.0, val))
-        self.update()
-
-    pulse_value = Property(float, _get_pulse, _set_pulse)
-
-    def _get_halo_angle(self) -> float:
-        return self._halo_angle
-
-    def _set_halo_angle(self, val: float):
-        self._halo_angle = val % 360.0
-        self.update()
-
-    halo_angle = Property(float, _get_halo_angle, _set_halo_angle)
-
-    def __init__(self, parent=None, orb_size: int = OrbSizes.WINDOW):
+    def __init__(self, parent=None, orb_size: int = 120):
         super().__init__(parent)
+        if orb_size:
+            self.setFixedSize(orb_size, orb_size)
+        self._orb_opacity = 1.0
+        self._glow_opacity = 0.8
+        self._pulse_phase = 0.0
         self._state = OrbState.IDLE
-        self._orb_size = orb_size
-        self._pulse_value = 1.0
-        self._halo_angle = 0.0
-        self._progress = 0.0
-        self._opacity = 1.0
-        self._blink_visible = True
 
-        self.setFixedSize(orb_size, orb_size)
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        # Design tokens DM-1
+        self.COLOR_BG = QColor(10, 14, 23)        # #0A0E17
+        self.COLOR_SURFACE1 = QColor(21, 27, 38)  # #151B26
+        self.COLOR_CYAN = QColor(0, 212, 255)      # #00D4FF
+        self.COLOR_CYAN_DIM = QColor(0, 212, 255, 100)  # 40% alpha
+        self.COLOR_TEXT = QColor(232, 236, 241)    # #E8ECF1
+        self.COLOR_TEXT_DIM = QColor(139, 149, 165)  # #8B95A5
+        self.COLOR_GREEN = QColor(0, 229, 153)     # #00E599
+        self.COLOR_AMBER = QColor(255, 184, 0)     # #FFB800
+        self.COLOR_ROSE = QColor(255, 77, 106)     # #FF4D6A
+        self.COLOR_DOT_GRID = QColor(26, 34, 52, 12)  # #1A2234 at ~5%
 
-        # Animations
-        self._pulse_anim = QPropertyAnimation(self, b"pulse_value")
-        self._pulse_anim.setEasingCurve(QEasingCurve.InOutSine)
-        self._pulse_anim.setLoopCount(-1)
+        # Pulsing animation timer (low CPU: single timer for all animations)
+        self._pulse_timer = QTimer(self)
+        self._pulse_timer.timeout.connect(self._update_pulse)
+        self._pulse_timer.start(50)  # 20 FPS — enough for smooth pulsing, low CPU
 
-        self._halo_anim = QPropertyAnimation(self, b"halo_angle")
-        self._halo_anim.setDuration(AnimDuration.ORB_HALO_SPIN)
-        self._halo_anim.setStartValue(0.0)
-        self._halo_anim.setEndValue(360.0)
-        self._halo_anim.setEasingCurve(QEasingCurve.Linear)
-        self._halo_anim.setLoopCount(-1)
+        # Smooth state transition
+        self._target_orb_opacity = 1.0
+        self._target_glow_opacity = 0.8
 
-        self._blink_timer = QTimer(self)
-        self._blink_timer.setInterval(500)
-        self._blink_timer.timeout.connect(self._toggle_blink)
+        self.setState(OrbState.IDLE)
 
-        self._apply_idle()
-
-    # ── API ──
-
-    @property
-    def state(self) -> OrbState:
-        return self._state
-
-    def set_state(self, new_state: OrbState, progress: float = 0.0):
-        if self._state == new_state:
-            if new_state == OrbState.ACTING:
-                self._progress = progress
-                self.update()
-            return
-
-        self._stop_all()
-        self._state = new_state
-        self._progress = progress
-        self._opacity = 1.0
-        self._blink_visible = True
-        self._blink_timer.stop()
-
-        handler = {
-            OrbState.IDLE: self._apply_idle,
-            OrbState.THINKING: self._apply_thinking,
-            OrbState.ACTING: self._apply_acting,
-            OrbState.ERROR: self._apply_error,
-            OrbState.LISTENING: self._apply_listening,
-            OrbState.SPEAKING: self._apply_speaking,
-        }.get(new_state, self._apply_idle)
-
-        handler()
-        self.state_changed.emit(new_state)
-
-    def set_progress(self, pct: float):
-        self._progress = max(0.0, min(1.0, pct))
+    def set_state(self, state: OrbState):
+        """Nouvelle API DM-1 : set_state avec OrbState enum."""
+        self._state = state
+        self._apply_state_config()
+        self.state_changed.emit(state)
         self.update()
 
-    def set_orb_size(self, size: int):
-        self._orb_size = size
-        self.setFixedSize(size, size)
+    def setState(self, state: OrbState):
+        """Alias DM-1 (camelCase) — compatible."""
+        self.set_state(state)
 
-    # ── États ──
+    def setWindowState(self, state):
+        """API rétrocompatible : accepte str ou OrbState."""
+        if isinstance(state, str):
+            state_map = {
+                "idle": OrbState.IDLE,
+                "listening": OrbState.LISTENING,
+                "thinking": OrbState.THINKING,
+                "speaking": OrbState.SPEAKING,
+                "acting": OrbState.ACTING,
+                "error": OrbState.ERROR,
+            }
+            state = state_map.get(state, OrbState.IDLE)
+        self.set_state(state)
 
-    def _apply_idle(self):
-        """Respiration lente 0.85↔1.0 en 4s — Z.ai."""
-        self._pulse_anim.setDuration(AnimDuration.ORB_PULSE)
-        self._pulse_anim.setStartValue(0.85)
-        self._pulse_anim.setEndValue(1.0)
-        self._pulse_anim.start()
+    def _apply_state_config(self):
+        """Applique la configuration visuelle pour l'état actuel."""
+        state = self._state
+        state_configs = {
+            OrbState.IDLE:      {"orb": 1.0, "glow": 0.6},
+            OrbState.LISTENING: {"orb": 1.0, "glow": 1.0},
+            OrbState.THINKING:  {"orb": 0.7, "glow": 0.4},
+            OrbState.SPEAKING:  {"orb": 1.0, "glow": 0.9},
+            OrbState.ACTING:    {"orb": 1.0, "glow": 0.9},
+            OrbState.ERROR:     {"orb": 0.8, "glow": 0.7},
+        }
+        config = state_configs.get(state, state_configs[OrbState.IDLE])
+        self._target_orb_opacity = config["orb"]
+        self._target_glow_opacity = config["glow"]
+        self._ring_count = STATE_RING_COUNT.get(state, 1)
 
-    def _apply_thinking(self):
-        """Halo rotatif 8s + léger pulse (Z.ai doc: spin 8s)."""
-        self._halo_anim.setDuration(AnimDuration.ORB_HALO_SPIN)
-        self._halo_anim.start()
-        self._pulse_anim.setDuration(AnimDuration.ORB_PULSE)
-        self._pulse_anim.setStartValue(0.92)
-        self._pulse_anim.setEndValue(1.0)
-        self._pulse_anim.start()
+    def _update_pulse(self):
+        """Animation frame update — called at 20 FPS."""
+        self._pulse_phase += 0.03
+        if self._pulse_phase > 6.2832:
+            self._pulse_phase -= 6.2832
 
-    def _apply_listening(self):
-        """Pulse régulier + halo lent (simule 3 ondes)."""
-        self._halo_anim.setDuration(2000)
-        self._halo_anim.start()
-        self._pulse_anim.setDuration(AnimDuration.ORB_PULSE_ACCEL)
-        self._pulse_anim.setStartValue(0.90)
-        self._pulse_anim.setEndValue(1.0)
-        self._pulse_anim.start()
+        # Smooth interpolation toward targets
+        self._orb_opacity += (self._target_orb_opacity - self._orb_opacity) * 0.08
+        self._glow_opacity += (self._target_glow_opacity - self._glow_opacity) * 0.08
 
-    def _apply_speaking(self):
-        """Pulse rapide irrégulier."""
-        self._pulse_anim.setDuration(600)
-        self._pulse_anim.setStartValue(0.95)
-        self._pulse_anim.setEndValue(1.0)
-        self._pulse_anim.start()
-
-    def _apply_acting(self):
-        """Scale 0.85 + anneau progression."""
-        self._pulse_anim.setDuration(AnimDuration.ORB_PULSE)
-        self._pulse_anim.setStartValue(0.85)
-        self._pulse_anim.setEndValue(0.90)
-        self._pulse_anim.start()
-
-    def _apply_error(self):
-        self._blink_timer.start()
-
-    def _stop_all(self):
-        self._pulse_anim.stop()
-        self._halo_anim.stop()
-        self._blink_timer.stop()
-
-    def _toggle_blink(self):
-        self._blink_visible = not self._blink_visible
         self.update()
-
-    # ── Rendu QPainter — Z.ai exact ──
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        w, h = self.width(), self.height()
+        cx, cy = w / 2, h / 2
 
-        center = QPointF(self.width() / 2, self.height() / 2)
-        radius = self._orb_size / 2 * self._pulse_value
+        # ── Layer 7: Background #0A0E17 ──
+        painter.fillRect(self.rect(), self.COLOR_BG)
 
-        if self._state == OrbState.ERROR and not self._blink_visible:
-            painter.setOpacity(0.2)
+        # ── Layer 6: Dot Grid (4% opacity, spacing ~20px) ──
+        self._draw_dot_grid(painter, w, h)
 
-        painter.setOpacity(painter.opacity() * self._opacity)
+        # ── Layer 2: GlowRing — concentric rings ──
+        self._draw_glow_rings(painter, cx, cy)
 
-        r = radius
+        # ── Layer 1: PresenceOrb — main sphere ──
+        self._draw_orb(painter, cx, cy, min(w, h) * 0.28)
 
-        # ── 1. Halo externe (soft radial glow) ──
-        halo = QRadialGradient(center, r * 1.8)
-        halo.setColorAt(0.0, QColor(Color.CYAN + "25"))   # ~15% opacity
-        halo.setColorAt(0.5, QColor(Color.CYAN + "10"))
-        halo.setColorAt(1.0, QColor(Color.CYAN + "00"))
-        painter.setBrush(halo)
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(center, r * 1.8, r * 1.8)
-
-        # ── 2. GlowRing — anneau lumineux concentrique (Z.ai) ──
-        ring_r = r * 1.15
-        ring_pen = QPen(QColor(Color.CYAN + "30"), 2)
-        ring_pen.setStyle(Qt.SolidLine)
-        painter.setPen(ring_pen)
-        painter.setBrush(Qt.NoBrush)
-        painter.drawEllipse(center, ring_r, ring_r)
-
-        # ── 3. Core — cercle central ──
-        core_color = Color.ERROR if self._state == OrbState.ERROR else Color.CYAN
-        core_gradient = QRadialGradient(center, r)
-        core_gradient.setColorAt(0.0, QColor(Color.CYAN))
-        core_gradient.setColorAt(0.6, QColor(core_color))
-        core_gradient.setColorAt(1.0, QColor(core_color + "80"))
-        painter.setBrush(core_gradient)
-        painter.setPen(QPen(QColor(Color.TEXT_PRIMARY + "20"), 1))
-        painter.drawEllipse(center, r, r)
-
-        # ── 4. Halo rotatif (thinking / listening) ──
-        if self._state in (OrbState.THINKING, OrbState.LISTENING):
-            path = QPainterPath()
-            arc_r = r * 1.3
-            rect = QRectF(
-                center.x() - arc_r, center.y() - arc_r,
-                arc_r * 2, arc_r * 2,
-            )
-            path.arcMoveTo(rect, self._halo_angle)
-            path.arcTo(rect, self._halo_angle, 270)
-
-            pen = QPen(QColor(Color.CYAN + "50"), 2)
-            pen.setCapStyle(Qt.RoundCap)
-            painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
-            painter.drawPath(path)
-
-        # ── 5. Anneau progression (acting) ──
-        if self._state == OrbState.ACTING and self._progress > 0:
-            prog_r = r * 0.85
-            rect = QRectF(
-                center.x() - prog_r, center.y() - prog_r,
-                prog_r * 2, prog_r * 2,
-            )
-            angle = int(360 * self._progress * 16)
-            pen = QPen(QColor(Color.CYAN), 3)
-            pen.setCapStyle(Qt.RoundCap)
-            painter.setPen(pen)
-            painter.drawArc(rect, 90 * 16, -angle)
+        # ── Layer 0: NURU wordmark (via QLabel dans NuruWindow) ──
+        # Le texte QPainter est désactivé — le logo brand V3
+        # est affiché via QLabel dans NuruWindow._build_ui()
 
         painter.end()
+
+    def _draw_dot_grid(self, painter: QPainter, w: int, h: int):
+        """Grille de points subtile à ~4-5% opacité, espacement ~20px."""
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(self.COLOR_DOT_GRID)
+        spacing = 20
+        dot_r = 1
+        for x in range(spacing, w, spacing):
+            for y in range(spacing, h, spacing):
+                painter.drawEllipse(QPointF(x, y), dot_r, dot_r)
+
+    def _draw_glow_rings(self, painter: QPainter, cx: float, cy: float):
+        """3 anneaux concentriques avec glow décroissant (30%/15%/5%)."""
+        base_radius = min(self.width(), self.height()) * 0.32
+
+        ring_configs = [
+            {"radius_mult": 1.0,  "opacity": 0.30, "width": 2.0},
+            {"radius_mult": 1.15, "opacity": 0.15, "width": 1.5},
+            {"radius_mult": 1.30, "opacity": 0.05, "width": 1.0},
+        ]
+
+        for i, cfg in enumerate(ring_configs):
+            if i >= self._ring_count:
+                break
+
+            pulse = 0.02 * (1 + self._pulse_phase) * self._glow_opacity
+            radius = base_radius * cfg["radius_mult"] + pulse * base_radius
+            opacity = cfg["opacity"] * self._glow_opacity
+
+            color = QColor(0, 212, 255, int(255 * opacity))
+            pen = QPen(color, cfg["width"])
+            pen.setStyle(Qt.SolidLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(QPointF(cx, cy), radius, radius)
+
+        # Soft radial glow behind orb (single-level shadow, M1 friendly)
+        glow_radius = base_radius * 1.5
+        gradient = QRadialGradient(cx, cy, glow_radius)
+        glow_alpha = int(STATE_GLOW_ALPHA.get(self._state, 40) * self._glow_opacity)
+        gradient.setColorAt(0.0, QColor(0, 212, 255, glow_alpha))
+        gradient.setColorAt(0.5, QColor(0, 212, 255, glow_alpha // 3))
+        gradient.setColorAt(1.0, QColor(0, 212, 255, 0))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(gradient))
+        painter.drawEllipse(QPointF(cx, cy), glow_radius, glow_radius)
+
+    def _draw_orb(self, painter: QPainter, cx: float, cy: float, radius: float):
+        """Sphère cyan avec gradient radial (blanc center → cyan edge)."""
+        pulse = 1.0 + 0.03 * (1 + self._pulse_phase)
+        r = radius * pulse
+
+        # Main orb gradient
+        gradient = QRadialGradient(cx - r * 0.2, cy - r * 0.2, r * 1.2)
+        alpha = int(255 * self._orb_opacity)
+
+        # Center highlight (white-ish)
+        gradient.setColorAt(0.0, QColor(200, 240, 255, alpha))
+        gradient.setColorAt(0.3, QColor(0, 212, 255, alpha))
+        gradient.setColorAt(0.7, QColor(0, 160, 200, int(alpha * 0.8)))
+        gradient.setColorAt(1.0, QColor(0, 100, 140, int(alpha * 0.3)))
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(gradient))
+        painter.drawEllipse(QPointF(cx, cy), r, r)
+
+        # Specular highlight (top-left refraction)
+        highlight_r = r * 0.35
+        hx = cx - r * 0.25
+        hy = cy - r * 0.25
+        highlight = QRadialGradient(hx, hy, highlight_r)
+        highlight.setColorAt(0.0, QColor(255, 255, 255, int(120 * self._orb_opacity)))
+        highlight.setColorAt(1.0, QColor(255, 255, 255, 0))
+        painter.setBrush(QBrush(highlight))
+        painter.drawEllipse(QPointF(hx, hy), highlight_r, highlight_r)
+
+    def _draw_logo(self, painter: QPainter, cx: float, y: float):
+        """Texte 'NURU' centré sous l'orb en cyan."""
+        font = QFont("Inter", 14, QFont.Weight.Bold)
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 4)
+        painter.setFont(font)
+        painter.setPen(QColor(0, 212, 255, int(200 * self._orb_opacity)))
+        painter.drawText(QRectF(cx - 60, y, 120, 30), Qt.AlignCenter, "NURU")
+
+
+# ── Alias DM-1 : NuruPresenceOrb = PresenceOrb ──
+# Les imports du projet utilisent NuruPresenceOrb, mais le code V12
+# utilise PresenceOrb. Cet alias assure la compatibilité.
+NuruPresenceOrb = PresenceOrb

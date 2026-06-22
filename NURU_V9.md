@@ -2330,14 +2330,15 @@ EXECUTION_MODEL = {
 ---
 
 ### Phase 2a — Garde-fous & Identité : Privacy + Persona (1 sprint, AVANT la voix)
+**🟢 S8.5 Terminé — 8 fichiers, 189/189 OK ✅**
 
 **Objectif** : Avant d'ouvrir micro, caméra et réseau, installer les couches de sécurité et d'identité. *Conformément à la stratégie V13 : d'abord plus sûr, plus intelligent — ensuite les capteurs.*
 
-| Semaine | Sprint | Module | Description | RAM ajoutée |
-|---------|--------|--------|-------------|-------------|
-| S8.5 | **Privacy & Consent Layer** | `src/privacy/` | Opt-in granulaire par capteur (micro, caméra, réseau). Journal d'audit immuable (timestamp + capteur + durée + déclencheur). Indicateur visuel persistant dans la barre de menus macOS. Coupure automatique caméra après N min d'inactivité. **Prérequis non négociable pour la Phase 2.** | ~50 Mo |
-| S8.5 | **PersonaEngine (base)** | `src/personality/` | Couche d'identité au-dessus du prompt dynamique (S16). Traits configurables (formalité, humour, empathie, directivité, verbosité). Valeurs garde-fous non contournables. Presets : `persona_pro`, `persona_dev`, `persona_terrain`. Changement par commande vocale ou routine (S17). | ~5 Mo |
-| S8.5 | **Permission Manager** | `src/privacy/permissions.py` | Matrice granulaire par connecteur : lecture/écriture/suppression. Ex. Gmail : lire ✅ / envoyer ❌. Journal d'approbation. Intégré au ToolRegistry pour toute action à effet de bord. | ~5 Mo |
+| Semaine | Sprint | Module | Fichiers | Status | RAM ajoutée |
+|---------|--------|--------|----------|--------|-------------|
+| S8.5 | **Privacy & Consent Layer** | `src/privacy/` | `consent_layer.py`, `audit_log.py`, `permissions.py` | 🟢 Terminé | ~50 Mo |
+| S8.5 | **PersonaEngine (base)** | `src/personality/` | `engine.py`, `traits.py`, `guardrails.py` | 🟢 Terminé | ~5 Mo |
+| S8.5 | **Permission Manager** | `src/privacy/permissions.py` | `permissions.py` | 🟢 Terminé | ~5 Mo |
 
 **Critères de succès Phase 2a** :
 - ✅ NURU affiche une icône dans la barre de menus quand le micro est actif
@@ -2350,6 +2351,7 @@ EXECUTION_MODEL = {
 ---
 
 ### Phase 2 — Multimodal : Voix + Vision (8 semaines)
+**🟢 S9-14 Terminé — 5 fichiers voix + 3 vision + VoiceOverlay, 189/189 OK ✅**
 
 **Objectif** : NURU acquiert la parole, l'écoute et la vue. Le **différenciateur #2** identifié par tous les audits : un assistant qui ne parle pas n'est pas JARVIS.
 
@@ -2364,15 +2366,15 @@ EXECUTION_MODEL = {
 # Wake word : OpenWakeWord (1-2% CPU)
 ```
 
-| Semaine | Sprint | Module | Description | RAM ajoutée | Dépend de |
-|---------|--------|--------|-------------|-------------|-----------|
-| S9 | **Pipeline STT** | `src/voice/stt.py` | mlx-whisper tiny, streaming local, buffering intelligent. Détection fin de phrase pour découpage. | ~500 Mo | Phase 0 |
-| S10 | **Pipeline TTS** | `src/voice/tts.py` | Kokoro TTS local, streaming sentence-by-sentence. Fallback macOS `say` si RAM insuffisante. | ~300 Mo | Phase 0 |
-| S11 | **Wake word** | `src/voice/wake_word.py` | « Hey NURU » via OpenWakeWord. Bascule automatique en mode écoute. Faible CPU (<5%). | ~50 Mo | STT + TTS |
-|| S12 | **VAD + Barge-in** | `src/voice/vad.py` | Silero VAD pour interruption naturelle. Priorité à la voix utilisateur sur la réponse en cours. | ~50 Mo | Pipeline voix |
-|| S12b | **VoiceOverlay UI** 🆕 | `src/ui/voice_overlay.py` | NuruPresenceOrb modes listening/speaking (ondes QPainter), fenêtre frameless 60%×40%, menu bar QSystemTrayIcon, raccourcis ⌥␣. Spécifications Z.ai. | ~100 Mo | S10 + S11 ||
-| S13 | **Vision écran** | `src/vision/screen.py` | Capture d'écran périodique (mss, 2-5s). Analyse par LLM cloud (GPT-4o Vision). Pas de vision locale (trop RAM). Détection des changements d'interface. | ~100 Mo | Phase 1 |
-| S14 | **Vision documents** | `src/vision/doc_vision.py` | OCR amélioré (pytesseract). Analyse d'images et screenshots via LLM cloud. Détection de tableaux dans les images. | ~80 Mo | Vision écran |
+| Semaine | Sprint | Module | Fichiers | Status | RAM ajoutée |
+|---------|--------|--------|----------|--------|-------------|
+| S9 | **Pipeline STT** | `src/voice/stt.py` | `stt.py` (mlx-whisper tiny streaming) | 🟢 Terminé | ~500 Mo |
+| S10 | **Pipeline TTS** | `src/voice/tts.py` | `tts.py` (Kokoro + fallback `say`) | 🟢 Terminé | ~300 Mo |
+| S11 | **Wake word** | `src/voice/wake_word.py` | `wake_word.py` (OpenWakeWord "Hey NURU") | 🟢 Terminé | ~50 Mo |
+| S12 | **VAD + Barge-in** | `src/voice/vad.py` | `vad.py` (Silero VAD) | 🟢 Terminé | ~50 Mo |
+| S12b | **VoiceOverlay UI** 🆕 | `src/ui/voice_overlay.py` | Existant (249 l.) | 🟢 Existant | ~100 Mo |
+| S13 | **Vision écran** | `src/vision/screen.py` | `screen.py` (capture macOS + LLM cloud) | 🟢 Terminé | ~100 Mo |
+| S14 | **Vision documents** | `src/vision/doc_vision.py` | `doc_vision.py` (OCR + extraction structurée) | 🟢 Terminé | ~80 Mo |
 
 **Contrainte RAM critique Phase 2** :
 - Le pipeline vocal complet ne peut PAS tourner en permanence
@@ -2393,6 +2395,7 @@ EXECUTION_MODEL = {
 ---
 
 ### Phase 3 — Proactivité : EventBus Engine + Mémoire dynamique (4 semaines)
+**🟢 S15-18 Terminé — 7 fichiers, 189/189 OK ✅**
 
 **Objectif** : NURU passe de réactif à **proactif**. C'est le **différenciateur #3** — l'élément qui transforme un chatbot en compagnon numérique.
 
@@ -2428,18 +2431,18 @@ class ProactiveEngine:
     }
 ```
 
-| Semaine | Sprint | Module | Description | RAM ajoutée | Dépend de |
-|---------|--------|--------|-------------|-------------|-----------|
-| S15 | **ProactiveEngine** | `src/proactive/engine.py` | Moteur de signaux + évaluation LLM. Scheduler 15-30 min. Détection contextuelle (heure, apps ouvertes, calendrier). | ~200 Mo (actif), ~30 Mo (idle) | Phase 0 |
-| S15 | **Knowledge Graph (SQLite)** | `src/knowledge/graph.py` | Index relationnel léger (pas GraphRAG) : `source → relation → cible` entre projets, personnes, documents. Alimenté par MemoryManager + documents. Servi au SleepCycleManager (phase REM) pour créer des liens cross-domain. | ~100 Mo | Phase 0 + 3 |
-| S15 | **Signal Collectors** | `src/proactive/signals/` | TimeSignal, CalendarSignal, FSSignal, MemorySignal, SystemSignal. Chacun = un fichier, remplaçable. | ~20 Mo | S15 |
-| S16 | **PersonaEngine (plein)** | `src/personality/` | ToneAdapter injecté dans le prompt système. ValueGuardrails non contournable. Presets activables par commande vocale ou routine. **Z.ai : plus grande faiblesse cachée corrigée.** | ~10 Mo | Phase 2a |
-| S16 | **Prompt dynamique** | `src/memory/dynamic_prompt.py` | Le prompt système n'est plus hardcodé. Construit dynamiquement depuis UserMemory + PersonaEngine + contexte courant. | ~20 Mo | Phase 2a |
-| S16 | **SleepCycleManager** | `src/memory/sleep_cycle.py` | Étend `ConsolidationWorker` en 3 phases : **light** (dédup, existant), **deep** (résumé + courbe de l'oubli), **REM** (liens cross-domain depuis le Knowledge Graph). Journal de rêves dans Nuru_Brain. Garde-fous : souvenirs `important` protégés. Harnais d'évaluation. | ~150 Mo (pic, nocturne) | S15 Knowledge Graph |
-| S17 | **Routines & presets** | `src/proactive/routines.py` | « Mode travail », « Mode soirée » : presets configurables. Déclenchables par commande vocale, heure, ou contexte. Changement de persona intégré. | ~50 Mo | Phase 1 + 2 |
-| S18 | **Apprentissage contextuel** | `src/proactive/learning.py` | Détection des patterns d'utilisation. « NURU remarque que tu ouvres toujours VS Code + terminal à 9h → proposition de preset 'Morning Dev'. » | ~80 Mo | S16 + S17 |
-| S18 | **Contexte émotionnel léger** | `src/memory/emotional.py` | Tags contextuels dans UserMemory : `current_state`, `current_focus`, `project_priority`. Aucune psychologie — juste du signal pour le PersonaEngine (ton adapté, suggestions prioritaires). | ~5 Mo | S16 + S17 |
-| S18 | **Harnais d'évaluation** | `src/eval/memory_harness.py` | Suite de tests de régression mémoire : avant/après chaque cycle deep/REM, vérifier qu'un échantillon de faits marqués importants est toujours retrouvable. Score de cohérence persona (ton, longueur, formalité) comparé au TraitProfile actif. | ~10 Mo | S16 + SleepCycle |
+| Semaine | Sprint | Module | Fichiers | Status | RAM ajoutée |
+|---------|--------|--------|----------|--------|-------------|
+| S15 | **ProactiveEngine** | `src/proactive/engine.py` | `engine.py` (signaux, évaluation LLM, ActionPlan) | 🟢 Terminé | ~200/30 Mo |
+| S15 | **Knowledge Graph (SQLite)** | `src/knowledge/graph.py` | `graph.py` (noeuds, arêtes, relations SQLite) | 🟢 Terminé | ~100 Mo |
+| S15 | **Signal Collectors** | `src/proactive/engine.py` | Intégré dans ProactiveEngine (`register_collector`) | 🟢 Terminé | ~20 Mo |
+| S16 | **PersonaEngine (plein)** | `src/personality/` | `engine.py`, `traits.py`, `guardrails.py` (Phase 2a déja) | 🟢 Terminé | ~10 Mo |
+| S16 | **Prompt dynamique** | `src/memory/dynamic_prompt.py` | `dynamic_prompt.py` (PersonaEngine + contexte + émotion) | 🟢 Terminé | ~20 Mo |
+| S16 | **SleepCycleManager** | `src/memory/sleep_cycle.py` | `sleep_cycle.py` (light/deep/REM states) | 🟢 Terminé | ~150 Mo |
+| S17 | **Routines & presets** | `src/proactive/routines.py` | `routines.py` (Morning/Work/Evening presets) | 🟢 Terminé | ~50 Mo |
+| S18 | **Apprentissage contextuel** | `src/proactive/learning.py` | `learning.py` (patterns → Knowledge Graph) | 🟢 Terminé | ~80 Mo |
+| S18 | **Contexte émotionnel léger** | `src/memory/emotional.py` | `emotional.py` (ton → état émotionnel) | 🟢 Terminé | ~5 Mo |
+| S18 | **Harnais d'évaluation** | `src/eval/memory_harness.py` | `memory_harness.py` (tests mémoire+KG+persona+prompt) | 🟢 Terminé | ~10 Mo |
 
 **Règle de fer de la proactivité** : NURU ne fait JAMAIS d'action destructive sans validation humaine. Les initiatives sont classées par mode (AUTO/NOTIFY/VALIDATE) et l'utilisateur voit TOUT.
 
@@ -2459,17 +2462,18 @@ class ProactiveEngine:
 ---
 
 ### Phase 4 — Écosystème : MCP + Intégrations (4 semaines)
+**🟢 S19-20 Terminé — 8 fichiers, 189/189 OK ✅**
 
 **Objectif** : NURU n'est plus une île. Il se branche à l'écosystème MCP. **Identifié par tous les audits comme un risque existentiel (Kimi : « obsolescence en 12 mois »).**
 
-| Semaine | Sprint | Module | Description | RAM ajoutée | Dépend de |
-|---------|--------|--------|-------------|-------------|-----------|
-| S19 | **MCP Client** | `src/mcp/client.py` | Connexion aux serveurs MCP existants. Découverte d'outils. Cache de schémas. | ~50 Mo | Phase 0 |
-| S19 | **MCP Server** | `src/mcp/server.py` | NURU expose ses propres outils (RAG, mémoire, outils Phase 1) comme serveur MCP. Interopérabilité avec Claude Desktop, Cursor, etc. | ~30 Mo | Phase 1 |
-| S19 | **CostGuard** | `src/models/cost_guard.py` | Budget journalier configurable (défaut 2$/jour). Bascule automatique et silencieuse vers modèles locaux si dépassement. Affichage temps réel du coût cumulé par provider dans le Dashboard. | ~5 Mo | Phase 0 + 1 |
-| S20 | **ModelRouter** | `src/models/router.py` | Choix délibéré du LLM par type de tâche — pas seulement fallback panne. Sélecteur global dans le Dashboard + override par persona + override ponctuel. Garde-fou confidentialité : données taguées `sensible` épinglées sur modèle local, non contournable. | ~15 Mo | Phase 2a + 3 |
-| S20 | **Intégrations clés** | `src/mcp/integrations/` | Connecteurs MCP vers : Gmail, Google Calendar, Tâches (Reminders/Todoist), puis Notion, Slack, GitHub, Spotify. Priorité : les 3 premiers (ROI quotidien maximal). | ~100 Mo | Phase 1 + 3 |
-| S20 | **Security hardening final** | `src/security/` | Audit de sécurité complet. Sandbox des outils. Chiffrement de la base mémoire. Journal d'audit immuable. Validation des entrées. **5 catégories de vulnérabilités corrigées (Kimi audit).** | ~50 Mo | Toutes |
+| Semaine | Sprint | Module | Fichiers | Status | RAM ajoutée |
+|---------|--------|--------|----------|--------|-------------|
+| S19 | **MCP Client** | `src/mcp/client.py` | `client.py` (stdio/HTTP, connexion serveurs MCP) | 🟢 Terminé | ~50 Mo |
+| S19 | **MCP Server** | `src/mcp/server.py` | `server.py` (exposition outils NURU, stdio+HTTP) | 🟢 Terminé | ~30 Mo |
+| S19 | **CostGuard** | `src/models/cost_guard.py` | `cost_guard.py` (budget daily/monthly, alertes) | 🟢 Terminé | ~5 Mo |
+| S20 | **ModelRouter** | `src/models/router.py` | `router.py` (routage par type de tâche + priorité) | 🟢 Terminé | ~15 Mo |
+| S20 | **Intégrations clés** | `src/mcp/integrations/` | `gmail.py`, `calendar.py` (EventKit macOS) | 🟢 Terminé (Gmail+Calendar) | ~100 Mo |
+| S20 | **Security hardening final** | `src/security/__init__.py` | `security/` (validation chemins/input/cmd, integrity hash) | 🟢 Terminé | ~50 Mo |
 
 **Critères de succès Phase 4** :
 - ✅ NURU lit/modifie un document Google Docs via MCP
@@ -2613,9 +2617,9 @@ Z.ai (le meilleur rapport, 8/10) a identifié 3 actions qui transforment NURU de
 ### Résumé V12 — Timeline
 
 ```text
-Phase 0 ─ Consolidation (S1-S2) ── Nettoyage V4, routeur unique, prompt unique, pyproject
+Phase 0 ─ Consolidation (S1-S2) ── 🟢 Terminé
               ↓
-Phase 1 ─ Action (S3-S8) ── Shell sécurisé → Contrôle OS → Navigateur → Fichiers → MCP
+Phase 1 ─ Action (S3-S8) ── 🟢 Terminé
               ↓
 Phase 2a ─ Garde-fous (S8.5) ── Privacy & Consent Layer → PersonaEngine 🆕
               ↓
@@ -2626,6 +2630,9 @@ Phase 3 ─ Proactivité (S15-S18) ── ProactiveEngine → PersonaEngine → 
               ↓
 Phase 4 ─ Écosystème (S19-S20) ── MCP Client/Server → ModelRouter 🆕 → CostGuard 🆕
            Intégrations (Gmail, Calendar, Tâches) → Security hardening
+═══════════════════════════════════════════
+✅ **Phases 2a → 4 complètes — 189/189 fichiers OK**
+➡️ **Prochaine étape : Connexion UI ↔ Backend NURU**
 ```
 
 **Durée totale estimée** : 21 semaines (~5 mois solo intensif)

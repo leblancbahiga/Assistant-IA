@@ -1,177 +1,252 @@
 """
-NURU V12 — NuruFloatingWidget (Z.ai design exact).
+NURU V12 — Floating Widget
+Design System DM-1 "Deep Cyan"
 
-Widget flottant always-on-top, drag-and-drop.
-Taille Z.ai : 220×160 px — Frosted glass effect.
-
-Comportement :
-  - Qt.Tool | FramelessWindowHint | WindowStaysOnTopHint
-  - Opacité → 0.4 après 30s inactivité → 1.0 au hover
-  - Mini-Orb (80px) + label NURU
-  - Effet verre dépoli simulé (QPainter, pas de QGraphicsBlurEffect)
+Specs (extraites mockup board V12):
+  - 220x160px, Qt.Tool | FramelessWindowHint | WindowStaysOnTopHint
+  - Frosted glass effect (QPainter blur approximation)
+  - Bordure cyan 1px, coins arrondis 12px
+  - Contenu: mini orb + "NURU" + conversation preview
 """
 
-import logging
-import math
-
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, Property, QPointF, QRectF
-from PySide6.QtGui import QPainter, QColor, QLinearGradient, QPen, QEnterEvent, QMouseEvent, QFont
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QApplication
-
-from src.ui.tokens import Color, Typography, Radius, Spacing, OrbSizes, AnimDuration, WindowSizes
-from src.ui.presence_orb import NuruPresenceOrb, OrbState
-
-logger = logging.getLogger(__name__)
+from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QPoint, QTimer
+from PySide6.QtGui import (
+    QPainter, QColor, QFont, QPen, QBrush, QRadialGradient, QPainterPath, QCursor
+)
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGraphicsDropShadowEffect
+)
 
 
-class NuruFloatingWidget(QWidget):
-    """
-    FloatingWidget 220×160 — verre dépoli.
+class FloatingWidget(QWidget):
+    """Widget flottant 220x160px, frameless, frosted glass."""
 
-    Z.ai spec :
-      - 220×160 px
-      - Frosted glass effect (QPainter simulated)
-      - Qt.Tool | FramelessWindowHint | WindowStaysOnTopHint
-      - Opacity 0.4 after 30s → 1.0 on hover
-      - Drag-and-drop libre
-    """
+    message_requested = Signal(str)
+
+    # Design tokens DM-1
+    BG = QColor(10, 14, 23, 200)       # #0A0E17 @ 78% alpha
+    BORDER = QColor(0, 212, 255, 50)    # #00D4FF @ 20%
+    CYAN = QColor(0, 212, 255)           # #00D4FF
+    TEXT = QColor(232, 236, 241)         # #E8ECF1
+    TEXT_DIM = QColor(139, 149, 165)     # #8B95A5
+    SURFACE = QColor(21, 27, 38, 180)    # #151B26 @ 70%
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._drag_pos = None
-        self._inactive = False
-
         self.setWindowFlags(
-            Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+            Qt.WindowType.Tool |
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowStaysOnTopHint
         )
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(WindowSizes.FLOATING_SIZE, WindowSizes.FLOATING_SIZE)
-
-        # Layout
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(Spacing.MD, Spacing.SM, Spacing.MD, Spacing.SM)
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(Spacing.XS)
-
-        # Mini-Orb
-        self._orb = NuruPresenceOrb(orb_size=OrbSizes.FLOATING)
-        layout.addWidget(self._orb, alignment=Qt.AlignCenter)
-
-        # Label
-        label = QLabel("NURU")
-        label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet(f"""
-            color: {Color.TEXT_SECONDARY};
-            font-size: {Typography.SIZE_ORB_LABEL}px;
-            font-family: {Typography.FAMILY_BODY};
-            font-weight: {Typography.WEIGHT_MEDIUM};
-            background: transparent;
-            letter-spacing: 2px;
-        """)
-        layout.addWidget(label)
-
-        # Opacité animation
-        self._opacity_anim = QPropertyAnimation(self, b"windowOpacity")
-        self._opacity_anim.setDuration(500)
-        self._opacity_anim.setEasingCurve(QEasingCurve.OutCubic)
-
-        # Inactivity timer
-        self._inactivity_timer = QTimer(self)
-        self._inactivity_timer.setSingleShot(True)
-        self._inactivity_timer.setInterval(AnimDuration.FLOATING_FADE)
-        self._inactivity_timer.timeout.connect(self._fade_out)
-
-        self._reset_timer()
-
-    # ── API ──
-
-    @property
-    def orb(self) -> NuruPresenceOrb:
-        return self._orb
-
-    def set_orb_state(self, state: OrbState, progress: float = 0.0):
-        self._orb.set_state(state, progress)
-        self._wake()
-
-    def _wake(self):
-        if self._inactive:
-            self._inactive = False
-            self._opacity_anim.setStartValue(0.4)
-            self._opacity_anim.setEndValue(1.0)
-            self._opacity_anim.start()
-        self._reset_timer()
-
-    def _fade_out(self):
-        self._inactive = True
-        self._opacity_anim.setStartValue(1.0)
-        self._opacity_anim.setEndValue(0.4)
-        self._opacity_anim.start()
-
-    def _reset_timer(self):
-        self._inactivity_timer.stop()
-        self._inactivity_timer.start()
-
-    # ── Drag ──
-
-    def mousePressEvent(self, event: QMouseEvent):
-        if event.button() == Qt.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            self._wake()
-            event.accept()
-
-    def mouseMoveEvent(self, event: QMouseEvent):
-        if event.buttons() == Qt.LeftButton and self._drag_pos is not None:
-            self.move(event.globalPosition().toPoint() - self._drag_pos)
-            event.accept()
-
-    def mouseReleaseEvent(self, event: QMouseEvent):
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setFixedSize(260, 180)
         self._drag_pos = None
-        event.accept()
+        self._theme_colors = self._dark_colors()
+        self._is_dark = True
 
-    def mouseDoubleClickEvent(self, event: QMouseEvent):
-        """Double-clic → éveil (placeholder pour action)."""
-        self._wake()
-        super().mouseDoubleClickEvent(event)
+        self._setup_ui()
 
-    # ── Hover ──
+    # ── Palettes ──
 
-    def enterEvent(self, event: QEnterEvent):
-        self._wake()
-        super().enterEvent(event)
+    @staticmethod
+    def _dark_colors():
+        return {
+            "bg": QColor(10, 14, 23, 200),
+            "border": QColor(0, 212, 255, 50),
+            "cyan": QColor(0, 212, 255),
+            "text": QColor(232, 236, 241),
+            "text_dim": QColor(139, 149, 165),
+            "surface": QColor(21, 27, 38, 180),
+        }
 
-    def leaveEvent(self, event):
-        self._reset_timer()
-        super().leaveEvent(event)
+    @staticmethod
+    def _light_colors():
+        return {
+            "bg": QColor(240, 244, 248, 200),
+            "border": QColor(0, 153, 187, 40),
+            "cyan": QColor(0, 153, 187),
+            "text": QColor(26, 35, 50),
+            "text_dim": QColor(107, 122, 144),
+            "surface": QColor(255, 255, 255, 200),
+        }
 
-    # ── Frosted glass QPainter (pas de QGraphicsBlurEffect) ──
+    def apply_theme(self, theme: str):
+        """Met à jour les couleurs QPainter selon le thème."""
+        self._is_dark = theme == "dark"
+        self._theme_colors = self._dark_colors() if theme == "dark" else self._light_colors()
+        # Mettre à jour les styles QSS des QLabel
+        title_color = self._theme_colors["text"].name()
+        dim_color = self._theme_colors["text_dim"].name()
+        self._title.setStyleSheet(f"color: {title_color}; border: none; background: transparent;")
+        self._subtitle.setStyleSheet(f"color: {dim_color}; border: none; background: transparent;")
+        self._preview.setStyleSheet(
+            f"color: {dim_color}; border: none; background: transparent; padding: 4px 0;"
+        )
+        sep_color = self._theme_colors["border"].name()
+        self._sep.setStyleSheet(f"background: {sep_color}; border: none;")
+        self.update()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(6)
+
+        C = self._theme_colors
+        text_name = C["text"].name()
+        dim_name = C["text_dim"].name()
+        border_name = C["border"].name()
+
+        # Top row: mini orb + title
+        top_row = QHBoxLayout()
+        top_row.setSpacing(10)
+
+        self._mini_orb = MiniOrb(self)
+        self._mini_orb.setFixedSize(28, 28)
+        top_row.addWidget(self._mini_orb)
+
+        title_layout = QVBoxLayout()
+        title_layout.setSpacing(2)
+
+        self._title = QLabel("NURU")
+        self._title.setFont(QFont("Inter", 13, QFont.Weight.Bold))
+        self._title.setStyleSheet(f"color: {text_name}; border: none; background: transparent;")
+        title_layout.addWidget(self._title)
+
+        self._subtitle = QLabel("Assistant prêt")
+        self._subtitle.setFont(QFont("Inter", 10))
+        self._subtitle.setStyleSheet(f"color: {dim_name}; border: none; background: transparent;")
+        title_layout.addWidget(self._subtitle)
+
+        top_row.addLayout(title_layout)
+        top_row.addStretch()
+        layout.addLayout(top_row)
+
+        # Separator
+        self._sep = QWidget(self)
+        self._sep.setFixedHeight(1)
+        self._sep.setStyleSheet(f"background: {border_name}; border: none;")
+        layout.addWidget(self._sep)
+
+        # Conversation preview
+        self._preview = QLabel("Cliquez pour parler à NURU...")
+        self._preview.setFont(QFont("Inter", 10, QFont.Weight.Light))
+        self._preview.setStyleSheet(
+            f"color: {dim_name}; border: none; background: transparent; padding: 4px 0;"
+        )
+        self._preview.setWordWrap(True)
+        layout.addWidget(self._preview)
+
+        layout.addStretch()
+
+    def setStatus(self, text: str, color=None):
+        self._subtitle.setText(text)
+        if color:
+            self._subtitle.setStyleSheet(f"color: {color}; border: none; background: transparent;")
+        else:
+            dim = self._theme_colors["text_dim"].name()
+            self._subtitle.setStyleSheet(f"color: {dim}; border: none; background: transparent;")
+
+    def setPreview(self, text: str):
+        self._preview.setText(text)
+        text_color = self._theme_colors["text"].name()
+        self._preview.setStyleSheet(
+            f"color: {text_color}; border: none; background: transparent; padding: 4px 0;"
+        )
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.Antialiasing, True)
 
-        rect = self.rect().adjusted(2, 2, -2, -2)
-        r = Radius.LARGE
+        C = self._theme_colors
 
-        # Fond verre dépoli — gradient semi-transparent
-        gradient = QLinearGradient(QPointF(0, 0), QPointF(0, rect.height()))
-        gradient.setColorAt(0.0, QColor("rgba(13, 17, 23, 0.75)"))
-        gradient.setColorAt(0.5, QColor("rgba(13, 17, 23, 0.85)"))
-        gradient.setColorAt(1.0, QColor("rgba(13, 17, 23, 0.90)"))
-        painter.setBrush(gradient)
+        # Frosted glass background
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, self.width(), self.height()), 12, 12)
 
-        # Bordure cyan subtile
-        border = QPen(QColor(Color.BORDER))
-        border.setWidth(1)
-        painter.setPen(border)
-        painter.drawRoundedRect(rect, r, r)
-
-        # Reflet haut (glass shine)
-        shine_rect = QRectF(rect.x() + 8, rect.y() + 4, rect.width() - 16, rect.height() * 0.35)
-        shine = QLinearGradient(QPointF(0, shine_rect.top()), QPointF(0, shine_rect.bottom()))
-        shine.setColorAt(0.0, QColor("rgba(255, 255, 255, 0.06)"))
-        shine.setColorAt(1.0, QColor("rgba(255, 255, 255, 0.00)"))
-        painter.setBrush(shine)
+        # Fill with semi-transparent
         painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(shine_rect, r - 2, r - 2)
+        painter.setBrush(C["bg"])
+        painter.drawPath(path)
+
+        # Frosted glass overlay (lighter center)
+        glass = QRadialGradient(
+            self.width() / 2, self.height() / 2, self.width() * 0.6
+        )
+        if self._is_dark:
+            glass.setColorAt(0.0, QColor(30, 40, 55, 40))
+        else:
+            glass.setColorAt(0.0, QColor(255, 255, 255, 50))
+        glass.setColorAt(1.0, QColor(0, 0, 0, 0))
+        painter.setBrush(QBrush(glass))
+        painter.drawPath(path)
+
+        # Cyan border 1px
+        pen = QPen(C["border"], 1)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(path)
+
+        # Top-edge glow line (subtle accent highlight)
+        glow_color = QColor(C["cyan"])
+        glow_color.setAlpha(30)
+        painter.setPen(QPen(glow_color, 1))
+        painter.drawLine(12, 1, self.width() - 12, 1)
+
+        painter.end()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            self.message_requested.emit("widget_click")
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+
+
+# ── Alias DM-1 : NuruFloatingWidget = FloatingWidget ──
+NuruFloatingWidget = FloatingWidget
+
+
+class MiniOrb(QWidget):
+    """Mini version de l'orb pour le floating widget (28x28)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._pulse = 0.0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._animate)
+        self._timer.start(60)
+
+    def _animate(self):
+        self._pulse += 0.05
+        if self._pulse > 6.28:
+            self._pulse -= 6.28
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        cx, cy = 14, 14
+        r = 10 + 1.5 * (1 + self._pulse)
+
+        # Glow
+        glow = QRadialGradient(cx, cy, r + 4)
+        glow.setColorAt(0.0, QColor(0, 212, 255, 40))
+        glow.setColorAt(1.0, QColor(0, 212, 255, 0))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(glow))
+        painter.drawEllipse(QPointF(cx, cy), r + 4, r + 4)
+
+        # Orb
+        gradient = QRadialGradient(cx - 2, cy - 2, r)
+        gradient.setColorAt(0.0, QColor(200, 240, 255, 255))
+        gradient.setColorAt(0.4, QColor(0, 212, 255, 255))
+        gradient.setColorAt(1.0, QColor(0, 120, 160, 150))
+        painter.setBrush(QBrush(gradient))
+        painter.drawEllipse(QPointF(cx, cy), r, r)
 
         painter.end()

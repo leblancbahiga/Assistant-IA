@@ -5,6 +5,7 @@ cache_ttl_seconds: 300
 cloud_fallback: openrouter/deepseek/deepseek-v4-flash
 cloud_model: llama-3.3-70b-versatile
 cloud_provider: groq
+heavy_search_min_ram_mb: 1000
 hybrid_enabled: true
 hybrid_mode: cloud_first
 learning_enabled: true
@@ -16,6 +17,9 @@ rag_k: 5
 rag_max_context_tokens: 2000
 rag_score_fallback: 0.25
 rag_score_threshold: 0.3
+ram_critical_threshold_gb: 0.5
+ram_warning_threshold_gb: 1.0
+rerank_min_ram_mb: 800
 response_mode: hybrid
 session_window: 5
 stt_model: small
@@ -23,28 +27,3 @@ token_juice_enabled: true
 token_juice_max_chunk_chars: 2000
 tts_enabled: true
 tts_engine: piper
-
-# ── Seuils RAM (V10.3k — Option C, audit B-RAM) ─────────────────────────
-# Hardcodés historiquement (1500/2000 Mo + 2.0/1.0 Go), inadaptés à M1 8 Go
-# où la RAM réellement disponible après PySide6 + Python ≈ 1.1 Go.
-# Les défauts code (Config) sont calibrés pour 8 Go. Sur-ridez ici pour
-# machines plus grosses (16/32 Go → 2048/2400 Mo recommandé).
-#
-# rerank_min_ram_mb: RAM minimale en Mo pour activer le cross-encoder.
-#   Défaut code: 800. Sur 16+ Go: 2000.
-# heavy_search_min_ram_mb: RAM minimale pour grep + HyDE parallèles.
-#   Défaut code: 1000. Sur 16+ Go: 2400.
-# ram_warning_threshold_gb: seuil d'alerte RAM (logique dashboard).
-#   Défaut code: 1.0. Sur 16+ Go: 2.0.
-# ram_critical_threshold_gb: seuil de libération forcée (décharge reranker).
-#   Défaut code: 0.5. Sur 16+ Go: 1.0.
-#
-# Exemple pour un MacBook Pro 32 Go :
-#   rerank_min_ram_mb: 2400
-#   heavy_search_min_ram_mb: 3000
-#   ram_warning_threshold_gb: 2.0
-#   ram_critical_threshold_gb: 1.0
-rerank_min_ram_mb: 800
-heavy_search_min_ram_mb: 1000
-ram_warning_threshold_gb: 1.0
-ram_critical_threshold_gb: 0.5

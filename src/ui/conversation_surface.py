@@ -1,16 +1,16 @@
 """
-NURU V12 — ConversationSurface (Z.ai design).
+NURU V12 — ConversationSurface (DM-1 "Deep Cyan").
 
 Zone de chat avec bulles alignées :
-- Utilisateur : droite, fond accent cyan
+- Utilisateur : droite, fond accent cyan transparent
 - NURU : gauche, fond surface
 - Markdown supporté pour les réponses NURU
 """
 
 import logging
 
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QColor, QTextDocument, QAbstractTextDocumentLayout
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QLabel, QSizePolicy,
     QHBoxLayout, QFrame, QTextBrowser,
@@ -22,19 +22,20 @@ logger = logging.getLogger(__name__)
 
 
 class BubbleWidget(QFrame):
-    """Bulle de chat unique — arrondie, avec alignement selon l'expéditeur."""
+    """Bulle de chat — DM-1 : coins arrondis 12px, fond cyan ou surface."""
 
     def __init__(self, text: str, is_user: bool = False, parent=None):
         super().__init__(parent)
         self._is_user = is_user
 
-        # Style
-        bg = Color.CYAN + "25" if is_user else Color.BG_ELEVATED
-        text_color = "#FFFFFF" if is_user else Color.TEXT_PRIMARY
-        radius = f"{Radius.LARGE}px"
+        # DM-1 couleurs
         if is_user:
+            bg = "rgba(0, 212, 255, 0.10)"
+            text_color = Color.TEXT_PRIMARY
             radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.SMALL}px {Radius.LARGE}px"
         else:
+            bg = Color.BG_SURFACE1
+            text_color = Color.TEXT_PRIMARY
             radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.LARGE}px {Radius.SMALL}px"
 
         self.setStyleSheet(f"""
@@ -46,20 +47,19 @@ class BubbleWidget(QFrame):
         """)
         self.setMaximumWidth(600)
 
-        # Contenu
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.MD, Spacing.SM, Spacing.MD, Spacing.SM)
         layout.setSpacing(4)
 
         if is_user:
-            # Texte utilisateur simple
             label = QLabel(text)
             label.setWordWrap(True)
-            label.setStyleSheet(f"color: {text_color}; font-size: {Typography.SIZE_BODY}px;"
-                                f" font-family: {Typography.FAMILY_BODY}; background: transparent;")
+            label.setStyleSheet(
+                f"color: {text_color}; font-size: {Typography.SIZE_BODY}px;"
+                f" font-family: {Typography.FAMILY_BODY}; background: transparent;"
+            )
             layout.addWidget(label)
         else:
-            # Réponse NURU : markdown
             browser = QTextBrowser()
             browser.setHtml(self._md_to_html(text))
             browser.setOpenExternalLinks(True)
@@ -78,43 +78,36 @@ class BubbleWidget(QFrame):
             """)
             browser.document().setDocumentMargin(0)
             browser.setMinimumHeight(20)
-            # Ajuster hauteur au contenu
             doc = browser.document()
             doc.setTextWidth(browser.viewport().width() - 4)
             layout.addWidget(browser)
 
     def _md_to_html(self, md: str) -> str:
-        """Conversion markdown minimal en HTML pour QTextBrowser."""
+        """Conversion markdown minimal en HTML."""
         import re
         html = md
-        # Code blocks
         html = re.sub(
             r'```(\w*)\n(.*?)```',
             r'<pre style="background:#151B26;padding:8px;border-radius:6px;'
             r'font-family:JetBrains Mono;font-size:11px;overflow-x:auto;">\2</pre>',
             html, flags=re.DOTALL
         )
-        # Inline code
         html = re.sub(
             r'`([^`]+)`',
             r'<code style="background:#151B26;padding:1px 4px;border-radius:3px;'
             r'font-family:JetBrains Mono;font-size:11px;">\1</code>',
             html
         )
-        # Bold
         html = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', html)
-        # Italic
         html = re.sub(r'\*(.+?)\*', r'<i>\1</i>', html)
-        # Links
         html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2">\1</a>', html)
-        # Newlines
         html = html.replace('\n', '<br>')
         return html
 
 
 class ConversationSurface(QWidget):
     """
-    Zone de conversation scrollable.
+    Zone de conversation scrollable — DM-1.
 
     Alignement :
       - Messages utilisateur → droite
@@ -123,13 +116,12 @@ class ConversationSurface(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(f"background: transparent;")
+        self.setStyleSheet("background: transparent;")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.MD, Spacing.MD, Spacing.MD, Spacing.MD)
         layout.setSpacing(Spacing.SM)
 
-        # Scroll area
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -140,7 +132,7 @@ class ConversationSurface(QWidget):
                 border: none;
             }}
             QScrollBar:vertical {{
-                background: {Color.BG_ELEVATED};
+                background: {Color.BG_SURFACE1};
                 width: 6px;
                 border-radius: 3px;
             }}
@@ -154,7 +146,6 @@ class ConversationSurface(QWidget):
             }}
         """)
 
-        # Conteneur interne
         self._inner = QWidget()
         self._inner.setStyleSheet("background: transparent;")
         self._inner_layout = QVBoxLayout(self._inner)
@@ -166,8 +157,6 @@ class ConversationSurface(QWidget):
         layout.addWidget(self._scroll)
 
     def add_message(self, text: str, is_user: bool = False):
-        """Ajoute une bulle et scroll en bas."""
-        # Structure bulle alignée
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
 
@@ -180,18 +169,14 @@ class ConversationSurface(QWidget):
             row.addWidget(bubble)
             row.addStretch()
 
-        # Container pour le layout
         container = QWidget()
         container.setStyleSheet("background: transparent;")
         container.setLayout(row)
 
-        # Insérer avant le stretch
         self._inner_layout.insertWidget(
             self._inner_layout.count() - 1, container
         )
 
-        # Scroll en bas après rendu
-        QTimer = __import__('PySide6.QtCore', fromlist=['QTimer']).QTimer
         QTimer.singleShot(50, self._scroll_to_bottom)
 
     def _scroll_to_bottom(self):
@@ -199,8 +184,7 @@ class ConversationSurface(QWidget):
         scrollbar.setValue(scrollbar.maximum())
 
     def clear(self):
-        """Vide la conversation."""
-        while self._inner_layout.count() > 1:  # garder le stretch
+        while self._inner_layout.count() > 1:
             item = self._inner_layout.takeAt(0)
             if item and item.widget():
                 item.widget().deleteLater()

@@ -24,12 +24,14 @@ logger = logging.getLogger(__name__)
 
 def main():
     from PySide6.QtWidgets import QApplication
+    from PySide6.QtGui import QIcon
 
     logger.info("🚀 NURU V12 — Ambient Presence (Z.ai)")
 
     app = QApplication(sys.argv)
     app.setApplicationName("NURU")
     app.setOrganizationName("NURU")
+    app.setWindowIcon(QIcon("src/ui/assets/Gemini_Generated_Image_35cdt735cdt735cd_transparent.png"))
 
     # Palette globale
     palette = app.palette()

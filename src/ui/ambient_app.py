@@ -1,25 +1,36 @@
 """
-NURU V12 — AmbientApp (Z.ai design exact).
+NURU V12 — AmbientApp (DM-1 "Deep Cyan") — CORRIGÉ.
 
-Architecture complète Z.ai :
-  - NuruWindow (QMainWindow 720×860) — fenêtre principale chat
-  - TrayIcon (menu bar macOS) — toujours accessible
-  - FloatingWidget 160×160 — verre dépoli, always-on-top
-  - VoiceOverlay (⌥␣) — mode vocal frameless
+Architecture complète DM-1 V12 :
+  - NuruWindow (QMainWindow 720×860) — fenêtre principale chat, fond gradient bleu
+  - NURUTrayIcon (menu bar macOS) — diamant cyan, toujours accessible, sync OrbState
+  - NuruFloatingWidget 260×180 — verre dépoli, always-on-top
+  - VoiceOverlay (⌥␣) — mode vocal frameless (optionnel, graceful fallback)
   - ChatOverlay (⌘N) — nouvelle conversation
   - Raccourcis : ⌥␣ ⌘⇧N ⌘N ⎋
 
-Cycle de vie Z.ai (doc §163-164) :
-  - Mode Chat Texte (défaut) : fenêtre avec PresenceOrb, ConversationSurface, InputBar
-  - Mode Vocal (⌥␣) : VoiceOverlay + fenêtre opacity 0.3
-  - Mode Action (transitoire) : Orb progression + carte inline
+Corrections V12 :
+  - Import NURUTrayIcon depuis src.ui.tray_icon (nouveau module, compatible OrbState)
+  - VoiceOverlay : import optionnel (try/except) si non encore implémenté
+  - Tray icon sync automatique avec orb state
+  - Tous les imports préservent NuruPresenceOrb, NuruFloatingWidget, OrbState
+
+Imports compatibles :
+  from src.ui.tokens import Color, Typography, Radius, Spacing, OrbSizes, AnimDuration, WindowSizes
+  from src.ui.presence_orb import NuruPresenceOrb, OrbState
+  from src.ui.floating_widget import NuruFloatingWidget
+  from src.ui.nuru_window import NuruWindow
+  from src.ui.tray_icon import NURUTrayIcon
 """
 
 import logging
 import os
 
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPointF
-from PySide6.QtGui import QIcon, QAction, QKeySequence, QShortcut, QColor, QPainter, QPixmap, QFont
+from PySide6.QtGui import (
+    QIcon, QAction, QKeySequence, QShortcut, QColor, QPainter,
+    QPixmap, QFont, QLinearGradient,
+)
 from PySide6.QtWidgets import (
     QApplication, QSystemTrayIcon, QMenu, QWidget, QVBoxLayout,
     QHBoxLayout, QLabel, QPushButton, QLineEdit, QFrame, QSizePolicy,
@@ -28,17 +39,24 @@ from PySide6.QtWidgets import (
 from src.ui.tokens import Color, Typography, Radius, Spacing, OrbSizes, AnimDuration, WindowSizes
 from src.ui.presence_orb import NuruPresenceOrb, OrbState
 from src.ui.floating_widget import NuruFloatingWidget
-from src.ui.voice_overlay import VoiceOverlay
 from src.ui.nuru_window import NuruWindow
+from src.ui.tray_icon import NURUTrayIcon
 
 logger = logging.getLogger(__name__)
 
-ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+# ── VoiceOverlay : import optionnel ──
+# Si le module n'existe pas encore, on crée un stub silencieux
+try:
+    from src.ui.voice_overlay import VoiceOverlay
+    _HAS_VOICE_OVERLAY = True
+except ImportError:
+    _HAS_VOICE_OVERLAY = False
+    logger.info("VoiceOverlay non disponible — mode vocal désactivé")
 
 
 class ChatOverlay(QWidget):
     """
-    Overlay de nouvelle conversation (⌘N — Z.ai).
+    Overlay de nouvelle conversation (⌘N — DM-1).
 
     Fenêtre temporaire frameless pour démarrer un nouveau fil.
     """
@@ -64,8 +82,8 @@ class ChatOverlay(QWidget):
 
         self.setStyleSheet(f"""
             ChatOverlay {{
-                background: rgba(13, 17, 23, 0.95);
-                border-radius: {Radius.LARGE}px;
+                background: rgba(10, 14, 23, 0.95);
+                border-radius: {Radius.WIDGET}px;
             }}
         """)
 
@@ -96,7 +114,7 @@ class ChatOverlay(QWidget):
                 border: none; font-size: 14px;
                 border-radius: 12px;
             }}
-            QPushButton:hover {{ background: rgba(248,81,73,0.2); color: {Color.ERROR}; }}
+            QPushButton:hover {{ background: rgba(255, 77, 106, 0.2); color: {Color.ERROR}; }}
         """)
         close_btn.clicked.connect(self.hide)
         top_layout.addWidget(close_btn)
@@ -142,7 +160,7 @@ class ChatOverlay(QWidget):
                 border: none; border-radius: 18px;
                 font-size: 16px;
             }}
-            QPushButton:hover {{ background: rgba(88,213,227,0.8); }}
+            QPushButton:hover {{ background: rgba(0, 180, 200, 0.8); }}
         """)
         send_btn.clicked.connect(self._send)
         input_layout.addWidget(send_btn)
@@ -168,21 +186,20 @@ class ChatOverlay(QWidget):
         bubble = QLabel(f"<b style='color:{Color.TEXT_PRIMARY}'>Vous</b> : {text}")
         bubble.setWordWrap(True)
         bubble.setStyleSheet(f"""
-            background: rgba(88,213,227,0.1);
+            background: rgba(0, 212, 255, 0.10);
             color: {Color.TEXT_PRIMARY};
             border-radius: {Radius.MEDIUM}px;
             padding: 8px 12px;
             font-size: {Typography.SIZE_BODY}pt;
         """)
         self._msg_layout.insertWidget(self._msg_layout.count() - 1, bubble)
-
         QTimer.singleShot(500, lambda: self._respond(f"Reçu : *{text}*"))
 
     def _respond(self, text: str):
         bubble = QLabel(f"<b style='color:{Color.CYAN}'>NURU</b> : {text}")
         bubble.setWordWrap(True)
         bubble.setStyleSheet(f"""
-            background: {Color.BG_ELEVATED};
+            background: {Color.BG_SURFACE1};
             color: {Color.TEXT_PRIMARY};
             border-radius: {Radius.MEDIUM}px;
             padding: 8px 12px;
@@ -198,112 +215,71 @@ class ChatOverlay(QWidget):
 
 class AmbientApp:
     """
-    Application NURU V12 — orchestre tous les composants Z.ai.
+    Application NURU V12 — orchestre tous les composants DM-1.
 
-    Gère : NuruWindow, TrayIcon, FloatingWidget, VoiceOverlay, ChatOverlay.
+    Corrigé V12 :
+      - NURUTrayIcon : importé depuis src.ui.tray_icon (compatible OrbState)
+      - Tray icon sync automatique via orb.state_changed
+      - VoiceOverlay : import optionnel (graceful fallback)
+      - NuruWindow : fond gradient bleu V12
+      - NuruFloatingWidget : 260×180 DM-1
     """
 
     def __init__(self, app: QApplication):
         self._app = app
+        self._current_theme = "dark"
         self._orb_state = OrbState.IDLE
 
-        # 1. Fenêtre principale NURU (Z.ai: QMainWindow 720×860)
+        # 1. Fenêtre principale NURU (DM-1: QMainWindow 720×860)
         self._window = NuruWindow()
 
-        # 2. VoiceOverlay (⌥␣)
-        self._voice_overlay = VoiceOverlay()
+        # 2. VoiceOverlay (⌥␣) — optionnel
+        if _HAS_VOICE_OVERLAY:
+            self._voice_overlay = VoiceOverlay()
+        else:
+            self._voice_overlay = None
+            logger.info("VoiceOverlay non chargé — raccourci vocal désactivé")
 
-        # 3. FloatingWidget (⌘⇧N)
+        # 3. FloatingWidget (⌘⇧N) — DM-1: 260×180
         self._floating_widget = NuruFloatingWidget()
 
         # 4. ChatOverlay (⌘N)
         self._chat_overlay = ChatOverlay()
 
-        # 5. Tray icon
-        self._setup_tray()
+        # 5. Tray icon — DM-1: diamant cyan lumineux (module dédié)
+        self._tray = NURUTrayIcon(app)
+        self._connect_tray_actions()
+        self._tray.show()
 
         # 6. Raccourcis
         self._setup_shortcuts()
 
-        # 7. Sync états Orb
+        # 7. Sync états Orb → Tray Icon
         self._window.orb.state_changed.connect(self._on_orb_state_changed)
-        self._floating_widget.orb.state_changed.connect(self._on_orb_state_changed)
+
+        # 8. Sync thème → window menu
+        self._window.theme_change_requested.connect(self._on_theme_change_requested)
+
+        # 9. Charger le QSS initial (dark)
+        self._load_qss("styles.qss")
 
         # Afficher composants initiaux
         self._window.show()
         self._show_floating()
 
-    # ── Tray (Z.ai: §199-200) ──
+    # ── Tray DM-1: actions connectées ──
 
-    def _setup_tray(self):
-        self._tray = QSystemTrayIcon()
-        self._update_tray_icon()
-        self._tray.setToolTip("NURU V12")
-
-        menu = QMenu()
-
-        open_action = menu.addAction("Ouvrir NURU")
-        open_action.triggered.connect(self._window.show)
-
-        voice_action = menu.addAction("Mode vocal ⌥␣")
-        voice_action.triggered.connect(self._toggle_voice)
-
-        menu.addSeparator()
-
-        toggle_widget = menu.addAction("Afficher Widget")
-        toggle_widget.triggered.connect(self._toggle_floating)
-        toggle_widget.setCheckable(True)
-        toggle_widget.setChecked(True)
-        self._toggle_widget_action = toggle_widget
-
-        menu.addSeparator()
-
-        pref_action = menu.addAction("Préférences…")
-        quit_action = menu.addAction("Quitter")
-        quit_action.triggered.connect(self._app.quit)
-
-        self._tray.setContextMenu(menu)
-        self._tray.activated.connect(self._on_tray_activated)
-        self._tray.show()
-
-    def _update_tray_icon(self):
-        """Icône 22×22px — Z.ai: monochrome selon état."""
-        pm = QPixmap(22, 22)
-        pm.fill(Qt.transparent)
-
-        painter = QPainter(pm)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        color_map = {
-            OrbState.IDLE: Color.TEXT_MUTED,
-            OrbState.LISTENING: Color.CYAN,
-            OrbState.THINKING: Color.CYAN,
-            OrbState.SPEAKING: Color.CYAN,
-            OrbState.ACTING: Color.WARM,
-            OrbState.ERROR: Color.ERROR,
-        }
-        color = color_map.get(self._orb_state, Color.TEXT_MUTED)
-
-        painter.setBrush(QColor(color))
-        painter.setPen(Qt.NoPen)
-        # Losange/diamant cyan (Z.ai: diamant cyan lumineux)
-        cx, cy = 11, 11
-        size = 12
-        points = [
-            QPointF(cx, cy - size // 2),
-            QPointF(cx + size // 2, cy),
-            QPointF(cx, cy + size // 2),
-            QPointF(cx - size // 2, cy),
-        ]
-        painter.drawPolygon(points)
-        painter.end()
-
-        self._tray.setIcon(QIcon(pm))
+    def _connect_tray_actions(self):
+        self._tray.show_action.triggered.connect(self._show_window)
+        self._tray.voice_action.triggered.connect(self._toggle_voice)
+        self._tray.widget_action.triggered.connect(self._toggle_floating)
+        self._tray.pref_action.triggered.connect(self._open_preferences)
+        self._tray.quit_action.triggered.connect(self._app.quit)
+        self._tray.tray.activated.connect(self._on_tray_activated)
 
     def _on_tray_activated(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
-            self._window.show()
-            self._window.raise_()
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self._show_window()
 
     # ── FloatingWidget ──
 
@@ -311,36 +287,34 @@ class AmbientApp:
         screen = QApplication.primaryScreen()
         if screen:
             geo = screen.availableGeometry()
-            size = WindowSizes.FLOATING_SIZE
             self._floating_widget.move(
-                geo.right() - size - 20,
-                geo.bottom() - size - 20,
+                geo.right() - WindowSizes.FLOATING_WIDTH - 20,
+                geo.bottom() - WindowSizes.FLOATING_HEIGHT - 20 - 60,
             )
         self._floating_widget.show()
 
     def _toggle_floating(self):
         if self._floating_widget.isVisible():
             self._floating_widget.hide()
-            self._toggle_widget_action.setText("Afficher Widget")
+            self._tray.widget_action.setText("  Afficher Widget")
+            self._tray.widget_action.setChecked(False)
         else:
             self._show_floating()
-            self._toggle_widget_action.setText("Masquer Widget")
+            self._tray.widget_action.setText("  Masquer Widget")
+            self._tray.widget_action.setChecked(True)
 
-    # ── Raccourcis (Z.ai: §204-225) ──
+    # ── Raccourcis DM-1 ──
 
     def _setup_shortcuts(self):
         self._shortcut_host = QWidget()
         self._shortcut_host.setWindowFlags(Qt.Tool)
 
-        # ⌥␣ — Voice (global)
         self._sc_voice = QShortcut(QKeySequence("Alt+Space"), self._shortcut_host)
         self._sc_voice.activated.connect(self._toggle_voice)
 
-        # ⌘⇧N — Floating widget (global)
         self._sc_widget = QShortcut(QKeySequence("Ctrl+Shift+N"), self._shortcut_host)
         self._sc_widget.activated.connect(self._toggle_floating)
 
-        # ⌘N — Nouvelle conversation (dans fenêtre active ou overlay)
         self._sc_chat = QShortcut(QKeySequence("Ctrl+N"), self._shortcut_host)
         self._sc_chat.activated.connect(self._new_chat)
 
@@ -349,42 +323,88 @@ class AmbientApp:
     # ── Voice ──
 
     def _toggle_voice(self):
+        if not _HAS_VOICE_OVERLAY or self._voice_overlay is None:
+            logger.warning("VoiceOverlay non disponible")
+            return
+
         if self._voice_overlay.isVisible():
             self._voice_overlay.hide_overlay()
         else:
             self._orb_state = OrbState.LISTENING
-            self._update_tray_icon()
             self._window.orb.set_state(OrbState.LISTENING)
-            self._floating_widget.set_orb_state(OrbState.LISTENING)
             self._window.set_mode("voice")
             self._voice_overlay.show_overlay()
-            self._voice_overlay.closed.connect(self._on_voice_closed)
-
-    def _on_voice_closed(self):
-        self._window.set_mode("chat")
-        self._orb_state = OrbState.IDLE
-        self._update_tray_icon()
-        self._window.orb.set_state(OrbState.IDLE)
-        self._floating_widget.set_orb_state(OrbState.IDLE)
 
     # ── Chat ──
 
     def _new_chat(self):
         self._orb_state = OrbState.IDLE
         self._window.orb.set_state(OrbState.IDLE)
-        self._floating_widget.set_orb_state(OrbState.IDLE)
         self._chat_overlay.show_overlay()
 
-    # ── Sync ──
+    # ── Window ──
+
+    def _show_window(self):
+        self._window.show()
+        self._window.raise_()
+
+    def _open_preferences(self):
+        from src.ui.preferences_dialog import PreferencesDialog
+        dlg = PreferencesDialog(self._window)
+        dlg.exec()
+
+    # ── Sync Orb → Tray ──
 
     def _on_orb_state_changed(self, state: OrbState):
+        """Sync automatique : OrbState → tray icon + floating widget."""
         self._orb_state = state
-        self._update_tray_icon()
-        # Sync l'autre orb
-        if self._window.orb.state != state:
-            self._window.orb.set_state(state)
-        if self._floating_widget.orb.state != state:
-            self._floating_widget.set_orb_state(state)
+        self._tray.set_state(state)
+
+        # Sync floating widget status text
+        state_labels = {
+            OrbState.IDLE:      ("Assistant prêt", Color.TEXT_SECONDARY),
+            OrbState.LISTENING: ("En écoute...", "#00E599"),
+            OrbState.THINKING:  ("Réflexion...", "#FFB800"),
+            OrbState.SPEAKING:  ("Parle...", Color.CYAN),
+            OrbState.ACTING:    ("Action...", Color.CYAN),
+            OrbState.ERROR:     ("Erreur", Color.ROSE),
+        }
+        label, color = state_labels.get(state, ("Assistant prêt", Color.TEXT_SECONDARY))
+        self._floating_widget.setStatus(label, color)
+
+    # ── Thème ──
+
+    def _load_qss(self, filename: str):
+        """Charge un fichier .qss et l'applique à l'application."""
+        path = os.path.join(os.path.dirname(__file__), filename)
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                self._app.setStyleSheet(f.read())
+        else:
+            logger.warning(f"Fichier QSS introuvable : {path}")
+
+    def _on_theme_change_requested(self, theme: str):
+        """Bascule entre thème sombre et clair."""
+        self._current_theme = theme
+        is_dark = theme == "dark"
+
+        # 1. Appliquer le QSS
+        qss_file = "styles.qss" if is_dark else "styles_light.qss"
+        self._load_qss(qss_file)
+
+        # 2. Mettre à jour le NuruWindow (fond inline + séparateur)
+        self._window.set_theme(theme)
+        action_text = "🌙  Mode sombre" if is_dark else "☀️  Mode clair"
+        self._window._theme_action.setText(action_text)
+
+        # 3. Floating widget
+        self._floating_widget.apply_theme(theme)
+
+        # 4. Redessiner tous les composants
+        self._window.update()
+        self._floating_widget.update()
+
+        logger.info(f"Thème changé : {theme}")
 
     # ── API ──
 
@@ -393,8 +413,12 @@ class AmbientApp:
         return self._window
 
     @property
-    def floating_widget(self):
+    def floating_widget(self) -> NuruFloatingWidget:
         return self._floating_widget
+
+    @property
+    def tray(self) -> NURUTrayIcon:
+        return self._tray
 
     @property
     def voice_overlay(self):
