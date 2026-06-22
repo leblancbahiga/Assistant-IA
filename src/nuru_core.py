@@ -165,6 +165,7 @@ class NuruCore:
         # Le bookkeeping : self._bg_tasks.add(t) (garde la ref) + add_done_callback(discard)
         # nettoie automatiquement quand la task finit.
         self._bg_tasks: set = set()
+        self._indexing_enabled = True  # V12 : flag pour stopper l'indexation
 
     def _is_online(self) -> bool:
         """Vérifie rapidement si le fournisseur Cloud est accessible.
@@ -229,6 +230,22 @@ class NuruCore:
         self._watcher.start()
         logger.info("📁 Document watcher démarré (surveille Documents, Desktop, Downloads)")
 
+        # S'abonne à l'événement index_reset pour stopper l'indexation
+        from src.core.events import EventBus
+        EventBus().subscribe("index_reset", self._on_index_reset)
+
+    async def _on_index_reset(self, _data=None):
+        """Callback quand l'utilisateur vide l'index depuis l'UI."""
+        logger.info("🛑 Index vidé par l'utilisateur — arrêt de l'auto-indexation")
+        await self.stop_indexing()
+
+    async def stop_indexing(self) -> None:
+        """Stoppe l'auto-indexation périodique et le watcher temps réel."""
+        self._indexing_enabled = False
+        if hasattr(self, '_watcher') and self._watcher:
+            self._watcher.stop()
+        logger.info("🛑 Auto-indexation arrêtée — utiliser reset_index() pour réactiver")
+
     async def _auto_index_with_ram_guard(self) -> None:
         """Auto-indexation périodique avec protection RAM (V11.2).
 
@@ -246,7 +263,7 @@ class NuruCore:
         # 1. Attendre 60s au démarrage (laisser le temps à l'app de charger)
         await asyncio.sleep(60)
 
-        while True:
+        while self._indexing_enabled:
             logger.info("🔍 Scan auto-indexation V11.2 (RAM guard) démarré...")
             total = 0
             indexed = 0
@@ -310,8 +327,12 @@ class NuruCore:
                 f"{indexed}/{total} fichiers indexés. "
                 f"Prochain scan dans 1h."
             )
-            # 7. Attendre 3600s avant le prochain scan
-            await asyncio.sleep(3600)
+            # 7. Vérifier le flag toutes les 10s pendant l'attente (permet un arrêt rapide)
+            for _ in range(360):
+                if not self._indexing_enabled:
+                    logger.info("🛑 Auto-indexation arrêtée sur demande")
+                    return
+                await asyncio.sleep(10)
 
     def build_system_prompt(self, intent: str, facts: list[str] = None, procedures: str = "") -> str:
         """Assemble le prompt système de base avec les faits et procédures, adapté selon l'intention."""

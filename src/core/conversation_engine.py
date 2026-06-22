@@ -21,12 +21,13 @@ import asyncio
 import logging
 import threading
 import time
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, Signal, QTimer
 
 from src.nuru_core import NuruCore
-from src.ui.tokens import OrbState
+from src.ui.presence_orb import OrbState
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,10 @@ class ConversationEngine(QObject):
     error_occurred = Signal(str, str)  # (code, message)
     # Changement d'état de l'orb
     state_changed = Signal(object)  # OrbState
+    # Transcription vocale temps réel
+    voice_transcript = Signal(str)
+    # Session vocale terminée avec le texte final
+    voice_session_end = Signal(str)
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
@@ -60,6 +65,8 @@ class ConversationEngine(QObject):
         self._sessions: dict[str, str] = {}
         # Évite de surcharger les signaux pendant le démarrage
         self._started = False
+        self._voice_running = False
+        self._voice_buffer: list[str] = []
 
     # ── Cycle de vie ──
 
@@ -177,6 +184,58 @@ class ConversationEngine(QObject):
             self._process(text),
             self._loop,
         )
+
+    # ── Voice ──
+
+    def start_voice_session(self) -> None:
+        """Démarre la capture micro + STT dans le thread asyncio."""
+        if not self._ready or not self._loop:
+            return
+        self.state_changed.emit(OrbState.LISTENING)
+        self._voice_running = True
+        self._voice_buffer: list[str] = []
+        asyncio.run_coroutine_threadsafe(
+            self._run_voice_capture(),
+            self._loop,
+        )
+        logger.info("🎤 Session vocale démarrée")
+
+    def stop_voice_session(self, final_text: str = "") -> None:
+        """Arrête la capture micro."""
+        self._voice_running = False
+        self.state_changed.emit(OrbState.IDLE)
+        if final_text.strip():
+            self.voice_session_end.emit(final_text)
+        logger.info("🎤 Session vocale terminée")
+
+    async def _run_voice_capture(self) -> None:
+        """Async generator : capture micro → VAD → STT → signaux UI."""
+        audio = self._nuru.audio
+        try:
+            async for chunk, is_speech in audio.capture_mic():
+                if not self._voice_running:
+                    break
+                if is_speech and chunk is not None:
+                    # Écrire le chunk dans un buffer audio
+                    audio_path = Path(f"/tmp/nuru_voice_{int(time.time())}.wav")
+                    import soundfile as sf
+                    sf.write(audio_path, chunk, 16000)
+                    # Transcrire
+                    text = await audio.transcribe(audio_path)
+                    if text.strip():
+                        self._voice_buffer.append(text)
+                        self._safe_emit(self.voice_transcript, text)
+                    # Nettoyer
+                    try:
+                        audio_path.unlink()
+                    except OSError:
+                        pass
+                # Petite pause pour ne pas saturer
+                await asyncio.sleep(0.1)
+        except Exception as e:
+            logger.error(f"🎤 Erreur capture vocale: {e}")
+        finally:
+            logger.info("🎤 Capture vocale terminée")
 
     # ── Traitement interne ──
 

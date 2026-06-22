@@ -231,10 +231,8 @@ class AmbientApp:
         self._current_theme = "dark"
         self._orb_state = OrbState.IDLE
 
-        # 0. ConversationEngine — pont backend (démarré en arrière-plan)
+        # 0. ConversationEngine — créé mais pas démarré (évite signaux avant window)
         self._engine = ConversationEngine()
-        self._engine.state_changed.connect(self._on_engine_state)
-        self._engine.start()
 
         # 1. Fenêtre principale NURU (DM-1: QMainWindow 720×860)
         self._window = NuruWindow(engine=self._engine)
@@ -242,6 +240,9 @@ class AmbientApp:
         # 2. VoiceOverlay (⌥␣) — optionnel
         if _HAS_VOICE_OVERLAY:
             self._voice_overlay = VoiceOverlay()
+            # Connexion des signaux vocaux
+            self._engine.voice_transcript.connect(self._on_voice_transcript)
+            self._engine.voice_session_end.connect(self._on_voice_session_end)
         else:
             self._voice_overlay = None
             logger.info("VoiceOverlay non chargé — raccourci vocal désactivé")
@@ -266,7 +267,11 @@ class AmbientApp:
         # 8. Sync thème → window menu
         self._window.theme_change_requested.connect(self._on_theme_change_requested)
 
-        # 9. Charger le QSS initial (dark)
+        # 9. Démarrer l'engine (maintenant que _window existe)
+        self._engine.state_changed.connect(self._on_engine_state)
+        self._engine.start()
+
+        # 10. Charger le QSS initial (dark)
         self._load_qss("styles.qss")
 
         # Afficher composants initiaux
@@ -335,11 +340,28 @@ class AmbientApp:
 
         if self._voice_overlay.isVisible():
             self._voice_overlay.hide_overlay()
+            self._engine.stop_voice_session()
         else:
             self._orb_state = OrbState.LISTENING
             self._window.orb.set_state(OrbState.LISTENING)
             self._window.set_mode("voice")
             self._voice_overlay.show_overlay()
+            self._engine.start_voice_session()
+
+    def _on_voice_transcript(self, text: str):
+        """Reçoit la transcription temps réel du micro."""
+        if self._voice_overlay and self._voice_overlay.isVisible():
+            self._voice_overlay.update_transcript(text)
+
+    def _on_voice_session_end(self, final_text: str):
+        """Session vocale terminée — envoie le texte final au backend."""
+        if not final_text.strip():
+            return
+        self._voice_overlay.update_state("🤔 Réflexion…")
+        self._orb_state = OrbState.THINKING
+        self._window.orb.set_state(OrbState.THINKING)
+        self._window.set_mode("text")
+        self._engine.send_message(final_text)
 
     # ── Chat ──
 

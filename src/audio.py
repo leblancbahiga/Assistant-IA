@@ -128,6 +128,7 @@ class AudioEngine:
             logger.info("STT déchargé.")
 
     # --- TTS (Text to Speech) ---
+
     def _load_tts(self):
         """Chargement Lazy de Piper."""
         if self._tts_voice is None and config.tts_engine == "piper":
@@ -192,3 +193,50 @@ class AudioEngine:
         if self._is_speaking:
             sd.stop()
             self._is_speaking = False
+
+    # --- Microphone ---
+
+    async def capture_mic(self, sample_rate: int = 16000, chunk_duration: float = 0.5):
+        """Async generator : lit le micro par paquets et yield (audio_chunk, is_speech).
+
+        Utilise sounddevice avec callback non-bloquant.
+        s'arrête quand le générateur est fermé.
+        """
+        import numpy as np
+        import sounddevice as sd
+        import queue
+
+        q: queue.Queue = queue.Queue()
+        chunk_frames = int(sample_rate * chunk_duration)
+
+        def callback(indata, frames, time_info, status):
+            """Callback sounddevice — thread non-bloquant."""
+            if status:
+                logger.debug(f"Mic: {status}")
+            q.put(indata.copy())
+
+        try:
+            with sd.InputStream(
+                samplerate=sample_rate,
+                channels=1,
+                dtype="float32",
+                blocksize=chunk_frames,
+                callback=callback,
+            ):
+                logger.info("🎤 Micro ouvert")
+                while True:
+                    try:
+                        data = await asyncio.get_event_loop().run_in_executor(
+                            None, lambda: q.get(timeout=0.5)
+                        )
+                        # Niveau RMS simple pour détection parole
+                        rms = float(np.sqrt(np.mean(data**2)))
+                        is_speech = rms > 0.02  # seuil empirique
+                        yield (data, is_speech)
+                    except Exception:
+                        # timeout queue = silence prolongé
+                        yield (None, False)
+        except Exception as e:
+            logger.error(f"🎤 Erreur micro: {e}")
+        finally:
+            logger.info("🎤 Micro fermé")

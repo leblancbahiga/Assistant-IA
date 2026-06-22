@@ -225,7 +225,7 @@ class IngestionEngine:
 
 
 def reset_index():
-    """Vide l'index RAG existant (supprime les fichiers de base)."""
+    """Vide l'index RAG existant (supprime les fichiers de base) et arrête l'auto-indexation."""
     import sqlite3
     db_paths = [
         str(Path.home() / ".nuru" / "nuru_brain.db"),
@@ -239,4 +239,11 @@ def reset_index():
                 logger.info(f"🗑️ Base supprimée: {db}")
         except Exception as e:
             logger.warning(f"⚠️ Impossible de supprimer {db}: {e}")
+    # Signale l'arrêt via EventBus (si NuruCore tourne)
+    try:
+        from src.core.events import EventBus
+        bus = EventBus()
+        bus.emit_sync("index_reset", {})
+    except Exception:
+        pass
     logger.info("Index RAG réinitialisé — redémarrage nécessaire")
