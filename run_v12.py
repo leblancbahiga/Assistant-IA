@@ -1,49 +1,55 @@
-#!/usr/bin/env python3
 """
-NURU V12 — Nouveau lanceur (design Z.ai).
+NURU V12 — Lancement interface Z.ai.
 
-Remplace l'ancien CyberDashboard 3 colonnes par l'interface
-NuruWindow : PresenceOrb + ConversationSurface + InputBar.
+Architecture ambiante :
+  - Tray icon (menu bar macOS)
+  - FloatingWidget 220×160 (verre dépoli)
+  - VoiceOverlay (⌥␣) — WaveformRings + Transcript
+  - ChatOverlay (⌘N) — conversation temporaire
+  - Pas de fenêtre principale persistante
 
 Usage :
-    python3 run_v12.py
+  python3 run_v12.py
 """
 
 import sys
-import os
 import logging
-
-# Path setup
-project_root = os.path.dirname(os.path.abspath(__file__))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-logger = logging.getLogger("run_v12")
+logger = logging.getLogger(__name__)
 
 
 def main():
     from PySide6.QtWidgets import QApplication
-    from PySide6.QtGui import QFont
-    from src.ui.nuru_window import NuruWindow
+
+    logger.info("🚀 NURU V12 — Ambient Presence (Z.ai)")
 
     app = QApplication(sys.argv)
+    app.setApplicationName("NURU")
+    app.setOrganizationName("NURU")
 
-    # Police par défaut
-    font = QFont("Inter", 13)
-    app.setFont(font)
+    # Palette globale
+    palette = app.palette()
+    palette.setColor(palette.ColorRole.Window, "#070A10")
+    palette.setColor(palette.ColorRole.WindowText, "#E8ECF1")
+    palette.setColor(palette.ColorRole.Base, "#0D1117")
+    palette.setColor(palette.ColorRole.Text, "#E8ECF1")
+    palette.setColor(palette.ColorRole.Button, "#151B26")
+    palette.setColor(palette.ColorRole.ButtonText, "#E8ECF1")
+    palette.setColor(palette.ColorRole.Highlight, "#00D4FF")
+    palette.setColor(palette.ColorRole.HighlightedText, "#070A10")
+    app.setPalette(palette)
 
-    # Style général (QSS de base — les composants ont leur propre style)
-    app.setStyle("Fusion")
+    from src.ui.ambient_app import AmbientApp
 
-    window = NuruWindow()
-    window.show()
+    _ambient = AmbientApp(app)
 
-    sys.exit(app.exec())
+    logger.info("✅ NURU V12 prêt — voir FloatingWidget et icône tray")
+    return app.exec()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

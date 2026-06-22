@@ -1,106 +1,117 @@
 """
-NURU V12 — Design Tokens (Z.ai spec).
+NURU V12 — Design Tokens (Z.ai spec exacte).
 
-Palette, typographie, rayon, espacement — single source of truth
-pour toute l'interface PySide6.
+Palette DM-1 Deep Cyan, typographie, rayon, espacement.
+Basé sur le design system board HTML de Z.ai.
 
-Basé sur le design system Deep Cyan de Z.ai (NURU_V9.md §2070-2260).
+Tokens extraits du mockup board :
+  --bg-deep: #070A10
+  --bg-card: #0D1117
+  --bg-surface: #151B26
+  Palette swatches : BG #0A0E17 / S1 #151B26 / S2 #1C2433 / ACC #00D4FF
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar
 
 
-# ── Palette ────────────────────────────────────────────────────────────
+# ── Palette DM-1 Deep Cyan (Z.ai) ──────────────────────────────────
 
 @dataclass(frozen=True)
 class Color:
-    """Couleurs NURU V12 — Design System Deep Cyan (Z.ai)."""
+    """Palette exacte du design system Z.ai."""
 
-    # Fond
-    BG_DEEP: str = "#0A0E17"       # Fond principal
-    BG_SURFACE: str = "#151B26"    # Surfaces (cartes, inputs)
-    BG_OVERLAY: str = "rgba(13,17,23,0.92)"  # VoiceOverlay
+    # Fonds
+    BG_DEEP: str = "#070A10"       # bg-deep — fond ultime
+    BG_CARD: str = "#0D1117"       # bg-card — cartes, panneaux
+    BG_SURFACE: str = "#151B26"    # bg-surface — surfaces interactives
+    BG_SURFACE_2: str = "#1C2433"  # S2 — surface secondaire
 
     # Accent
     CYAN: str = "#00D4FF"          # Accent principal
-    CYAN_LIGHT: str = "#66E5FF"    # Hover / highlight
-    CYAN_DIM: str = "#0099BB"      # Light mode accent
+    CYAN_DIM: str = "rgba(0, 212, 255, 0.6)"    # Dim
+    CYAN_FAINT: str = "rgba(0, 212, 255, 0.08)" # Faint
 
     # Texte
-    TEXT_PRIMARY: str = "#E8ECF1"  # Corps
-    TEXT_SECONDARY: str = "#8B95A5"  # Caption / secondaire
-    TEXT_DISABLED: str = "#4A5568"  # Désactivé
+    TEXT_PRIMARY: str = "#E8ECF1"  # TX — corps
+    TEXT_SECONDARY: str = "#8B95A5"  # TX2 — caption
+    TEXT_DIM: str = "#4A5568"      # text-dim — désactivé
 
     # États
-    ERROR: str = "#FF4D6A"         # Erreur / alerte
-    WARNING: str = "#FFB84D"       # Attention
-    SUCCESS: str = "#39FF14"       # Succès
+    SUCCESS: str = "#00E599"       # accent-green
+    WARNING: str = "#FFB800"       # accent-amber
+    ERROR: str = "#FF4D6A"         # accent-rose
 
-    # Bordures / séparateurs
-    BORDER: str = "#2A3344"
-    BORDER_FOCUS: str = "#00D4FF"
+    # Overlay
+    BG_OVERLAY: str = "rgba(7, 10, 16, 0.92)"  # VoiceOverlay
 
-    # Palettes
-    DARK: ClassVar[dict] = field(default=None)  # type: ignore
-    LIGHT: ClassVar[dict] = field(default=None)  # type: ignore
+    # Bordures
+    BORDER: str = "rgba(0, 212, 255, 0.12)"
+    BORDER_STRONG: str = "rgba(0, 212, 255, 0.3)"
+
+    # Palettes QPalette-swap
+    DARK: ClassVar[dict] = {
+        "bg": BG_DEEP,
+        "card": BG_CARD,
+        "surface": BG_SURFACE,
+        "accent": CYAN,
+        "text": TEXT_PRIMARY,
+        "text_secondary": TEXT_SECONDARY,
+        "border": BORDER,
+    }
+
+    LIGHT: ClassVar[dict] = {
+        "bg": "#F4F6F9",
+        "card": "#FFFFFF",
+        "surface": "#FFFFFF",
+        "accent": "#0099BB",
+        "text": "#1A2332",
+        "text_secondary": "#6B7A90",
+        "border": "#D1D9E6",
+    }
 
 
-# Palettes QPalette-swap
-Color.DARK = {
-    "bg": Color.BG_DEEP,
-    "surface": Color.BG_SURFACE,
-    "accent": Color.CYAN,
-    "text": Color.TEXT_PRIMARY,
-    "text_secondary": Color.TEXT_SECONDARY,
-    "border": Color.BORDER,
-}
-
-Color.LIGHT = {
-    "bg": "#F4F6F9",
-    "surface": "#FFFFFF",
-    "accent": Color.CYAN_DIM,
-    "text": "#1A2332",
-    "text_secondary": "#6B7A90",
-    "border": "#D1D9E6",
-}
-
-
-# ── Typographie ────────────────────────────────────────────────────────
+# ── Typographie Z.ai ───────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class Typography:
-    """Polices et tailles NURU V12."""
+    """Inter + JetBrains Mono — exactement la spec Z.ai."""
 
-    FAMILY_BODY: str = "Inter, -apple-system, sans-serif"
-    FAMILY_CODE: str = "JetBrains Mono, SF Mono, Monaco, monospace"
+    FAMILY_BODY: str = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+    FAMILY_CODE: str = "'JetBrains Mono', 'SF Mono', Monaco, monospace, sans-serif"
 
-    SIZE_BODY: int = 13          # px — texte principal
-    SIZE_CAPTION: int = 11       # px — sous-titres
-    SIZE_TITLE: int = 18         # px — titres
+    # Tailles
+    SIZE_BODY: int = 13          # px
+    SIZE_CAPTION: int = 11       # px
+    SIZE_TITLE: int = 18         # px
     SIZE_OVERLAY: int = 28       # px — prompt vocal
-    SIZE_ORB_LABEL: int = 10     # px — label sous l'Orb
+    SIZE_ORB_LABEL: int = 10     # px
+    SIZE_BADGE: int = 10         # px — badges / tags
+    SIZE_STATUS: int = 11        # px — pill statut
 
+    # Poids
+    WEIGHT_LIGHT: int = 300
     WEIGHT_NORMAL: int = 400
     WEIGHT_MEDIUM: int = 500
+    WEIGHT_SEMIBOLD: int = 600
     WEIGHT_BOLD: int = 700
+    WEIGHT_BLACK: int = 900
 
 
-# ── Rayons & espacements ──────────────────────────────────────────────
+# ── Rayons Z.ai ────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class Radius:
-    """Coins arrondis — système Z.ai (4/12/16 px)."""
+    """Système de rayons hérité de macOS (Z.ai)."""
 
-    SMALL: int = 4
-    MEDIUM: int = 12
-    LARGE: int = 16
-    PILL: int = 999  # cercles/badges
+    SMALL: int = 4    # badges, petits composants
+    MEDIUM: int = 8   # cartes, mockup cards
+    LARGE: int = 12   # fenêtres, overlays
 
 
 @dataclass(frozen=True)
 class Spacing:
-    """Espacements verticaux/horizontaux — design system."""
+    """Espacements."""
 
     XS: int = 4
     SM: int = 8
@@ -109,28 +120,42 @@ class Spacing:
     XL: int = 32
 
 
-# ── Orb ────────────────────────────────────────────────────────────────
+# ── Orb Z.ai ───────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class OrbSizes:
-    """Tailles du PresenceOrb selon le contexte (Z.ai)."""
+    """Tailles exactes du PresenceOrb selon Z.ai."""
 
-    WINDOW: int = 120       # Dans la fenêtre principale
-    OVERLAY: int = 200      # Dans le VoiceOverlay
-    FLOATING: int = 80      # Dans le FloatingWidget
+    WINDOW: int = 120      # Dans l'ambiance
+    OVERLAY: int = 200     # Dans le VoiceOverlay
+    FLOATING: int = 80     # Dans le FloatingWidget
 
 
-# ── Animations ─────────────────────────────────────────────────────────
+# ── Animations Z.ai ────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class AnimDuration:
-    """Durées d'animation (ms) — Z.ai spec."""
+    """Durées exactes de la spec Z.ai (ms)."""
 
     ORB_PULSE: int = 4000         # 4s — idle respiration
     ORB_HALO_SPIN: int = 3000     # 3s — halo réflexion
-    ORB_PULSE_ACCEL: int = 1500   # 1.5s — respond pulse accéléré
+    ORB_PULSE_ACCEL: int = 1500   # 1.5s — respond
     OVERLAY_SHOW: int = 250       # 250ms — apparition overlay
     OVERLAY_HIDE: int = 250       # 250ms — disparition overlay
-    TOAST_VISIBLE: int = 4000     # 4s — visibilité toast
-    TOAST_SLIDE: int = 300        # 300ms — glissement toast
-    FLOATING_FADE: int = 30000    # 30s — avant auto-dim floating
+    FLOATING_FADE: int = 30000    # 30s — auto-dim floating
+
+
+# ── Tailles composants Z.ai ────────────────────────────────────────
+
+@dataclass(frozen=True)
+class WidgetSizes:
+    """Tailles exactes des composants Z.ai."""
+
+    FLOATING_WIDTH: int = 220     # FloatingWidget (Z.ai: 220×160)
+    FLOATING_HEIGHT: int = 160
+
+    TOPBAR_HEIGHT: int = 56       # Top bar (Z.ai: 56px)
+    STATUSBAR_HEIGHT: int = 24    # Status bar (Z.ai: 24px)
+
+    OVERLAY_WIDTH_PCT: float = 0.6   # VoiceOverlay: 60% écran
+    OVERLAY_HEIGHT_PCT: float = 0.4  # VoiceOverlay: 40% écran
