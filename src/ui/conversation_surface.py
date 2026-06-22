@@ -1,16 +1,17 @@
-"""
-NURU V12 — ConversationSurface (DM-1 "Deep Cyan").
+"""NURU V12 — ConversationSurface (DM-1 "Deep Cyan").
 
 Zone de chat avec bulles alignées :
 - Utilisateur : droite, fond accent cyan transparent
 - NURU : gauche, fond surface
 - Markdown supporté pour les réponses NURU
+- Streaming temps réel (token par token)
 """
 
 import logging
+import time
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QLabel, QSizePolicy,
     QHBoxLayout, QFrame, QTextBrowser,
@@ -60,12 +61,12 @@ class BubbleWidget(QFrame):
             )
             layout.addWidget(label)
         else:
-            browser = QTextBrowser()
-            browser.setHtml(self._md_to_html(text))
-            browser.setOpenExternalLinks(True)
-            browser.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            browser.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            browser.setStyleSheet(f"""
+            self._browser = QTextBrowser()
+            self._browser.setHtml(self._md_to_html(text))
+            self._browser.setOpenExternalLinks(True)
+            self._browser.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self._browser.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self._browser.setStyleSheet(f"""
                 QTextBrowser {{
                     background: transparent;
                     color: {text_color};
@@ -76,11 +77,20 @@ class BubbleWidget(QFrame):
                 }}
                 QTextBrowser a {{ color: {Color.CYAN}; }}
             """)
-            browser.document().setDocumentMargin(0)
-            browser.setMinimumHeight(20)
-            doc = browser.document()
-            doc.setTextWidth(browser.viewport().width() - 4)
-            layout.addWidget(browser)
+            self._browser.document().setDocumentMargin(0)
+            self._browser.setMinimumHeight(20)
+            doc = self._browser.document()
+            doc.setTextWidth(self._browser.viewport().width() - 4)
+            layout.addWidget(self._browser)
+
+    def append_html(self, html_fragment: str):
+        """Ajoute du HTML à la bulle existante (streaming)."""
+        cursor = self._browser.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.insertHtml(html_fragment)
+        # Auto-scroll au contenu le plus récent
+        scrollbar = self._browser.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     def _md_to_html(self, md: str) -> str:
         """Conversion markdown minimal en HTML."""
@@ -106,8 +116,7 @@ class BubbleWidget(QFrame):
 
 
 class ConversationSurface(QWidget):
-    """
-    Zone de conversation scrollable — DM-1.
+    """Zone de conversation scrollable — DM-1.
 
     Alignement :
       - Messages utilisateur → droite
@@ -156,7 +165,15 @@ class ConversationSurface(QWidget):
         self._scroll.setWidget(self._inner)
         layout.addWidget(self._scroll)
 
+        # État de streaming
+        self._streaming_bubble: BubbleWidget | None = None
+        self._stream_buffer: list[str] = []
+        self._stream_timer: QTimer | None = None
+
+    # ── Messages normaux ──
+
     def add_message(self, text: str, is_user: bool = False):
+        """Ajoute un message complet (non streamé)."""
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
 
@@ -179,11 +196,85 @@ class ConversationSurface(QWidget):
 
         QTimer.singleShot(50, self._scroll_to_bottom)
 
+    # ── Streaming ──
+
+    def start_stream(self) -> None:
+        """Crée une bulle vide pour le streaming de la réponse NURU."""
+        # Vider le buffer
+        self._stream_buffer = []
+
+        # Forcer l'affichage immédiat du chunk précédent s'il y en a un
+        self._flush_stream_buffer()
+
+        # Créer une bulle vide
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+
+        self._streaming_bubble = BubbleWidget("", is_user=False)
+        row.addWidget(self._streaming_bubble)
+        row.addStretch()
+
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        container.setLayout(row)
+
+        self._inner_layout.insertWidget(
+            self._inner_layout.count() - 1, container
+        )
+
+        QTimer.singleShot(50, self._scroll_to_bottom)
+
+    def append_to_stream(self, chunk: str) -> None:
+        """Ajoute un fragment de texte à la bulle de streaming.
+
+        Utilise un buffer + timer pour grouper les tokens
+        et éviter de repeindre trop souvent.
+        """
+        self._stream_buffer.append(chunk)
+
+        # Déclencher le flush immédiatement (timer unique)
+        if self._stream_timer is None or not self._stream_timer.isActive():
+            self._stream_timer = QTimer()
+            self._stream_timer.setSingleShot(True)
+            self._stream_timer.timeout.connect(self._flush_stream_buffer)
+            self._stream_timer.start(30)  # ms — batch tokens toutes les 30ms
+
+    def _flush_stream_buffer(self) -> None:
+        """Vide le buffer dans la bulle de streaming."""
+        if not self._stream_buffer or self._streaming_bubble is None:
+            return
+
+        text = "".join(self._stream_buffer)
+        self._stream_buffer = []
+
+        # Échapper le HTML avant insertion
+        safe = (text
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\n", "<br>"))
+        self._streaming_bubble.append_html(safe)
+        self._scroll_to_bottom()
+
+    def end_stream(self) -> None:
+        """Finalise la bulle de streaming."""
+        # Vider le buffer restant
+        self._flush_stream_buffer()
+        self._streaming_bubble = None
+
+        # Nettoyer le timer
+        if self._stream_timer and self._stream_timer.isActive():
+            self._stream_timer.stop()
+        self._stream_timer = None
+
+    # ── Utilitaires ──
+
     def _scroll_to_bottom(self):
         scrollbar = self._scroll.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
     def clear(self):
+        self.end_stream()
         while self._inner_layout.count() > 1:
             item = self._inner_layout.takeAt(0)
             if item and item.widget():

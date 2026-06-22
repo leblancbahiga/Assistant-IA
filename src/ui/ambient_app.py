@@ -41,6 +41,7 @@ from src.ui.presence_orb import NuruPresenceOrb, OrbState
 from src.ui.floating_widget import NuruFloatingWidget
 from src.ui.nuru_window import NuruWindow
 from src.ui.tray_icon import NURUTrayIcon
+from src.core.conversation_engine import ConversationEngine
 
 logger = logging.getLogger(__name__)
 
@@ -230,8 +231,13 @@ class AmbientApp:
         self._current_theme = "dark"
         self._orb_state = OrbState.IDLE
 
+        # 0. ConversationEngine — pont backend (démarré en arrière-plan)
+        self._engine = ConversationEngine()
+        self._engine.state_changed.connect(self._on_engine_state)
+        self._engine.start()
+
         # 1. Fenêtre principale NURU (DM-1: QMainWindow 720×860)
-        self._window = NuruWindow()
+        self._window = NuruWindow(engine=self._engine)
 
         # 2. VoiceOverlay (⌥␣) — optionnel
         if _HAS_VOICE_OVERLAY:
@@ -371,6 +377,12 @@ class AmbientApp:
         }
         label, color = state_labels.get(state, ("Assistant prêt", Color.TEXT_SECONDARY))
         self._floating_widget.setStatus(label, color)
+
+    # ── Engine ──
+
+    def _on_engine_state(self, state: OrbState):
+        """Relaye l'état du ConversationEngine → orb."""
+        self._window.orb.set_state(state)
 
     # ── Thème ──
 

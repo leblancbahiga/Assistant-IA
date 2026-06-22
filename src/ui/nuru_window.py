@@ -101,14 +101,16 @@ class NuruWindow(QMainWindow):
       - PresenceOrb (120px) centré en haut — point focal visuel
       - ConversationSurface (bulles) — zone centrale
       - NuruInputBar (saisie + micro) — bas
+      - ConversationEngine (bridge backend) — injecté
     """
 
     theme_change_requested = Signal(str)  # 'dark' | 'light'
 
-    def __init__(self):
+    def __init__(self, engine=None):
         super().__init__()
         self._current_mode = "chat"  # chat | voice | action
         self._current_theme = "dark"
+        self._engine = engine  # ConversationEngine, injecté par AmbientApp
 
         self._setup_window()
         self._build_ui()
@@ -244,11 +246,42 @@ class NuruWindow(QMainWindow):
         if not text:
             return
         self._input_bar.input.clear()
-        self._conversation.add_message(f"**Vous** : {text}", is_user=True)
-        QTimer.singleShot(500, lambda: self._add_response(f"Reçu : {text}"))
+        self._conversation.add_message(text, is_user=True)
+
+        if self._engine:
+            # Connexion au backend via ConversationEngine
+            self._engine.token_received.connect(
+                self._on_engine_token, Qt.ConnectionType.UniqueConnection
+            )
+            self._engine.response_complete.connect(
+                self._on_engine_done, Qt.ConnectionType.UniqueConnection
+            )
+            self._engine.error_occurred.connect(
+                self._on_engine_error, Qt.ConnectionType.UniqueConnection
+            )
+            self._conversation.start_stream()
+            self._engine.send_message(text)
+        else:
+            # Fallback mock (mode déconnecté)
+            QTimer.singleShot(500, lambda: self._add_response(f"Reçu : {text}"))
+
+    def _on_engine_token(self, token: str):
+        """Reçoit un token du backend et le stream dans la bulle."""
+        self._conversation.append_to_stream(token)
+
+    def _on_engine_done(self, full_response: str):
+        """Finalise le streaming et remet l'orb en IDLE."""
+        self._conversation.end_stream()
+        self._orb.set_state(OrbState.IDLE)
+
+    def _on_engine_error(self, code: str, message: str):
+        """Affiche l'erreur dans la bulle de streaming."""
+        self._conversation.append_to_stream(f"\n\n[⚠️ {message}]")
+        self._conversation.end_stream()
+        self._orb.set_state(OrbState.ERROR)
 
     def _add_response(self, text: str):
-        self._conversation.add_message(f"NURU : {text}", is_user=False)
+        self._conversation.add_message(text, is_user=False)
         self._orb.set_state(OrbState.IDLE)
 
     def _on_mic_click(self):

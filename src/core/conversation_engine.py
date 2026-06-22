@@ -1,0 +1,219 @@
+"""ConversationEngine — Pont UI ↔ Backend NURU (V12).
+
+Bridge asynchrone entre les composants PySide6 (ConversationSurface,
+NuruInputBar, NuruPresenceOrb) et le pipeline LLM (NuruOrchestrator).
+
+Architecture :
+  - Thread asyncio dédié pour le backend (pas de blocage UI)
+  - Signaux PySide6 pour le streaming de tokens
+  - Gestion d'état OrbState : IDLE → THINKING → SPEAKING → IDLE
+  - Support multi-session
+
+Usage :
+  engine = ConversationEngine()
+  engine.start()
+  engine.send_message("Bonjour NURU")
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import threading
+import time
+from typing import Optional
+
+from PySide6.QtCore import QObject, Signal, QTimer
+
+from src.nuru_core import NuruCore
+from src.ui.tokens import OrbState
+
+logger = logging.getLogger(__name__)
+
+
+class ConversationEngine(QObject):
+    """Bridge entre l'interface PySide6 et le pipeline asynchrone NURU.
+
+    Émet des signaux thread-safe pour mettre à jour l'UI en temps réel
+    pendant la génération des réponses.
+    """
+
+    # ── Signaux ──
+    # Chaque token de réponse (streaming)
+    token_received = Signal(str)
+    # Signal de fin avec le texte complet
+    response_complete = Signal(str)
+    # Erreur survenue
+    error_occurred = Signal(str, str)  # (code, message)
+    # Changement d'état de l'orb
+    state_changed = Signal(object)  # OrbState
+
+    def __init__(self, parent: QObject | None = None):
+        super().__init__(parent)
+        self._nuru: NuruCore | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._ready = False
+        self._current_session: str = "default"
+        self._processing = False
+        # Cache de session pour réutilisation
+        self._sessions: dict[str, str] = {}
+        # Évite de surcharger les signaux pendant le démarrage
+        self._started = False
+
+    # ── Cycle de vie ──
+
+    def start(self) -> None:
+        """Initialise NuruCore et démarre la boucle asyncio en arrière-plan."""
+        if self._started:
+            logger.warning("ConversationEngine déjà démarré")
+            return
+
+        logger.info("🚀 ConversationEngine — initialisation...")
+        self.state_changed.emit(OrbState.THINKING)
+
+        try:
+            self._nuru = NuruCore()
+            logger.info("✅ NuruCore initialisé")
+        except Exception as e:
+            logger.error(f"❌ Échec NuruCore: {e}")
+            self.error_occurred.emit("init", str(e))
+            self.state_changed.emit(OrbState.ERROR)
+            return
+
+        # Thread asyncio dédié
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(
+            target=self._run_async_loop,
+            name="nuru-asyncio",
+            daemon=True,
+        )
+        self._thread.start()
+
+        # Lancer les tâches background dans le thread asyncio
+        future = asyncio.run_coroutine_threadsafe(
+            self._init_async(),
+            self._loop,
+        )
+        future.add_done_callback(self._on_init_done)
+
+    def _run_async_loop(self) -> None:
+        """Boucle asyncio du thread dédié."""
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+
+    async def _init_async(self) -> None:
+        """Initialisation asynchrone : démarrage des tâches background."""
+        try:
+            self._nuru.start_background_tasks()
+            logger.info("✅ Tâches background NuruCore démarrées")
+        except Exception as e:
+            logger.error(f"⚠️ start_background_tasks: {e}")
+
+    def _on_init_done(self, future: asyncio.Future) -> None:
+        """Callback quand l'init asynchrone est terminée."""
+        try:
+            future.result()
+            self._ready = True
+            self._started = True
+            self.state_changed.emit(OrbState.IDLE)
+            logger.info("✅ ConversationEngine prêt")
+        except Exception as e:
+            logger.error(f"❌ Échec init asynchrone: {e}")
+            self.error_occurred.emit("async_init", str(e))
+            self.state_changed.emit(OrbState.ERROR)
+
+    def stop(self) -> None:
+        """Arrête la boucle asyncio et libère les ressources."""
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        self._started = False
+        self._ready = False
+        logger.info("🛑 ConversationEngine arrêté")
+
+    # ── API publique ──
+
+    @property
+    def is_ready(self) -> bool:
+        return self._ready
+
+    @property
+    def is_processing(self) -> bool:
+        return self._processing
+
+    @property
+    def session_id(self) -> str:
+        return self._current_session
+
+    def new_session(self, session_id: str | None = None) -> str:
+        """Crée ou bascule vers une nouvelle session."""
+        sid = session_id or f"session_{int(time.time())}"
+        self._current_session = sid
+        self._sessions[sid] = sid
+        return sid
+
+    def send_message(self, text: str) -> None:
+        """Point d'entrée principal : envoie un message au backend.
+
+        Peut être appelé depuis n'importe quel thread (Qt ou non).
+        La réponse arrive via les signaux token_received / response_complete.
+        """
+        if not text or not text.strip():
+            return
+        if not self._ready:
+            logger.warning("ConversationEngine pas encore prêt")
+            self.error_occurred.emit("not_ready", "Le moteur NURU n'est pas encore prêt")
+            return
+        if self._processing:
+            logger.warning("Déjà en train de traiter — message ignoré")
+            self.error_occurred.emit("busy", "NURU est déjà en train de répondre")
+            return
+
+        self._processing = True
+        self._safe_emit(self.state_changed, OrbState.THINKING)
+
+        # Lancer le traitement dans le thread asyncio
+        asyncio.run_coroutine_threadsafe(
+            self._process(text),
+            self._loop,
+        )
+
+    # ── Traitement interne ──
+
+    async def _process(self, text: str) -> None:
+        """Exécute le pipeline complet dans le thread asyncio.
+
+        Yields tokens → émet signaux thread-safe vers l'UI.
+        """
+        full_response = ""
+        try:
+            async for token in self._nuru.orchestrator.process_query(
+                text,
+                session_id=self._current_session,
+            ):
+                full_response += token
+                self._safe_emit(self.token_received, token)
+
+            # Finalisation
+            self._safe_emit(self.response_complete, full_response)
+            self._safe_emit(self.state_changed, OrbState.IDLE)
+
+        except asyncio.CancelledError:
+            logger.info("Requête annulée")
+            self._safe_emit(self.state_changed, OrbState.IDLE)
+
+        except Exception as e:
+            logger.error(f"❌ Erreur traitement: {e}", exc_info=True)
+            self._safe_emit(self.error_occurred, "processing", str(e))
+            self._safe_emit(self.state_changed, OrbState.ERROR)
+
+        finally:
+            self._processing = False
+
+    # ── Helpers ──
+
+    def _safe_emit(self, signal, value) -> None:
+        """Émet un signal PySide6 depuis n'importe quel thread."""
+        signal.emit(value)  # type: ignore[attr-defined]
+        # Exécution synchrone car déjà dans le thread Qt
+        # (appelé uniquement depuis QTimer.singleShot ou directement)
