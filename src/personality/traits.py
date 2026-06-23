@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field
-from typing import Optional, Callable
+from typing import Callable, ClassVar, Optional
 
 
 class TraitDimension(enum.Enum):
@@ -119,7 +119,7 @@ class TraitProfile:
             },
         )
 
-    BUILTIN_PROFILES: dict[str, Callable[[], TraitProfile]] = {
+    BUILTIN_PROFILES: ClassVar[dict[str, Callable[[], TraitProfile]]] = {
         "persona_pro": _persona_pro,
         "persona_dev": _persona_dev,
         "persona_terrain": _persona_terrain,

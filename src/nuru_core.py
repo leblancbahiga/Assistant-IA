@@ -29,6 +29,14 @@ from src.extraction import PostSessionExtractor  # Extraction post-session
 from src.long_term_memory import LongTermMemory  # V10.1 : Mémoire long terme
 from src.memory_bridge import MemoryBridge  # V10.1 : Pont V5+V9
 
+# Phase 3 : Proactif, Connaissances, Cycle de sommeil
+from src.knowledge.graph import KnowledgeGraph
+from src.memory.sleep_cycle import SleepCycleManager
+from src.memory.dynamic_prompt import DynamicPromptBuilder, PromptContext
+from src.proactive.engine import ProactiveEngine
+from src.proactive.routines import RoutineScheduler, RoutinePreset
+from src.personality.engine import PersonaEngine
+
 logger = logging.getLogger(__name__)
 
 
@@ -167,6 +175,27 @@ class NuruCore:
         self._bg_tasks: set = set()
         self._indexing_enabled = True  # V12 : flag pour stopper l'indexation
 
+        # ── Phase 3 : Knowledge Graph ──
+        self.knowledge_graph = KnowledgeGraph()
+        self.knowledge_graph.init()
+
+        # ── Phase 3 : Sleep Cycle ──
+        self.sleep_cycle = SleepCycleManager()
+
+        # ── Phase 3 : Proactive Engine ──
+        self.proactive = ProactiveEngine()
+        self._register_proactive_collectors()
+
+        # ── Phase 3 : Dynamic Prompt Builder ──
+        self.prompt_builder = DynamicPromptBuilder(
+            persona=PersonaEngine(),
+            knowledge=self.knowledge_graph,
+        )
+
+        # ── Phase 3 : Routine Scheduler ──
+        self.routines = RoutineScheduler()
+        self.routines.load_preset(RoutinePreset.default())
+
     def _is_online(self) -> bool:
         """Vérifie rapidement si le fournisseur Cloud est accessible.
         
@@ -233,6 +262,17 @@ class NuruCore:
         # S'abonne à l'événement index_reset pour stopper l'indexation
         from src.core.events import EventBus
         EventBus().subscribe("index_reset", self._on_index_reset)
+
+        # ── Phase 3 : Sleep cycle monitoring ──
+        self.sleep_cycle.start_monitoring()
+        task = asyncio.create_task(self._sleep_cycle_loop())
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
+        # ── Phase 3 : Proactive signal collection ──
+        task = asyncio.create_task(self._proactive_collect_loop())
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
 
     async def _on_index_reset(self, _data=None):
         """Callback quand l'utilisateur vide l'index depuis l'UI."""
@@ -334,8 +374,84 @@ class NuruCore:
                     return
                 await asyncio.sleep(10)
 
+    # ── Phase 3 : Proactive Engine ────────────────────────────────────────────
+
+    def _register_proactive_collectors(self) -> None:
+        """Enregistre les collecteurs de signaux pour le ProactiveEngine."""
+
+        def _clock_collector():
+            from src.proactive.engine import Signal, SignalCategory, SignalPriority
+            import datetime
+            now = datetime.datetime.now()
+            signals = []
+            # Rappel si proche d'un horaire de routine
+            for routine in self.routines.get_active():
+                due = self.routines.check_due(time.time())
+                for r in due:
+                    signals.append(Signal(
+                        source="clock",
+                        category=SignalCategory.REMINDER,
+                        priority=SignalPriority.ROUTINE,
+                        title=f"Routine due : {r.name}",
+                        description=r.description,
+                    ))
+            return signals
+
+        self.proactive.register_collector("clock", _clock_collector)
+
+        def _memory_collector():
+            """Collecteur basé sur les faits mémoire récents."""
+            from src.proactive.engine import Signal, SignalCategory, SignalPriority
+            signals = []
+            try:
+                facts = self.memory.get_recent_facts(limit=5)
+                for fact in facts:
+                    signals.append(Signal(
+                        source="memory",
+                        category=SignalCategory.INFO,
+                        priority=SignalPriority.LOW,
+                        title="Fait mémoire",
+                        description=str(fact),
+                    ))
+            except Exception:
+                pass
+            return signals
+
+        self.proactive.register_collector("memory", _memory_collector)
+
+    # ── Phase 3 : Boucles background ──────────────────────────────────────────
+
+    async def _sleep_cycle_loop(self) -> None:
+        """Boucle périodique de mise à jour du cycle de sommeil."""
+        from src.memory.sleep_cycle import SleepPhase
+        while self._indexing_enabled:
+            try:
+                phase = self.sleep_cycle.tick()
+                if phase == SleepPhase.DEEP and hasattr(self, '_on_deep_sleep'):
+                    await self.event_bus.publish("sleep_phase", {"phase": phase.value})
+                elif phase == SleepPhase.AWAKE:
+                    await self.event_bus.publish("sleep_phase", {"phase": phase.value})
+            except Exception as e:
+                logger.debug(f"Sleep cycle tick: {e}")
+            await asyncio.sleep(10)
+
+    async def _proactive_collect_loop(self) -> None:
+        """Boucle de collecte et évaluation proactives."""
+        await asyncio.sleep(30)  # Laisser le temps à l'app de démarrer
+        while self._indexing_enabled:
+            try:
+                signals = await self.proactive.collect_signals()
+                if signals:
+                    logger.info(f"⚡ Signaux proactifs: {len(signals)} collectés")
+                    plan = await self.proactive.evaluate()
+                    pending = plan.pending_actions()
+                    for action in pending:
+                        await self.event_bus.publish("proactive_action", action.to_dict())
+            except Exception as e:
+                logger.debug(f"Proactive collect: {e}")
+            await asyncio.sleep(120)  # Collecte toutes les 2 minutes
+
     def build_system_prompt(self, intent: str, facts: list[str] = None, procedures: str = "") -> str:
-        """Assemble le prompt système de base avec les faits et procédures, adapté selon l'intention."""
         parts = [SYSTEM_PROMPT_STATIC]
         
         # Règles de réponse spécifiques à l'intention (surcouche au prompt de base)
@@ -368,7 +484,26 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
             facts_str = "\n".join(facts)
             if facts_str.strip():
                 parts.append(f"\n## Ce que tu sais sur Leblanc\n{facts_str.strip()}")
-                
+
+        # ── Phase 3 : Contexte augmenté ──
+        try:
+            kg_nodes = self.knowledge_graph.search_nodes("", limit=5)
+            if kg_nodes:
+                kg_block = "\n".join(f"- {n.label} ({n.entity_type})" for n in kg_nodes)
+                parts.append(f"\n## Connaissances reliées (Knowledge Graph)\n{kg_block}")
+        except Exception:
+            pass
+
+        try:
+            phase = self.sleep_cycle.current_phase
+            if phase.value != "awake":
+                from src.memory.sleep_cycle import SleepPhase
+                phase_names = {SleepPhase.AWAKE.value: "éveillé", SleepPhase.LIGHT.value: "sommeil léger",
+                              SleepPhase.DEEP.value: "sommeil profond", SleepPhase.REM.value: "sommeil paradoxal"}
+                parts.append(f"\n## Statut NURU\nÉtat : {phase_names.get(phase.value, phase.value)}")
+        except Exception:
+            pass
+
         return "\n".join(parts)
 
     def _detect_model_family(self, intent: str) -> str:
@@ -391,6 +526,9 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
         Délègue l'intégralité du pipeline (routage, RAG, génération,
         vérification, mémoire) au NuruOrchestrator injecté.
         """
+        # ── Phase 3 : Signal d'activité utilisateur ──
+        self.sleep_cycle.user_activity_detected()
+
         async for token in self.orchestrator.process_query(
             query=query, session_id="default",
             use_tts=use_tts, audio_engine=self.audio if use_tts else None,
