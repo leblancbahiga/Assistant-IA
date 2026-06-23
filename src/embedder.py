@@ -118,5 +118,5 @@ class Embedder:
             del self._tokenizer
             self._model = None
             self._tokenizer = None
-            mx.metal.clear_cache()
+            mx.clear_cache()
             logger.info("Embedder déchargé de la mémoire Metal.")

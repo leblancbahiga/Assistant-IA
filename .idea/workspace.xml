@@ -6,7 +6,17 @@
   <component name="ChangeListManager">
     <list default="true" id="3593a8dd-1a26-409b-af6b-c7b826474b13" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/routing/prompt_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/routing/prompt_builder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/RAPPORT_AUDIT_V4.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/settings.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/config/settings.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_v12.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_v12.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/ambient_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/ambient_app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/conversation_surface.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/conversation_surface.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/floating_widget.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/floating_widget.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/nuru_window.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/nuru_window.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/presence_orb.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/presence_orb.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/styles.qss" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/styles.qss" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/styles_light.qss" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/styles_light.qss" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/tokens.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/tokens.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

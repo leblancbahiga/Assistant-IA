@@ -69,7 +69,7 @@ class CrossEncoderReranker:
             # Nettoyage du cache MPS/Metal
             try:
                 import mlx.core as mx
-                mx.metal.clear_cache()
+                mx.clear_cache()
             except Exception:
                 pass
             try:
