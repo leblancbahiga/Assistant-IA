@@ -215,6 +215,11 @@ class NuruCore:
         self.model_router = ModelRouter(cost_guard=self.cost_guard)
         self._init_model_routes()
 
+        # ── Connecter ModelRouter + CostGuard à CloudLLM ──
+        self.cloud_llm.model_router = self.model_router
+        self.cloud_llm.cost_guard = self.cost_guard
+        logger.info("🔗 CloudLLM connecté à ModelRouter + CostGuard")
+
         # ── Phase 4 : MCP ──
         self.mcp_server = MCPServer(name="nuru-mcp", version="12.0.0")
         self.mcp_client = MCPClient()

@@ -16,12 +16,14 @@ class CircuitBreakerState:
     timeout: float = 30.0  # secondes avant de réessayer
 
 class CloudLLM:
-    """Client API pour les modèles Cloud (DeepSeek, OpenRouter, Groq) avec Circuit Breaker."""
+    """Client API pour les modèles Cloud (DeepSeek, OpenRouter, Groq) avec Circuit Breaker et ModelRouter."""
 
-    def __init__(self):
+    def __init__(self, model_router=None, cost_guard=None):
         self.provider = config.cloud_provider
         self.model = config.cloud_model
         self.circuit_breaker = CircuitBreakerState()
+        self.model_router = model_router
+        self.cost_guard = cost_guard
 
     def generate(self, prompt: str, timeout: float = 30.0, model: Optional[str] = None) -> str:
         """Version synchrone NON-streaming pour expansion rapide de requête (QueryRewriter).
@@ -73,10 +75,49 @@ class CloudLLM:
             return parts[0], parts[1]
         return default_provider, config_str
 
+    def _intent_to_task_type(self, intent: str):
+        """Convertit une intention NURU (string) vers un TaskType du ModelRouter."""
+        from src.models.router import TaskType
+        mapping = {
+            "SIMPLE": TaskType.SIMPLE,
+            "RAG": TaskType.RAG,
+            "COMPLEX": TaskType.COMPLEX,
+            "GENERAL": TaskType.RAG,
+            "CREATIVE": TaskType.CREATIVE,
+            "CODE": TaskType.CODE,
+            "TOOL": TaskType.TOOL,
+            "VISION": TaskType.VISION,
+        }
+        return mapping.get(intent.upper(), TaskType.SIMPLE)
+
     async def generate_stream(self, prompt: str, intent: str = "SIMPLE", system_prompt: Optional[str] = None, temperature: float = 0.7) -> AsyncGenerator[str, None]:
-        """Génère une réponse en streaming avec Circuit Breaker et Fallback automatique."""
-        primary_provider = self.provider
-        primary_model = self.model
+        """Génère une réponse en streaming avec ModelRouter + Circuit Breaker + Fallback automatique + CostGuard."""
+        
+        # ── Choix du modèle via ModelRouter ──
+        task_type = self._intent_to_task_type(intent)
+        selected_provider = self.provider  # fallback statique
+        selected_model = self.model
+        fallback_order: list[str] = []
+        
+        if self.model_router:
+            try:
+                decision = self.model_router.decide(task_type)
+                provider_part, model_part = self._parse_provider_model(
+                    decision.selected_model, self.provider
+                )
+                selected_provider = provider_part
+                selected_model = model_part
+                fallback_order = decision.fallback_models
+                logger.info(
+                    f"🤖 ModelRouter[{intent}] → {decision.selected_model} "
+                    f"(cost ~${decision.estimated_cost:.4f}/1k) | {decision.reason}"
+                )
+            except Exception as e:
+                logger.warning(f"ModelRouter indisponible, fallback statique: {e}")
+        # ── Fin ModelRouter ──
+        
+        primary_provider = selected_provider
+        primary_model = selected_model
 
         # 1. Tentative sur le Provider Primaire
         primary_failed = False
@@ -100,11 +141,31 @@ class CloudLLM:
                 if success:
                     self.circuit_breaker.failures = 0
                     self.circuit_breaker.state = "CLOSED"
+                    # Enregistrer les métriques de succès
+                    if self.model_router:
+                        self.model_router.record_metrics(
+                            model=f"{primary_provider}/{primary_model}",
+                            latency_ms=0.0,  # Pas de latence exacte en streaming
+                            success=True,
+                        )
+                    if self.cost_guard:
+                        self.cost_guard.record_usage(
+                            model=f"{primary_provider}/{primary_model}",
+                            prompt_tokens=len(prompt) // 4,  # estimation
+                            completion_tokens=256,  # estimation
+                            cost=0.0005,  # estimation forfaitaire
+                        )
                     return
             except Exception as e:
                 logger.error(f"Erreur avec le provider primaire {primary_provider}: {e}")
                 self.circuit_breaker.failures += 1
                 self.circuit_breaker.last_failure = time.time()
+                if self.model_router:
+                    self.model_router.record_metrics(
+                        model=f"{primary_provider}/{primary_model}",
+                        latency_ms=0.0,
+                        success=False,
+                    )
                 if self.circuit_breaker.failures >= 3:
                     self.circuit_breaker.state = "OPEN"
         
