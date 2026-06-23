@@ -31,6 +31,7 @@ class OrbState(Enum):
     SPEAKING = auto()
     ACTING = auto()
     ERROR = auto()
+    SLEEP = auto()  # Phase sommeil LIGHT/DEEP/REM
 
 
 # Couleurs DM-1 par état
@@ -41,6 +42,7 @@ STATE_COLORS = {
     OrbState.SPEAKING: QColor(0, 212, 255),    # Cyan
     OrbState.ACTING:   QColor(0, 212, 255),    # Cyan
     OrbState.ERROR:    QColor(255, 77, 106),   # Rose
+    OrbState.SLEEP:    QColor(75, 85, 120),    # Bleu-gris dim
 }
 
 STATE_GLOW_ALPHA = {
@@ -50,6 +52,7 @@ STATE_GLOW_ALPHA = {
     OrbState.SPEAKING:  60,
     OrbState.ACTING:    60,
     OrbState.ERROR:     90,
+    OrbState.SLEEP:     15,  # Luminescence minimale
 }
 
 STATE_RING_COUNT = {
@@ -59,6 +62,7 @@ STATE_RING_COUNT = {
     OrbState.SPEAKING:  2,
     OrbState.ACTING:    2,
     OrbState.ERROR:     1,
+    OrbState.SLEEP:     1,
 }
 
 
@@ -136,6 +140,7 @@ class PresenceOrb(QWidget):
             OrbState.SPEAKING:  {"orb": 1.0, "glow": 0.9, "rot_spd": 0.03},
             OrbState.ACTING:    {"orb": 1.0, "glow": 0.9, "rot_spd": 0.04},
             OrbState.ERROR:     {"orb": 0.8, "glow": 0.7, "rot_spd": 0.02},
+            OrbState.SLEEP:     {"orb": 0.4, "glow": 0.2, "rot_spd": 0.01},
         }
         config = state_configs.get(state, state_configs[OrbState.IDLE])
         self._target_orb_opacity = config["orb"]

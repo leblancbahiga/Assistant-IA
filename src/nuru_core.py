@@ -577,9 +577,9 @@ class NuruCore:
             try:
                 phase = self.sleep_cycle.tick()
                 if phase == SleepPhase.DEEP and hasattr(self, '_on_deep_sleep'):
-                    await self.event_bus.publish("sleep_phase", {"phase": phase.value})
+                    await self.event_bus.emit("sleep_phase", {"phase": phase.value})
                 elif phase == SleepPhase.AWAKE:
-                    await self.event_bus.publish("sleep_phase", {"phase": phase.value})
+                    await self.event_bus.emit("sleep_phase", {"phase": phase.value})
             except Exception as e:
                 logger.debug(f"Sleep cycle tick: {e}")
             await asyncio.sleep(10)
@@ -595,7 +595,7 @@ class NuruCore:
                     plan = await self.proactive.evaluate()
                     pending = plan.pending_actions()
                     for action in pending:
-                        await self.event_bus.publish("proactive_action", action.to_dict())
+                        await self.event_bus.emit("proactive_action", action.to_dict())
             except Exception as e:
                 logger.debug(f"Proactive collect: {e}")
             await asyncio.sleep(120)  # Collecte toutes les 2 minutes

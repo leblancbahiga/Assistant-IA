@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 
 from src.ui.tokens import Color, Typography, Radius, Spacing, OrbSizes, AnimDuration, WindowSizes
 from src.ui.presence_orb import NuruPresenceOrb, OrbState
+from src.core.events import EventBus
 from src.ui.floating_widget import NuruFloatingWidget
 from src.ui.nuru_window import NuruWindow
 from src.ui.tray_icon import NURUTrayIcon
@@ -271,12 +272,33 @@ class AmbientApp:
         self._engine.state_changed.connect(self._on_engine_state)
         self._engine.start()
 
-        # 10. Charger le QSS initial (dark)
+        # 10. Abonnement EventBus Phase 3 (sleep → orb, proactif)
+        EventBus().subscribe("sleep_phase", self._on_sleep_phase)
+        EventBus().subscribe("proactive_action", self._on_proactive_action)
+
+        # 11. Charger le QSS initial (dark)
         self._load_qss("styles.qss")
 
         # Afficher composants initiaux
         self._window.show()
         self._show_floating()
+
+    # ── EventBus Phase 3 : Sleep → Orb ─────────────────────────────────────────
+
+    def _on_sleep_phase(self, data: dict) -> None:
+        """Met à jour l'orb selon la phase de sommeil."""
+        phase = data.get("phase", "awake")
+        if phase == "awake":
+            self._window.orb.set_state(OrbState.IDLE)
+        elif phase == "deep":
+            self._window.orb.set_state(OrbState.SLEEP)
+
+    def _on_proactive_action(self, data: dict) -> None:
+        """Reçoit une action proactive et l'affiche dans le chat."""
+        title = data.get("title", "Action") if isinstance(data, dict) else "Action"
+        logger.info(f"⚡ Action proactive reçue: {title}")
+        if hasattr(self._window, 'show_suggestion'):
+            self._window.show_suggestion(data)
 
     # ── Tray DM-1: actions connectées ──
 
