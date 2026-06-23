@@ -37,6 +37,12 @@ from src.proactive.engine import ProactiveEngine
 from src.proactive.routines import RoutineScheduler, RoutinePreset
 from src.personality.engine import PersonaEngine
 
+# Phase 4 : MCP, ModelRouter, CostGuard
+from src.models.cost_guard import CostGuard, CostConfig
+from src.models.router import ModelRouter, ModelRoute, TaskType, RoutingDecision
+from src.mcp.server import MCPServer, MCPTool
+from src.mcp.client import MCPClient
+
 logger = logging.getLogger(__name__)
 
 
@@ -196,6 +202,24 @@ class NuruCore:
         self.routines = RoutineScheduler()
         self.routines.load_preset(RoutinePreset.default())
 
+        # ── Phase 4 : CostGuard ──
+        daily_budget = getattr(config, "cost_daily_budget", getattr(config, "daily_api_budget", 0.50))
+        monthly_budget = getattr(config, "cost_monthly_budget", getattr(config, "monthly_api_budget", 10.0))
+        self.cost_guard = CostGuard(CostConfig(
+            daily_budget=daily_budget,
+            monthly_budget=monthly_budget,
+        ))
+        logger.info(f"💰 CostGuard: ${daily_budget}/jour, ${monthly_budget}/mois")
+
+        # ── Phase 4 : ModelRouter ──
+        self.model_router = ModelRouter(cost_guard=self.cost_guard)
+        self._init_model_routes()
+
+        # ── Phase 4 : MCP ──
+        self.mcp_server = MCPServer(name="nuru-mcp", version="12.0.0")
+        self.mcp_client = MCPClient()
+        self._register_mcp_tools()
+
     def _is_online(self) -> bool:
         """Vérifie rapidement si le fournisseur Cloud est accessible.
         
@@ -271,6 +295,11 @@ class NuruCore:
 
         # ── Phase 3 : Proactive signal collection ──
         task = asyncio.create_task(self._proactive_collect_loop())
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
+        # ── Phase 4 : MCP HTTP Server ──
+        task = asyncio.create_task(self._mcp_server.start_http(port=8765))
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
 
@@ -373,6 +402,121 @@ class NuruCore:
                     logger.info("🛑 Auto-indexation arrêtée sur demande")
                     return
                 await asyncio.sleep(10)
+
+    # ── Phase 4 : Routes ModelRouter ──────────────────────────────────────────
+
+    def _init_model_routes(self) -> None:
+        """Configure les routes de modèles selon les providers NURU."""
+        from src.models.router import ModelRoute, TaskType
+        routes = [
+            ModelRoute(
+                name="groq/llama-3.3-70b", provider="groq",
+                task_types=[TaskType.SIMPLE, TaskType.RAG, TaskType.TOOL],
+                cost_per_1k_tokens=0.0001, priority=10, fallback="groq/deepseek-r1",
+                avg_accuracy=0.95,
+            ),
+            ModelRoute(
+                name="groq/deepseek-r1", provider="groq",
+                task_types=[TaskType.COMPLEX, TaskType.CODE],
+                cost_per_1k_tokens=0.0003, priority=8,
+                avg_accuracy=0.92,
+            ),
+            ModelRoute(
+                name="deepseek/deepseek-chat", provider="deepseek",
+                task_types=[TaskType.COMPLEX, TaskType.CREATIVE],
+                cost_per_1k_tokens=0.0005, priority=7,
+                avg_accuracy=0.90,
+            ),
+            ModelRoute(
+                name="openrouter/qwen-qwq-32b", provider="openrouter",
+                task_types=[TaskType.COMPLEX, TaskType.CODE, TaskType.CREATIVE],
+                cost_per_1k_tokens=0.0002, priority=6,
+                avg_accuracy=0.88,
+            ),
+            ModelRoute(
+                name="local/phi-4-mini", provider="local",
+                task_types=list(TaskType),
+                cost_per_1k_tokens=0.0, priority=1,
+                avg_accuracy=0.80,
+            ),
+        ]
+        for route in routes:
+            self.model_router.add_route(route)
+        logger.info(f"🗺️ ModelRouter: {len(routes)} routes configurées")
+
+    # ── Phase 4 : MCP Tools ───────────────────────────────────────────────────
+
+    def _register_mcp_tools(self) -> None:
+        """Enregistre les outils NURU comme outils MCP."""
+        from src.mcp.server import MCPTool
+
+        # Tool: Recherche mémoire
+        def _search_memory(**params):
+            query = params.get("query", "")
+            limit = params.get("limit", 5)
+            try:
+                results = self.memory.search(query, limit=limit)
+                return {"results": results, "count": len(results)}
+            except Exception as e:
+                return {"error": str(e)}
+
+        self.mcp_server.register_tool(MCPTool(
+            name="search_memory",
+            description="Recherche dans la mémoire persistante de NURU",
+            parameters={"query": {"type": "string", "required": True}, "limit": {"type": "integer"}},
+            handler=_search_memory,
+        ))
+
+        # Tool: Query RAG
+        def _rag_query(**params):
+            query = params.get("query", "")
+            try:
+                results = self.rag.search(query)
+                if hasattr(results, 'to_dict'):
+                    return results.to_dict()
+                return str(results)
+            except Exception as e:
+                return {"error": str(e)}
+
+        self.mcp_server.register_tool(MCPTool(
+            name="rag_query",
+            description="Interroge le moteur RAG documentaire",
+            parameters={"query": {"type": "string", "required": True}},
+            handler=_rag_query,
+        ))
+
+        # Tool: Knowledge Graph
+        def _kg_query(**params):
+            query = params.get("query", "")
+            limit = params.get("limit", 10)
+            try:
+                nodes = self.knowledge_graph.search_nodes(query, limit=limit)
+                return {"nodes": [n.to_dict() for n in nodes], "count": len(nodes)}
+            except Exception as e:
+                return {"error": str(e)}
+
+        self.mcp_server.register_tool(MCPTool(
+            name="knowledge_graph_search",
+            description="Recherche dans le graphe de connaissances",
+            parameters={"query": {"type": "string", "required": True}, "limit": {"type": "integer"}},
+            handler=_kg_query,
+        ))
+
+        # Tool: Cost summary
+        def _cost_summary(**params):
+            try:
+                return self.cost_guard.get_summary()
+            except Exception as e:
+                return {"error": str(e)}
+
+        self.mcp_server.register_tool(MCPTool(
+            name="cost_summary",
+            description="Résumé des coûts API",
+            parameters={},
+            handler=_cost_summary,
+        ))
+
+        logger.info(f"🔌 MCP: {len(self.mcp_server.tools)} outils enregistrés")
 
     # ── Phase 3 : Proactive Engine ────────────────────────────────────────────
 
