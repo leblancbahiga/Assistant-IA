@@ -2081,7 +2081,7 @@ La majorité des projets « JARVIS » open-source échouent parce qu'ils **ajout
 | **VoiceOverlay** | 60%×40% écran | Fenêtre frameless semi-transparente pour le mode vocal | 🆕 |
 | **NuruFloatingWidget** | 160×160 px | Widget always-on-top, drag-and-drop, auto-dim opacité | 🆕 |
 | **NuruMenuBarIcon** | 22×22 px | QSystemTrayIcon, icône change selon état | 🆕 |
-| **ContextStrip** | barre horizontale | Infos contextuelles (app active, fichier sélectionné) | 🆕 |
+|| **ContextStrip** | barre horizontale | Infos contextuelles (app active, fichier sélectionné) | 📋 V13 |
 | **ProactiveToast** | notification glissante | 400px déplacement, 300ms ease-out, 4s visibilité | 🆕 |
 
 **Supprimés :**
@@ -2213,7 +2213,7 @@ splash_label.setPixmap(splash_pixmap.scaledToWidth(320, Qt.SmoothTransformation)
 | **P1 — Socle visuel** | 1-3 | NuruWindow sombre + coins arrondis, Orb idle/thinking (QPainter), ConversationSurface bulles, Design tokens (palette, typo, espacement) | Chat fonctionnel avec identité V12 |
 | **P1.5 — Widget flottant** 🔀 | 2-3 | FloatingWidget layout + Tray menu (dépend uniquement de NuruWindow, pas de l'Orb) | Widget apparaît dans menu bar |
 | **P2 — Expérience vocale** | 4-6 | VoiceOverlay frameless complet, Orb listening/speaking (ondes, halo), Menu bar QSystemTrayIcon, Raccourcis clavier | Activation vocale + overlay fonctionnel |
-| **P3 — Présence & polish** | 7-9 | Orb acting (anneau progression), ProactiveToasts glissants, ContextStrip (NSWorkspace), Mode debug Ctrl+D, Light mode, Micro-interactions | Tous modes actifs, micro-interactions fluides |
+| **P3 — Présence & polish** | 7-9 | Orb acting (anneau progression) ✅, ProactiveToasts glissants ✅, ContextStrip (NSWorkspace) 📋 V13, Mode debug Ctrl+D 📋 V13, Light mode ✅, Micro-interactions ✅ | Orb acting + toasts + light mode actifs ; ContextStrip et debug à faire V13 |
 
 > **Parallélisme** : P1.5 (FloatingWidget) peut démarrer dès la semaine 2, en parallèle de P1. Il ne dépend que de `NuruWindow` et `QSystemTrayIcon` — pas de l'Orb. Si le widget est fonctionnel avant l'Orb, un cercle gris statique sert de placeholder.
 
