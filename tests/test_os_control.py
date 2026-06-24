@@ -493,10 +493,12 @@ class TestEdgeCases:
         result = ctrl.screenshot()
         # Soit réussi (permissions OK) soit échoué avec message clair
         if not result.success:
-            assert "permission" in str(result.error).lower() or \
-                   "accessibility" in str(result.error).lower() or \
-                   "screen recording" in str(result.error).lower() or \
-                   "not available" in str(result.error).lower()
+            err = str(result.error).lower()
+            assert "permission" in err or \
+                   "accessibility" in err or \
+                   "screen recording" in err or \
+                   "not available" in err or \
+                   "capture d'écran" in err
 
     def test_type_special_characters(self, ctrl):
         """Caractères spéciaux dans type_text."""

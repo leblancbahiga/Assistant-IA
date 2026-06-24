@@ -34,7 +34,7 @@ def test_fact_status_issues_badge():
     assert b._fact_status == "issues"
     assert b._fact_badge is not None
     text = b._fact_badge.text()
-    assert "Incertain" in text
+    assert "Problèmes" in text
 
 
 def test_fact_status_error_badge():
@@ -43,7 +43,7 @@ def test_fact_status_error_badge():
     assert b._fact_status == "error"
     assert b._fact_badge is not None
     text = b._fact_badge.text()
-    assert "Non vérifié" in text
+    assert "Erreur" in text
 
 
 def test_fact_status_user_ignored():

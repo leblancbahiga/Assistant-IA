@@ -296,7 +296,7 @@ class MarkdownRenderer:
         """Convertit les marqueurs [N] en hyperliens cliquables.
 
         Exemple: ``[1]`` → ``<a href="citation:1" ...>[1]</a>``
-        Ne lie que les crochets numériques non déjà dans un <a>.
+        Protection des [N] déjà dans des balises <a> avant substitution.
         """
         def _replace(m: re.Match) -> str:
             num = m.group(1)
@@ -307,5 +307,12 @@ class MarkdownRenderer:
                 f' title="Source {num}">'
                 f"[{num}]</a>"
             )
-        # Remplacer [N] où N est un nombre, hors balises existantes
-        return re.sub(r"(?![^<]*>)\[(\d+)\](?!<)", _replace, html)
+        # 1. Protéger les [N] déjà dans une balise <a>
+        def _protect(m):
+            return m.group(0).replace("[", "&#91;").replace("]", "&#93;")
+        html = re.sub(r"<a[^>]*>.*?</a>", _protect, html)
+        # 2. Lier les [N] non protégés
+        html = re.sub(r"\[(\d+)\]", _replace, html)
+        # 3. Restaurer les [N] protégés
+        html = html.replace("&#91;", "[").replace("&#93;", "]")
+        return html
