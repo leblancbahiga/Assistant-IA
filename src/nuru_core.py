@@ -304,7 +304,7 @@ class NuruCore:
         task.add_done_callback(self._bg_tasks.discard)
 
         # ── Phase 4 : MCP HTTP Server ──
-        task = asyncio.create_task(self._mcp_server.start_http(port=8765))
+        task = asyncio.create_task(self.mcp_server.start_http(port=8765))
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
 

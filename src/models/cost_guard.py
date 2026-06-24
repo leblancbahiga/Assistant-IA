@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable
+import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,9 @@ logger = logging.getLogger(__name__)
 class UsageRecord:
     """Enregistrement de consommation."""
     model: str
-    prompt_tokens: int
-    completion_tokens: int
     cost: float
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
     timestamp: float = 0.0
 
     def __post_init__(self):
@@ -32,9 +33,10 @@ class UsageRecord:
     def to_dict(self) -> dict:
         return {
             "model": self.model,
-            "tokens": self.prompt_tokens + self.completion_tokens,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
             "cost": self.cost,
-            "time": self.timestamp,
+            "timestamp": self.timestamp,
         }
 
 
@@ -76,6 +78,12 @@ class CostGuard:
                 for line in self.config.log_path.read_text().strip().split("\n"):
                     if line:
                         data = json.loads(line)
+                        # Normalize old format keys
+                        if "time" in data and "timestamp" not in data:
+                            data["timestamp"] = data.pop("time")
+                        if "tokens" in data:
+                            data.setdefault("prompt_tokens", data.pop("tokens"))
+                            data.setdefault("completion_tokens", 0)
                         self._records.append(UsageRecord(**data))
             except Exception as e:
                 logger.error(f"Erreur chargement historique coûts: {e}")
