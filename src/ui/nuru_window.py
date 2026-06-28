@@ -18,7 +18,7 @@ Trois modes : chat (défaut) | voice | action
 import logging
 
 from PySide6.QtCore import Qt, QTimer, QPointF, Signal
-from PySide6.QtGui import QColor, QPainter, QIcon, QPixmap
+from PySide6.QtGui import QColor, QPainter, QIcon, QPixmap, QLinearGradient, QRadialGradient
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QApplication, QMenu,
@@ -350,33 +350,75 @@ class NuruWindow(QMainWindow):
         else:
             self.setWindowOpacity(1.0)
 
-    # ── Render DM-1 — coins arrondis + fond ──
+    # ── Render DM-1 V12 — gradient bleu + ambient glow cyan + coins arrondis ──
 
-    def _bg_color(self) -> QColor:
-        """Couleur de fond selon le thème courant."""
-        return QColor(
-            Color.LIGHT["bg"] if self._current_theme == "light" else Color.BG_DEEP
-        )
+    def _build_dark_bg_gradient(self, w: int, h: int) -> QLinearGradient:
+        """V12 — gradient 3-stops sombre (#0A0E17 → #0D131E → #0B101A → #0A0E17).
+        Crée une profondeur subtile sans agressivité.
+        """
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0.0,  QColor(10, 14, 23))   # #0A0E17 — haut
+        grad.setColorAt(0.35, QColor(13, 19, 30))   # #0D131E — léger relief
+        grad.setColorAt(0.65, QColor(11, 16, 26))   # #0B101A
+        grad.setColorAt(1.0,  QColor(10, 14, 23))   # #0A0E17 — bas
+        return grad
+
+    def _build_light_bg_gradient(self, w: int, h: int) -> QLinearGradient:
+        """Light theme — gradient plat subtil centré sur light.bg."""
+        grad = QLinearGradient(0, 0, 0, h)
+        light_bg = Color.LIGHT["bg"]  # #F0F4F8
+        grad.setColorAt(0.0, QColor(light_bg))
+        grad.setColorAt(1.0, QColor(248, 250, 252))  # #F8FAFC — quasi-identique
+        return grad
 
     def _dot_color(self) -> QColor:
         """Couleur de la grille de points selon le thème."""
         if self._current_theme == "light":
             return QColor(200, 210, 220, 20)  # grille subtile claire
-        return QColor(26, 34, 52, 12)  # grille sombre
+        return QColor(26, 34, 52, 12)  # grille sombre ~ 5%
 
     def paintEvent(self, event):
+        """DM-1 V12 :
+          - Fond gradient bleu (3-stops) en dark, plat en light
+          - Coins arrondis (Radius.WIDGET)
+          - Grille de points subtile
+          - Ambient glow cyan derrière la zone de l'orb (dark only)
+        """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setBrush(self._bg_color())
-        painter.setPen(Qt.NoPen)
+        w, h = self.width(), self.height()
         r = Radius.WIDGET
+
+        # ── 1. Fond gradient ────────────────────────────────────────
+        if self._current_theme == "dark":
+            painter.setBrush(self._build_dark_bg_gradient(w, h))
+        else:
+            painter.setBrush(self._build_light_bg_gradient(w, h))
+        painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(self.rect(), r, r)
 
-        # Grille de points subtile DM-1
+        # ── 2. Ambient glow cyan derrière l'orb (V12, dark only) ──
+        # Cylindre de lumière cyan très doux en haut-centre
+        if self._current_theme == "dark":
+            orb_y = Spacing.LG + OrbSizes.WINDOW
+            ambient_glow = QRadialGradient(
+                w / 2, orb_y, OrbSizes.WINDOW * 1.5
+            )
+            ambient_glow.setColorAt(0.0, QColor(0, 212, 255, 15))   # ~6 % cyan
+            ambient_glow.setColorAt(0.5, QColor(0, 212, 255, 5))    # ~2 %
+            ambient_glow.setColorAt(1.0, QColor(0, 212, 255, 0))
+            painter.setBrush(ambient_glow)
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(
+                QPointF(w / 2, orb_y),
+                OrbSizes.WINDOW * 1.5,
+                OrbSizes.WINDOW * 1.5,
+            )
+
+        # ── 3. Grille de points subtile DM-1 ─────────────────────────
         painter.setBrush(self._dot_color())
         spacing = 20
         dot_r = 1
-        w, h = self.width(), self.height()
         for x in range(spacing, w, spacing):
             for y in range(spacing, h, spacing):
                 painter.drawEllipse(QPointF(x, y), dot_r, dot_r)
