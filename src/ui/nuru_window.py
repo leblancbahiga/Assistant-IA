@@ -91,6 +91,98 @@ class NuruInputBar(QWidget):
         return self._mic
 
 
+class NuruCentralWidget(QWidget):
+    """
+    Central widget DM-1 V12 — fond gradient bleu + grille de points + ambient glow.
+
+    Reçoit le paintEvent qui était sur QMainWindow, car le central widget
+    opaque (QSS background) recouvrait le rendu du parent.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("NuruCentral")
+        self._current_theme = "dark"
+
+    def set_theme(self, theme: str):
+        self._current_theme = theme
+        self.update()
+
+    # ── Render DM-1 V12 — gradient bleu + ambient glow cyan + coins arrondis ──
+
+    def _build_dark_bg_gradient(self, w: int, h: int) -> QLinearGradient:
+        """V12 — gradient 3-stops sombre (#0A0E17 → #0D131E → #0B101A → #0A0E17).
+        Crée une profondeur subtile sans agressivité.
+        """
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0.0,  QColor(10, 14, 23))   # #0A0E17 — haut
+        grad.setColorAt(0.35, QColor(13, 19, 30))   # #0D131E — léger relief
+        grad.setColorAt(0.65, QColor(11, 16, 26))   # #0B101A
+        grad.setColorAt(1.0,  QColor(10, 14, 23))   # #0A0E17 — bas
+        return grad
+
+    def _build_light_bg_gradient(self, w: int, h: int) -> QLinearGradient:
+        """Light theme — gradient plat subtil centré sur light.bg."""
+        grad = QLinearGradient(0, 0, 0, h)
+        light_bg = Color.LIGHT["bg"]  # #F0F4F8
+        grad.setColorAt(0.0, QColor(light_bg))
+        grad.setColorAt(1.0, QColor(248, 250, 252))  # #F8FAFC — quasi-identique
+        return grad
+
+    def _dot_color(self) -> QColor:
+        """Couleur de la grille de points selon le thème."""
+        if self._current_theme == "light":
+            return QColor(200, 210, 220, 20)
+        return QColor(26, 34, 52, 12)
+
+    def paintEvent(self, event):
+        """DM-1 V12 :
+          - Fond gradient bleu (3-stops) en dark, plat en light
+          - Coins arrondis (Radius.WIDGET)
+          - Grille de points subtile
+          - Ambient glow cyan derrière la zone de l'orb (dark only)
+        """
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        r = Radius.WIDGET
+
+        # ── 1. Fond gradient ────────────────────────────────────────
+        if self._current_theme == "dark":
+            painter.setBrush(self._build_dark_bg_gradient(w, h))
+        else:
+            painter.setBrush(self._build_light_bg_gradient(w, h))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(self.rect(), r, r)
+
+        # ── 2. Ambient glow cyan derrière l'orb (V12, dark only) ────
+        if self._current_theme == "dark":
+            orb_y = Spacing.LG + OrbSizes.WINDOW
+            ambient_glow = QRadialGradient(
+                w / 2, orb_y, OrbSizes.WINDOW * 1.5
+            )
+            ambient_glow.setColorAt(0.0, QColor(0, 212, 255, 15))   # ~6 % cyan
+            ambient_glow.setColorAt(0.5, QColor(0, 212, 255, 5))    # ~2 %
+            ambient_glow.setColorAt(1.0, QColor(0, 212, 255, 0))
+            painter.setBrush(ambient_glow)
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(
+                QPointF(w / 2, orb_y),
+                OrbSizes.WINDOW * 1.5,
+                OrbSizes.WINDOW * 1.5,
+            )
+
+        # ── 3. Grille de points subtile DM-1 ─────────────────────────
+        painter.setBrush(self._dot_color())
+        spacing = 20
+        dot_r = 1
+        for x in range(spacing, w, spacing):
+            for y in range(spacing, h, spacing):
+                painter.drawEllipse(QPointF(x, y), dot_r, dot_r)
+
+        painter.end()
+
+
 class NuruWindow(QMainWindow):
     """
     Fenêtre principale NURU V12 (DM-1 "Deep Cyan").
@@ -128,16 +220,11 @@ class NuruWindow(QMainWindow):
     # ── UI ──
 
     def _build_ui(self):
-        central = QWidget()
-        central.setObjectName("NuruCentral")
-        self._central = central
-        central.setStyleSheet(f"""
-            #NuruCentral {{
-                background: {Color.BG_DEEP};
-                border-radius: {Radius.WIDGET}px;
-            }}
-        """)
-        self.setCentralWidget(central)
+        # Central widget custom — porte le paintEvent gradient + ambient glow.
+        # On NE met PAS de QSS `background:` ici, pour ne pas masquer le rendu.
+        self._central = NuruCentralWidget(self)
+        self.setCentralWidget(self._central)
+        central = self._central
 
         layout = QVBoxLayout(central)
         layout.setContentsMargins(Spacing.LG, Spacing.LG, Spacing.LG, Spacing.MD)
@@ -307,23 +394,13 @@ class NuruWindow(QMainWindow):
         self.theme_change_requested.emit(new_theme)
 
     def set_theme(self, theme: str):
-        """Applique un thème (dark/light) et met à jour tous les styles inline."""
+        """Applique un thème (dark/light) — délègue au NuruCentralWidget."""
         self._current_theme = theme
-
-        # Mettre à jour le fond du central widget
-        bg = Color.LIGHT["bg"] if theme == "light" else Color.BG_DEEP
+        # Mettre à jour le séparateur (inline)
         border_color = Color.LIGHT["border"] if theme == "light" else Color.BORDER
-        self._central.setStyleSheet(f"""
-            #NuruCentral {{
-                background: {bg};
-                border-radius: {Radius.WIDGET}px;
-            }}
-        """)
-
-        # Mettre à jour le séparateur
         self._sep.setStyleSheet(f"background: {border_color};")
-
-        # Repeindre
+        # Mettre à jour le rendu du central widget (gradient + grille + glow)
+        self._central.set_theme(theme)
         self.update()
 
     # ── Orb API ──
@@ -349,78 +426,3 @@ class NuruWindow(QMainWindow):
             self.setWindowOpacity(0.3)
         else:
             self.setWindowOpacity(1.0)
-
-    # ── Render DM-1 V12 — gradient bleu + ambient glow cyan + coins arrondis ──
-
-    def _build_dark_bg_gradient(self, w: int, h: int) -> QLinearGradient:
-        """V12 — gradient 3-stops sombre (#0A0E17 → #0D131E → #0B101A → #0A0E17).
-        Crée une profondeur subtile sans agressivité.
-        """
-        grad = QLinearGradient(0, 0, 0, h)
-        grad.setColorAt(0.0,  QColor(10, 14, 23))   # #0A0E17 — haut
-        grad.setColorAt(0.35, QColor(13, 19, 30))   # #0D131E — léger relief
-        grad.setColorAt(0.65, QColor(11, 16, 26))   # #0B101A
-        grad.setColorAt(1.0,  QColor(10, 14, 23))   # #0A0E17 — bas
-        return grad
-
-    def _build_light_bg_gradient(self, w: int, h: int) -> QLinearGradient:
-        """Light theme — gradient plat subtil centré sur light.bg."""
-        grad = QLinearGradient(0, 0, 0, h)
-        light_bg = Color.LIGHT["bg"]  # #F0F4F8
-        grad.setColorAt(0.0, QColor(light_bg))
-        grad.setColorAt(1.0, QColor(248, 250, 252))  # #F8FAFC — quasi-identique
-        return grad
-
-    def _dot_color(self) -> QColor:
-        """Couleur de la grille de points selon le thème."""
-        if self._current_theme == "light":
-            return QColor(200, 210, 220, 20)  # grille subtile claire
-        return QColor(26, 34, 52, 12)  # grille sombre ~ 5%
-
-    def paintEvent(self, event):
-        """DM-1 V12 :
-          - Fond gradient bleu (3-stops) en dark, plat en light
-          - Coins arrondis (Radius.WIDGET)
-          - Grille de points subtile
-          - Ambient glow cyan derrière la zone de l'orb (dark only)
-        """
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        r = Radius.WIDGET
-
-        # ── 1. Fond gradient ────────────────────────────────────────
-        if self._current_theme == "dark":
-            painter.setBrush(self._build_dark_bg_gradient(w, h))
-        else:
-            painter.setBrush(self._build_light_bg_gradient(w, h))
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(self.rect(), r, r)
-
-        # ── 2. Ambient glow cyan derrière l'orb (V12, dark only) ──
-        # Cylindre de lumière cyan très doux en haut-centre
-        if self._current_theme == "dark":
-            orb_y = Spacing.LG + OrbSizes.WINDOW
-            ambient_glow = QRadialGradient(
-                w / 2, orb_y, OrbSizes.WINDOW * 1.5
-            )
-            ambient_glow.setColorAt(0.0, QColor(0, 212, 255, 15))   # ~6 % cyan
-            ambient_glow.setColorAt(0.5, QColor(0, 212, 255, 5))    # ~2 %
-            ambient_glow.setColorAt(1.0, QColor(0, 212, 255, 0))
-            painter.setBrush(ambient_glow)
-            painter.setPen(Qt.NoPen)
-            painter.drawEllipse(
-                QPointF(w / 2, orb_y),
-                OrbSizes.WINDOW * 1.5,
-                OrbSizes.WINDOW * 1.5,
-            )
-
-        # ── 3. Grille de points subtile DM-1 ─────────────────────────
-        painter.setBrush(self._dot_color())
-        spacing = 20
-        dot_r = 1
-        for x in range(spacing, w, spacing):
-            for y in range(spacing, h, spacing):
-                painter.drawEllipse(QPointF(x, y), dot_r, dot_r)
-
-        painter.end()
