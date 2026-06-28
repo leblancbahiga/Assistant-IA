@@ -180,7 +180,10 @@ def _make_orchestrator(**overrides):
         ),
     }
     defaults.update(overrides)
-    return NuruOrchestrator(**defaults)
+    orch = NuruOrchestrator(**defaults)
+    # Mock de la connectivité réseau par défaut
+    orch.llm_gen.check_connectivity = AsyncMock(return_value=True)
+    return orch
 
 
 @pytest.mark.asyncio
@@ -268,6 +271,7 @@ async def test_pipeline_offline():
     orch = _make_orchestrator(
         local_llm=MockLLM(mode="ok"),
     )
+    orch.llm_gen.check_connectivity = AsyncMock(return_value=False)
     tokens = []
     async for token in orch.process_query("test offline"):
         tokens.append(token)

@@ -46,10 +46,10 @@ from src.mcp.client import MCPClient
 logger = logging.getLogger(__name__)
 
 
-SYSTEM_PROMPT_STATIC = """
-Tu es NURU V8+, l'assistant IA personnel de Leblanc.
+SYSTEM_PROMPT_TEMPLATE = """
+Tu es NURU V8+, l'assistant IA personnel de {user_name}.
 
-Ton utilisateur : Leblanc BAHIGA Mudarhi — Ingénieur agronome & informaticien, spécialiste des chaînes de valeur agricoles en Afrique centrale et orientale (IITA, FAO, World Bank, USAID).
+Ton utilisateur : {user_full_name} — {user_profession}, spécialiste de {user_specialty} ({user_organizations}).
 
 Ta mission principale est de fournir des réponses exactes, traçables, utiles et adaptées au contexte disponible.
 
@@ -601,7 +601,16 @@ class NuruCore:
             await asyncio.sleep(120)  # Collecte toutes les 2 minutes
 
     def build_system_prompt(self, intent: str, facts: list[str] = None, procedures: str = "") -> str:
-        parts = [SYSTEM_PROMPT_STATIC]
+        from src.identity_manager import IdentityManager
+        identity = IdentityManager.load()
+        static_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+            user_name=identity["user_name"],
+            user_full_name=identity["user_full_name"],
+            user_profession=identity["user_profession"],
+            user_specialty=identity["user_specialty"],
+            user_organizations=identity["user_organizations"]
+        )
+        parts = [static_prompt]
         
         # Règles de réponse spécifiques à l'intention (surcouche au prompt de base)
         if intent == "RAG":
@@ -632,7 +641,20 @@ ne s'appliquent pas pour les salutations et conversations simples.""".strip())
         if facts:
             facts_str = "\n".join(facts)
             if facts_str.strip():
-                parts.append(f"\n## Ce que tu sais sur Leblanc\n{facts_str.strip()}")
+                parts.append(f"\n## Ce que tu sais sur {identity['user_name']}\n{facts_str.strip()}")
+
+        # V12.1 — ANTI-HALLUCINATION : informations personnelles
+        parts.append(f"""
+# RÈGLE STRICTE : INFORMATIONS PERSONNELLES SUR L'UTILISATEUR
+Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail, projets, nationalité, résidence) :
+- Utilise UNIQUEMENT les faits listés dans ## Ce que tu sais sur {identity["user_name"]} ci-dessus.
+- N'INVENTE JAMAIS d'informations personnelles qui n'y figurent pas.
+- Si les faits sont insuffisants pour répondre, dis-le honnêtement : "Je ne dispose pas
+  de cette information dans ma mémoire à propos de {identity["user_name"]}."
+- Ne comble PAS les lacunes avec des suppositions, généralités ou stéréotypes.
+- Exemple à ne PAS suivre : "Sa couleur préférée est le bleu" → si ce fait n'est pas
+  dans ## Ce que tu sais sur {identity["user_name"]}, ne l'invente pas.
+""".strip())
 
         # ── Phase 3 : Contexte augmenté ──
         try:

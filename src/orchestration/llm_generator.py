@@ -26,11 +26,13 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_user_facts(system_prompt: str) -> str:
-    """Extrait la section 'Ce que tu sais sur Leblanc' du system_prompt.
+    """Extrait la section 'Ce que tu sais sur [Utilisateur]' du system_prompt.
 
     Retourne une chaîne vide si la section est absente.
     """
-    marker = "## Ce que tu sais sur Leblanc"
+    from src.identity_manager import IdentityManager
+    identity = IdentityManager.load()
+    marker = f"## Ce que tu sais sur {identity['user_name']}"
     start = system_prompt.find(marker)
     if start == -1:
         return ""
@@ -138,8 +140,10 @@ class LLMGenerator:
                 logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")
             else:
                 logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB, hybrid={hybrid}, temp={cloud_temp})")
+                from src.identity_manager import IdentityManager
+                identity = IdentityManager.load()
+                cloud_system = f"Tu es NURU, assistant personnel de {identity['user_name']}. Tu réponds en français.\n\n"
                 user_facts_section = _extract_user_facts(system_prompt)
-                cloud_system = "Tu es NURU, assistant personnel de Leblanc. Tu réponds en français.\n\n"
                 if rag_context.strip():
                     cloud_system += (
                         f"## CONTEXTE DE VOS DOCUMENTS (prioritaire, utilise EXCLUSIVEMENT ces informations)\n"

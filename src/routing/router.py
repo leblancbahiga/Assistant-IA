@@ -72,6 +72,11 @@ RAG_KEYWORDS = {
     "rapport", "présentation", "projet", "étude de base",
     "filière", "filiere", "walikale",
     "cherche dans", "trouve le fichier", "ouvre le document",
+    # V12.1 — Questions personnelles sur l'utilisateur
+    "leblanc", "bahiga", "mudarhi",
+    "mon profil", "ma bio", "qui suis-je", "qui suis je",
+    "parle-moi de moi", "parle moi de moi",
+    "mes infos", "informations personnelles",
 }
 
 # ── Patterns triviaux (0 ms) ──────────────────────────────────────────────
@@ -80,10 +85,11 @@ TRIVIAL_PATTERNS = {
     r"^(oui|non|ok|d'accord|daccord|super|parfait|cool|génial|nickel)\b": "SIMPLE",
     r"^(c['' ]?(est|était|etait) (bien|super|génial|nul|pas mal|sympa|intéressant)\b)": "SIMPLE",
     r"^(je (suis|va|vais) (bien|content|heureux|fatigué|occupé)\b)": "SIMPLE",
-    r"^(qui (es-?tu|êtes-?vous|suis-?je))\b": "SIMPLE",
+    r"^(qui (es-?tu|êtes-?vous))\b": "SIMPLE",  # NOTA: "qui suis-je" → RAG via mots-clés
     r"^(tu es|vous êtes) qui\b": "SIMPLE",
     r"^(quelle est ton? (nom|identité|but|mission|rôle|fonction|objectif|créateur|auteur))\b": "SIMPLE",
     r"^(tu peux )?(répéter|répète|expliquer|clarifier|résumer|reformuler)\b": "SIMPLE",
+    # "qui suis-je" est traité plus bas par les mots-clés RAG (documents personnels)
 }
 
 # ── Seuils RAG (audit §7.1) ───────────────────────────────────────────────

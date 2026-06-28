@@ -86,7 +86,9 @@ class DynamicPromptBuilder:
                 procedures=memory_store.get_procedures() if memory_store else [],
             )
         else:
-            system_prompt = f"Tu es NURU, assistant personnel de Leblanc."
+            from src.identity_manager import IdentityManager
+            identity = IdentityManager.load()
+            system_prompt = f"Tu es NURU, assistant personnel de {identity['user_name']}."
 
         # V10.3f : Injection contexte conversationnel de session
         if session_id:
