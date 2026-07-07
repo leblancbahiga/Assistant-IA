@@ -187,7 +187,7 @@ class AgentOrchestrator:
 
         start_time = time.monotonic()
         max_wall = self.limits.get("max_wall_time_seconds", 300)
-        max_steps_limit = self.limits.get("max_steps", 5)
+        max_steps_limit = self.limits.get("max_steps", 3)  # V15 Phase 0B : 3 itérations max (P0 #20)
         max_retries = self.limits.get("max_retries_per_step", 3)
 
         state = AgentState(
