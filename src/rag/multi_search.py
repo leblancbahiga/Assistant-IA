@@ -102,45 +102,63 @@ def check_ram_available() -> tuple[bool, int]:
 
 # ──────────────────────────────────────────
 # Fusion RRF (basée sur les RANGS, pas les scores bruts)
+# V15 Phase 0B : normalisation débiaisée + poids par stratégie
 # ──────────────────────────────────────────
+
+# Poids relatifs des stratégies RRF (vectoriel > FTS > metadata > HyDE > grep)
+STRATEGY_WEIGHTS: dict[str, float] = {
+    "vectoriel": 1.0,
+    "fts": 0.8,
+    "metadata": 0.7,
+    "hyde": 0.6,
+    "grep": 0.5,
+}
+
 
 def reciprocal_rank_fusion(
     strategy_results: list[list[SearchResult]],
+    strategy_labels: Optional[list[str]] = None,
     k: int = RRF_K,
 ) -> list[SearchResult]:
-    """Fusion RRF standard — utilise les RANGS, pas les scores bruts.
+    """Fusion RRF débiaisée — chaque stratégie contribue selon son poids.
 
-    Chaque stratégie contribue : 1 / (k + rang).
-    Un document présent dans N stratégies obtient N×RRF.
-    Les scores sont normalisés [0, 1] après fusion.
+    Le score normalisé tient compte du nombre réel et de la qualité
+    des stratégies exécutées, pas d'un maximum théorique arbitraire.
+
+    Args:
+        strategy_results: Résultats classés par stratégie
+        strategy_labels: Noms des stratégies (pour pondération)
+        k: Constante RRF standard
     """
+    if strategy_labels is None:
+        strategy_labels = [""] * len(strategy_results)
+
     scores: dict[tuple[str, str], float] = defaultdict(float)
     content_map: dict[tuple[str, str], str] = {}
 
-    for results in strategy_results:
+    total_max_possible = 0.0
+
+    for results, label in zip(strategy_results, strategy_labels):
+        weight = STRATEGY_WEIGHTS.get(label, 0.5)
+        # Contribution max théorique de cette stratégie (rang 1)
+        total_max_possible += weight * (1.0 / (k + 1))
+
         for rank, r in enumerate(results, start=1):
-            key = (r.content[:400], r.source)  # Clé basée sur début contenu + source
-            scores[key] += 1.0 / (k + rank)
+            key = (r.content[:400], r.source)
+            scores[key] += weight * (1.0 / (k + rank))
             # Garder le contenu le plus long si conflit
             if key not in content_map or len(r.content) > len(content_map[key]):
                 content_map[key] = r.content
 
-    if not scores:
+    if not scores or total_max_possible <= 0:
         return []
 
-    # Normaliser les scores [0, 1] par division par le max théorique CONSTANT
-    # V12.1 : MAX_RRF_STRATEGIES = 5 au lieu de len(strategy_results) pour que
-    # les scores soient comparables entre requêtes (quel que soit le nombre de
-    # stratégies réellement exécutées).
-    max_possible = MAX_RRF_STRATEGIES * (1.0 / (k + 1))
-    if max_possible <= 0:
-        max_possible = 1.0
-
+    # Normaliser [0, 1] par la somme des max possibles
     fused = [
         SearchResult(
             content=content_map[key],
             source=key[1],
-            score=min(rrf_score / max_possible, 1.0),
+            score=min(rrf_score / total_max_possible, 1.0),
             strategy='rrf',
             rank=0,
         )
@@ -254,6 +272,8 @@ class MultiSearchOrchestrator:
         # est le seul garde-fou. HyDE+grep sont lancés dès que le score rapide
         # est insuffisant, sans dépendre d'un confidence_label externe.
         early_stop = False
+        heavy_labels: list[str] = []
+        heavy_gathered: list = []
 
         # ── Round 1 : Stratégies RAPIDES (vectoriel + FTS + métadonnées) ──
         # Ces stratégies prennent < 50ms. On les attend pour décider
@@ -348,12 +368,15 @@ class MultiSearchOrchestrator:
         # Compter les résultats
         diag.total_results_before_dedup = sum(len(r) for r in all_results)
 
+        # ── Construction des labels de stratégies pour RRF pondéré ──
+        all_labels = fast_labels[:] + heavy_labels  # même ordre que all_results
+
         # ── Fusion RRF (par RANGS) ──
         if not all_results:
             diag.total_time_ms = (time.time() - t_start) * 1000
             return [], diag
 
-        fused = reciprocal_rank_fusion(all_results)
+        fused = reciprocal_rank_fusion(all_results, strategy_labels=all_labels)
 
         # ── Déduplication sémantique ──
         deduped = semantic_dedup(fused)
