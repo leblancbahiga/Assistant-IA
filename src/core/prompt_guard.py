@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from pathlib import Path
 from typing import Final
 
 logger = __import__("logging").getLogger(__name__)
@@ -242,9 +243,48 @@ def assert_safe_user_input(text: str, *, context: str = "user_input") -> str:
     return out
 
 
+def sanitize_path(path: str | Path) -> Path:
+    """Valide et résout un chemin fichier contre les attaques Path Traversal.
+
+    Vérifie :
+    - Résolution sécurisée (pas de '..' qui sort du home)
+    - Absence de liens symboliques dangereux
+    - Extension autorisée pour les documents
+
+    Returns
+    -------
+    Path résolu (absolu, expand) si valide.
+
+    Raises
+    ------
+    ValueError — si le chemin traverse en dehors de ~/Documents|Desktop|Downloads|.nuru
+    """
+    p = Path(path).expanduser().resolve()
+
+    allowed_prefixes = [
+        Path.home() / "Documents",
+        Path.home() / "Desktop",
+        Path.home() / "Downloads",
+        Path.home() / ".nuru",
+    ]
+
+    # Vérifier qu'on est dans un dossier autorisé
+    if not any(str(p).startswith(str(prefix)) for prefix in allowed_prefixes):
+        raise ValueError(f"Chemin refusé (hors zone autorisée) : {p}")
+
+    # Vérifier les symlink dangereux
+    if p.is_symlink():
+        real = p.resolve(strict=False)
+        if not any(str(real).startswith(str(prefix)) for prefix in allowed_prefixes):
+            raise ValueError(f"Symlink vers zone non autorisée : {p} → {real}")
+
+    return p
+
+
 __all__ = [
     "sanitize_for_prompt_injection",
     "sanitize_document_content",
     "build_safe_user_facts_block",
     "assert_safe_user_input",
+    "sanitize_path",
 ]

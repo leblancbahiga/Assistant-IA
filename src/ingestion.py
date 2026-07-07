@@ -100,6 +100,10 @@ class IngestionEngine:
     async def index_file(self, filepath: str):
         """Parse et indexe un fichier unique avec timeout de sécurité."""
         try:
+            # V15 Phase 0B : validation path contre Path Traversal
+            from src.core.prompt_guard import sanitize_path
+            sanitize_path(filepath)
+
             # Timeout critique de 120s par document (V10.1: 30s → 120s pour les gros fichiers comme NURU_V9.md)
             async with asyncio.timeout(120):
                 file_hash = self.compute_sha256(filepath)

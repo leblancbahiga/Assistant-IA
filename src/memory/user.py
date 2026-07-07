@@ -67,7 +67,7 @@ class UserMemory:
             conn.commit()
         finally:
             conn.close()
-        logger.debug("UserMemory set : %s = %s [%s]", key, value, category)
+        logger.debug("UserMemory set : %s = %s… [%s]", key, value[:8], category)
 
     def get(self, key: str) -> Optional[str]:
         """Récupère la valeur d'une clé.

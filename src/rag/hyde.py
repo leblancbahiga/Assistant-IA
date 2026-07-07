@@ -110,14 +110,9 @@ async def hyde_search(
 
 
 async def _generate_hypothetical(query: str, cloud_llm: object) -> str:
-    """Génère un document hypothétique via CloudLLM.
+    """Génère un document hypothétique via CloudLLM dans un thread séparé.
 
-    Args:
-        query: La requête (idéalement réécrite)
-        cloud_llm: Instance CloudLLM avec méthode generate()
-
-    Returns:
-        str: Le document hypothétique, ou "" en cas d'échec
+    V15 Phase 0B : wrapping async pour ne pas bloquer la boucle d'événements.
     """
     prompt = (
         f"{HYDE_SYSTEM_PROMPT}\n"
@@ -126,7 +121,10 @@ async def _generate_hypothetical(query: str, cloud_llm: object) -> str:
     )
 
     try:
-        response = cloud_llm.generate(prompt, timeout=5.0)
+        # V15 Phase 0B : to_thread pour éviter le blocage de la boucle (5s max)
+        response = await asyncio.to_thread(
+            cloud_llm.generate, prompt, timeout=5.0
+        )
         if not response or not response.strip():
             return ""
 

@@ -109,14 +109,44 @@ class TokenJuice:
     dédup, crush logs/timestamps) avant que les données n'atteignent le LLM.
     """
 
-    def __init__(self, enabled: bool = True, max_chunk_chars: int = 2000):
+    def __init__(self, enabled: bool = True, max_chunk_chars: int = 2000, tokenizer: Optional[object] = None):
         self.enabled = enabled
         self.max_chunk_chars = max_chunk_chars
+        self._tokenizer = tokenizer
         self._stats = {
             "pre_compress_chars": 0,
             "post_compress_chars": 0,
             "compressions": 0,
         }
+
+    def set_tokenizer(self, tokenizer: object) -> None:
+        """Injecte le tokenizer réel du LLM pour un comptage précis."""
+        self._tokenizer = tokenizer
+
+    def _count_tokens(self, text: str) -> int:
+        """Compte les tokens avec le tokenizer réel, ou estime ~4 chars/token."""
+        if self._tokenizer is not None and hasattr(self._tokenizer, 'encode'):
+            return len(self._tokenizer.encode(text))
+        # Fallback caractères (approximation)
+        return len(text) // 4 + 1
+
+    def _trim_by_tokens(self, text: str, max_tokens: int, token_safety_margin: int = 50) -> str:
+        """Tronque un texte au nombre de tokens max en utilisant le tokenizer réel.
+
+        Avec marge de sécurité pour éviter un dépassement exact au niveau
+        de la jonction token/char.
+        """
+        if not text:
+            return text
+        n_tokens = self._count_tokens(text)
+        max_tokens -= token_safety_margin
+        if n_tokens <= max_tokens:
+            return text
+        # Troncature binaire par caractères (approximative, affinée en V16+)
+        ratio = max_tokens / n_tokens if n_tokens > 0 else 1.0
+        target_chars = int(len(text) * ratio)
+        cutoff = max(target_chars, 100)  # jamais moins de 100 chars
+        return text[:cutoff] + f"\n[… tronqué de {n_tokens - max_tokens} tokens …]"
 
     def compress(self, text: str, stage: str = "pre") -> str:
         """Compresse un texte brut (requête, prompt, etc.).

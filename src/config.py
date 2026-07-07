@@ -12,6 +12,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 import keyring
 import yaml
 
+SENSITIVE_KEY_PATTERNS = ("key", "secret", "token", "password", "credential")
+
+
+def _mask_val(key: str, val: str) -> str:
+    """Masque la valeur dans les logs si la clé semble sensible."""
+    if any(p in key.lower() for p in SENSITIVE_KEY_PATTERNS):
+        return val[:4] + "…" + val[-4:] if len(val) > 8 else "****"
+    return val
+
 
 class Config(BaseSettings):
     """Configuration globale de NURU V5.
@@ -188,7 +197,7 @@ class Config(BaseSettings):
                 yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
             
             logger = logging.getLogger(__name__)
-            logger.info(f"Config sauvegardée: {key} = {val}")
+            logger.info(f"Config sauvegardée: {key} = {_mask_val(key, str(val))}")
             return True
         except Exception as e:
             logger = logging.getLogger(__name__)
