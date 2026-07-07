@@ -169,6 +169,9 @@ class ConversationSurface(QWidget):
         self._streaming_bubble: BubbleWidget | None = None
         self._stream_buffer: list[str] = []
         self._stream_timer: QTimer | None = None
+        # Glue spaces entre tokens pour providers qui strippent
+        # les espaces en début de token (openrouter deepseek, etc.)
+        self._glue_spaces: bool = True
 
     # ── Messages normaux ──
 
@@ -229,8 +232,34 @@ class ConversationSurface(QWidget):
 
         Utilise un buffer + timer pour grouper les tokens
         et éviter de repeindre trop souvent.
+
+        Glue spaces : si le dernier fragment ne se termine pas par un
+        espace et que le nouveau ne commence pas par un, on insère un
+        espace. Compense un comportement de streaming où certains
+        providers (openrouter deepseek notamment) envoient des tokens
+        sans espaces entre eux (mots collés). Désactivable via
+        ``self._glue_spaces = False``.
         """
-        self._stream_buffer.append(chunk)
+        if not self._glue_spaces or not self._stream_buffer:
+            self._stream_buffer.append(chunk)
+        else:
+            prev = self._stream_buffer[-1]
+            # Si le buffer précédent ne finit pas par un séparateur
+            # ET que le nouveau chunk ne commence pas par un séparateur
+            # → ajouter un espace pour éviter les mots collés.
+            sep_chars = " \n\t.,;:!?)]}-—"
+            needs_space = (
+                prev
+                and not prev[-1].isspace()
+                and not prev.endswith(tuple(sep_chars))
+                and chunk
+                and not chunk[0].isspace()
+                and not chunk.startswith(tuple(sep_chars))
+            )
+            if needs_space:
+                self._stream_buffer.append(" " + chunk)
+            else:
+                self._stream_buffer.append(chunk)
 
         # Déclencher le flush immédiatement (timer unique)
         if self._stream_timer is None or not self._stream_timer.isActive():

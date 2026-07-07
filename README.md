@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/ui/assets/nuru_logo_v5.png" width="160" alt="NURU V12"/>
+<img src="src/ui/assets/Gemini_Generated_Image_35cdt735cdt735cd_transparent.png" width="160" alt="NURU V12"/>
 
 <br/>
 
@@ -16,8 +16,8 @@ Conçu pour tourner en local d'abord, sur un MacBook Pro M1 de 8 Go de RAM unifi
   <a href="NURU_V14_VISION.md"><img src="https://img.shields.io/badge/V14%20Vision-NURU_V14_VISION.md-a855f7?style=for-the-badge" alt="V14 Vision"/></a>
   <img src="https://img.shields.io/badge/Platform-macOS%20M1%208GB-39FF14?style=for-the-badge&logo=apple&logoColor=white" alt="macOS M1 8GB"/>
   <img src="https://img.shields.io/badge/LLM-Phi--4--mini%20(MLX)-FFB000?style=for-the-badge" alt="LLM Phi-4-mini"/>
-  <img src="https://img.shields.io/badge/Tests-50%20fichiers-success?style=for-the-badge" alt="50 test files"/>
-  <img src="https://img.shields.io/badge/Phase%200-%E2%9C%85-success?style=for-the-badge" alt="Phase 0 done"/>
+  <img src="https://img.shields.io/badge/Tests-913%20tests-success?style=for-the-badge" alt="913 tests"/>
+  <img src="https://img.shields.io/badge/Phase%200%20V12-%E2%9C%85-success?style=for-the-badge" alt="Phase 0 V12 done"/>
   <img src="https://img.shields.io/badge/Status-V12%20actif-00D4FF?style=for-the-badge" alt="Status V12"/>
 </p>
 
@@ -73,28 +73,25 @@ Pré-requis validés :
 ## Quick Start
 
 ```bash
-# Lancer le dashboard PySide6
-python3 nuru_dashboard.py
+# Lancer le dashboard V12 (présence ambiante Z.ai — tray + floating widget)
+python3 run_v12.py
 
 # Chat CLI simple (léger, sans UI)
 python3 cli.py
 
-# Réindexation de vos documents (première fois ou nouveau dossier)
-python3 reindex_personal.py
+# Réindexation des documents
+python3 reindex_all.py
 
-# Tests Phase 0 en isolation
-python3 -m pytest tests/test_v45_modules.py -v
+# Tests
+python3 -m pytest tests/test_zai_architecture.py -v
 ```
 
 | Commande | Effet |
 |----------|-------|
-| `python3 nuru_dashboard.py` | Lance l'UI 3 colonnes (Z.ai design) avec chat, métriques RAM et présence animée |
+| `python3 run_v12.py` | Lance l'interface ambiante V12 (tray icon + floating widget + orb animé) |
 | `python3 cli.py` | Mode terminal pour usage SSH / serveur headless |
-| `python3 reindex_personal.py` | Indexe vos documents personnels (whitelist Leblanc, ~104 chunks V2) |
-| `python3 reindex_all.py` | Indexe tout le workspace (~450 sources, plus large) |
-| `python3 tests/test_v45_modules.py` | 12 modules V4.5 (sans MLX) — PolicyEngine, RRF, Citation, EventBus |
-| `python3 tests/test_rag.py` | Suite RAG (Reranker, FTS, embedding safety) |
-| `python3 tests/test_orchestrator_pipeline.py` | Pipeline end-to-end (online + offline) |
+| `python3 reindex_all.py` | Indexe tous les documents du workspace |
+| `python3 -m pytest tests/` | Suite complète — 913 tests (UI, RAG, agent, mémoire, voice) |
 
 ---
 
@@ -181,7 +178,7 @@ NURU V12 absorbe V13-A/B (les modules "PersonaEngine", "SleepCycle", "CostGuard"
 
 ```
 nuru/
-├── nuru_dashboard.py           # Entry point PySide6 (qasync)
+├── run_v12.py                  # Entry point PySide6 — V12 ambient presence (Z.ai)
 ├── cli.py                      # Entry point CLI
 ├── pyproject.toml              # Python ≥3.11 · pytest · pydantic · mlx-lm
 ├── config/
@@ -221,15 +218,21 @@ nuru/
 │   ├── audio.py                # STT/TTS
 │   ├── ocr.py                  # Vision OCR
 │   ├── tools/                  # ToolRegistry + SandboxShell
-│   └── ui/
-│       ├── dashboard.py        # PySide6 3 colonnes (Z.ai)
-│       ├── styles.qss          # QSS — palette anthracite + cyan
-│       ├── components/         # ChatBubble, ConsolePage, etc.
-│       └── assets/
-│           ├── nuru_logo_v5.png       # Hero
-│           ├── gemini-logo.svg        # Logo animé SVG
-│           └── fond.jpg               # Fond paysage
-├── tests/                       # 50 fichiers, ~800 assertions (réel mesuré)
+│   ├── ui/
+│   │   ├── ambient_app.py      # V12 AmbientApp — orchestre tray, floating, voice, chat
+│   │   ├── floating_widget.py  # Widget always-on-top 260×180 (DM-1 verre dépoli)
+│   │   ├── presence_orb.py     # NuruPresenceOrb — 7 états animés
+│   │   ├── tray_icon.py        # NURUTrayIcon — diamant cyan (menu bar macOS)
+│   │   ├── voice_overlay.py    # Overlay vocal frameless (⌥␣)
+│   │   ├── nuru_window.py      # Fenêtre principale 720×860 (QMainWindow DM-1)
+│   │   ├── conversation_surface.py  # Zone de chat avec bulles
+│   │   ├── styles.qss          # QSS — palette anthracite + cyan
+│   │   ├── tokens.py           # Design tokens — Color, Typography, Radius
+│   │   ├── components/         # ChatBubble, ConsolePage, etc.
+│   │   └── assets/
+│               ├── Gemini_Generated_Image_35cdt735cdt735cd_transparent.png  # Logo V12
+│               └── gemini-logo.svg        # Logo animé SVG
+├── tests/                       # 37 fichiers, 913 tests
 ├── NURU_V9.md                   # Spec V12 détaillée (140 Ko)
 ├── NURU_V14_VISION.md           # Vision V14 (GoalMemory, LiveKit, Skills SDK)
 ├── NURU_AUDIT_SYNTHESE.md       # 7 audits experts consolidés
@@ -319,4 +322,4 @@ MIT. Voir [`LICENSE`](LICENSE) (à ajouter).
 
 ---
 
-*Document mis à jour le 21 juin 2026 — NURU V12 Phase 0 ✅ — V13-A/B absorbé — V14 vision long terme*
+*Document mis à jour le 7 juillet 2026 — NURU V12.2 — Dashboard ambiant Z.ai actif — 913 tests ✅*

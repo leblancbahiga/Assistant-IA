@@ -4,6 +4,9 @@
 
 cd "$(dirname "$0")"
 
+# Nettoyer PYTHONPATH Hermes pour éviter conflit Python 3.11/3.13
+unset PYTHONPATH
+
 # Rediriger les logs
 exec > /tmp/nuru_dashboard.log 2>&1
 

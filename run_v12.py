@@ -13,7 +13,15 @@ Usage :
 """
 
 import sys
+import os
 import logging
+
+# ── Purge PYTHONPATH Hermes (conflit Python 3.11/3.13) ──
+# Hermès injecte son venv 3.11 dans PYTHONPATH, ce qui brise les imports
+# C extensions compilées pour 3.13 (pydantic_core, etc.).
+_HERMES_MARKERS = ('.hermes/hermes-agent', '.hermes/hermes-agent/venv')
+os.environ.pop('PYTHONPATH', None)
+sys.path = [p for p in sys.path if not any(m in p for m in _HERMES_MARKERS)]
 
 logging.basicConfig(
     level=logging.INFO,
