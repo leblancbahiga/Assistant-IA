@@ -116,6 +116,8 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 27 | **Ajouter HNSW à sqlite-vec** — passage en recherche vectorielle approchée pour accélérer les requêtes | #6 | 4 h |
 | 29 | **Dataset d'évaluation RAG étendu** — 20+ questions agronomiques pour fiabiliser le Recall@5 (actuellement 92% sur 5 docs seulement) | #6 | 4 h |
 | 30 | **MoE logiciel local** — charger un modèle spécialisé par domaine au lieu d'un seul généraliste (ex: Qwen2.5-3B pour RAG, Qwen2.5-Coder-3B pour code, Gemma3-4B pour raisonnement, MiniLM pour classification) — un seul chargé à la fois, philosophie DeepSeek | Expert DeepSeek | 2 sem |
+| 31 | **RAMBudgetManager** — arbitre dynamique entre LLM, RAG, STT, TTS, UI. Alloue la RAM selon la tâche : sacrifie STT/TTS si conversation, réduit LLM context si RAG intensif. Évite le swap en priorisant les composants critiques. | Expert DeepSeek | 1 sem |
+| 32 | **Speculative RAG** — un petit modèle (TinyLlama 1.1B) génère une réponse rapide sans RAG ; le RAG tourne en parallèle. Si docs pertinents trouvés (score >0.7), re-génère avec contexte. Sinon, garde la réponse rapide. Latence perçue : <500ms pour 80% des requêtes. | Expert DeepSeek | 1 sem |
 
 #### 🔵 P2 — Modéré (Sprint V15+)
 
@@ -138,6 +140,8 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 34 | **Distillation domaine (LoRA NURU)** — créer un dataset Q&A agronomie/gestion projets/réfugiés + fine-tuning Phi-4-mini ou Qwen3-4B pour spécialiser NURU sans modèle géant. **Dataset formaté :** instructions structurées (format sortie, appels d'outils natifs, indicateurs confiance, style NURU cohérent) — LoRA 4-bit ~50-100 Mo | Expert DeepSeek | 2 sem |
 | 35 | **FP8 / AWQ / QAT** — quantification différenciée : attention en FP16, FFN en 4-bit AWQ. Économie 15-20% RAM (700 Mo potentiels sur Phi-4). Vérifier compatibilité MLX sur M1. | Expert DeepSeek | 1 sem |
 | 36 | **Vérifier GQA sur le modèle actuel** — si Phi-4 n'a pas Grouped Query Attention, changer pour Qwen2/Gemma2 qui en ont (cache KV 2-8x plus petit). Impact direct sur RAM et latence. | Expert DeepSeek | 2 j |
+| 37 | **Plan de migration des données mémoire** — script de migration pour fusionner les 4 bases existantes (memory_store, long_term_memory, memory_bridge, memory/) en MemoryHub unifié sans perte. | Expert DeepSeek | 3 j |
+| 38 | **Speculative Dreaming** — pendant l'inactivité (idle >5 min), NURU prédit les questions probables via l'agenda/projets/conversations récentes, pré-génère les réponses en cache. Hit rate cible : 30%. | Expert DeepSeek | 2 sem |
 
 #### 🟢 P3 — Long terme
 
@@ -167,6 +171,7 @@ COUCHE 6 — AGENT ORCHESTRATOR (fusionné)
 
 COUCHE 5 — RAISONNEMENT AVANCÉ
   ReflexionEngine · SelfConsistency · ConfidenceCalibrator
+  SpeculativeRAG · SpeculativeDreaming (idle)
   TreeOfThoughts (P3) · Multi-agent (P3)
 
 COUCHE 4 — MÉMOIRE UNIFIÉE (6 types + Consolidation)
@@ -339,6 +344,7 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 | Métrique | Actuelle | Cible V15 | Comment |
 |----------|----------|-----------|---------|
 | Temps première réponse | >10 s (swap) | **<3 s** | Mesure utilisateur critique |
+| Temps jusqu'au 1er token | >3 s | **<0.5 s** | Streaming visible rapidement |
 | Swap disque | Permanent | **0 swap** | Signe que RAM suffit |
 | Recall@5 RAG | ~92% (5 docs) | **>70% (50 docs)** | Dataset étendu |
 | RAM totale utilisée | ~8 Go (swap) | **<6 Go** | Marge pour contexte RAG |
