@@ -100,11 +100,11 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 |---|-------------|--------|--------|
 | 12 | **Implémenter WorkingMemory** — contexte de session persisté avec TTL, évite la perte de contexte entre les tours | #2 | 8 h |
 | 13 | **Implémenter ConfidenceCalibrator** — score de fiabilité par réponse, exposé à l'utilisateur (FAIT / INFÉRENCE / HYPOTHÈSE) | #2 | 8 h |
-| 14 | **Implémenter ReflexionEngine** — auto-critique + correction en 2 passes max | #2 | 24 h |
+| 14 | **Implémenter ReflexionEngine** — auto-critique + correction en 2 passes max. **⚠️ Coût : 2x tokens et latence** — nécessite d'abord décodage spéculatif ou optimisation pipeline M1 | #2 | 24 h |
 | 15 | **Implémenter ProceduralMemory** — workflows appris par l'usage, NURU sait « comment faire » | #2 | 16 h |
 | 16 | **Construire un harnais de benchmark RAG** — 30-50 paires question/document connu, mesure Recall@5/10, MRR, NDCG | #1, #2 | 8 h |
 | 17 | **Activer le reranker systématiquement** (pas conditionnel) — qualité RAG constante | #2 | 4 h |
-| 18 | **Implémenter Self-Consistency** — 3 réponses + vote majoritaire pour les questions critiques | #2 | 16 h |
+| 18 | *← Self-Consistency déjà en P0 #29 (déplacé pour ⚠️ coût RAM)* | — | — |
 | 19 | **Nettoyer `nuru_core.py`** — supprimer ou archiver le pipeline V4 legacy (`process_query()`) | #1 | 2-3 j |
 | 20 | **Small-to-Big Retrieval** — améliorer le chunking : récupérer petits chunks pertinents, puis document parent complet | #3 | 8 h |
 | 21 | **Sandbox pour outils** — liste blanche de répertoires autorisés, protection contre injection via documents PDF | #3 | 8 h |
@@ -115,7 +115,7 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 26 | **Remplacer BM25 maison par `rank_bm25` standard** — le BM25 actuel n'a pas d'IDF ni de normalisation correcte | #6 | 2 h |
 | 27 | **Ajouter HNSW à sqlite-vec** — passage en recherche vectorielle approchée pour accélérer les requêtes | #6 | 4 h |
 | 29 | **Dataset d'évaluation RAG étendu** — 20+ questions agronomiques pour fiabiliser le Recall@5 (actuellement 92% sur 5 docs seulement) | #6 | 4 h |
-| 30 | **MoE logiciel local** — charger un modèle spécialisé par domaine au lieu d'un seul généraliste (ex: Qwen2.5-3B pour RAG, Qwen2.5-Coder-3B pour code, Gemma3-4B pour raisonnement, MiniLM pour classification) — un seul chargé à la fois, philosophie DeepSeek | Expert DeepSeek | 2 sem |
+| 30 | **MoE logiciel local (LoRA-MoE)** — garder UN modèle de base en RAM, charger/décharger dynamiquement des adaptateurs LoRA ultra-légers (<50 Mo) par domaine : LoRA RAG & Extraction, LoRA Python Coding, LoRA Conversation. Variante plus réaliste que 5 modèles entiers sur M1 8 Go : même gain d'expertise, empreinte RAM quasi constante. | Expert DeepSeek | 2 sem |
 | 31 | **RAMBudgetManager** — arbitre dynamique entre LLM, RAG, STT, TTS, UI. Alloue la RAM selon la tâche : sacrifie STT/TTS si conversation, réduit LLM context si RAG intensif. Évite le swap en priorisant les composants critiques. | Expert DeepSeek | 1 sem |
 | 32 | **Speculative RAG** — un petit modèle (TinyLlama 1.1B) génère une réponse rapide sans RAG ; le RAG tourne en parallèle. Si docs pertinents trouvés (score >0.7), re-génère avec contexte. Sinon, garde la réponse rapide. Latence perçue : <500ms pour 80% des requêtes. | Expert DeepSeek | 1 sem |
 
@@ -142,6 +142,7 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 36 | **Vérifier GQA sur le modèle actuel** — si Phi-4 n'a pas Grouped Query Attention, changer pour Qwen2/Gemma2 qui en ont (cache KV 2-8x plus petit). Impact direct sur RAM et latence. | Expert DeepSeek | 2 j |
 | 37 | **Plan de migration des données mémoire** — script de migration pour fusionner les 4 bases existantes (memory_store, long_term_memory, memory_bridge, memory/) en MemoryHub unifié sans perte. | Expert DeepSeek | 3 j |
 | 38 | **Speculative Dreaming** — pendant l'inactivité (idle >5 min), NURU prédit les questions probables via l'agenda/projets/conversations récentes, pré-génère les réponses en cache. Hit rate cible : 30%. | Expert DeepSeek | 2 sem |
+| 39 | **Distillation algorithmique (JSON natif au lieu de ReAct)** — fine-tuner le modèle pour émettre directement des commandes JSON au lieu du prompting ReAct (Thought→Action→Observation). Réduit la taille des prompts système de 60% et élimine les erreurs de format. | Expert DeepSeek | 1 sem |
 
 #### 🟢 P3 — Long terme
 
