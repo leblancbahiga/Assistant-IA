@@ -17,8 +17,9 @@ Conçu pour tourner en local d'abord, sur un MacBook Pro M1 de 8 Go de RAM unifi
   <img src="https://img.shields.io/badge/Platform-macOS%20M1%208GB-39FF14?style=for-the-badge&logo=apple&logoColor=white" alt="macOS M1 8GB"/>
   <img src="https://img.shields.io/badge/LLM-Phi--4--mini%20(MLX)-FFB000?style=for-the-badge" alt="LLM Phi-4-mini"/>
   <img src="https://img.shields.io/badge/Tests-913%20tests-success?style=for-the-badge" alt="913 tests"/>
-  <img src="https://img.shields.io/badge/Phase%200%20V12-%E2%9C%85-success?style=for-the-badge" alt="Phase 0 V12 done"/>
-  <img src="https://img.shields.io/badge/Status-V12%20actif-00D4FF?style=for-the-badge" alt="Status V12"/>
+  <img src="https://img.shields.io/badge/V15%20Phase%200A-%E2%9C%85-success?style=for-the-badge" alt="Phase 0A done"/>
+  <img src="https://img.shields.io/badge/Phase%200B-4%2F12-blue?style=for-the-badge" alt="Phase 0B 4/12"/>
+  <img src="https://img.shields.io/badge/Status-V12%20actif%20%2B%20V15-success?style=for-the-badge" alt="Status V12+V15"/>
 </p>
 
 </div>
@@ -282,6 +283,7 @@ V14 est **strictement additif** sur V12. Voir [`NURU_V14_VISION.md`](NURU_V14_VI
 | Document | Lire si... |
 |----------|-----------|
 | [`NURU_V9.md`](NURU_V9.md) | Tu veux la spec V12 complète (phases, sprints, décisions) — **140 Ko, dense, c'est le carnet de sprint** |
+| [`NURUV15.md`](NURUV15.md) | Tu veux le plan de consolidation V15 — 81 propositions issues des 7 audits, phases d'exécution avec statut |
 | [`NURU_V14_VISION.md`](NURU_V14_VISION.md) | Tu veux ce qui vient après V12 — GoalMemory, LiveKit, Skills |
 | [`NURU_AUDIT_SYNTHESE.md`](NURU_AUDIT_SYNTHESE.md) | Tu lis une décision d'architecture, et tu veux le contexte des 7 audits experts qui l'ont motivée |
 | [`NURU_AUDIT_2026-06-21_V12.md`](NURU_AUDIT_2026-06-21_V12.md) | Tu ouvres le repo aujourd'hui et tu veux savoir quels sont les P0 du moment |
@@ -322,4 +324,4 @@ MIT. Voir [`LICENSE`](LICENSE) (à ajouter).
 
 ---
 
-*Document mis à jour le 7 juillet 2026 — NURU V12.2 — Dashboard ambiant Z.ai actif — 913 tests ✅*
+*Document mis à jour le 15 juillet 2026 — NURU V12.2 — Dashboard ambiant Z.ai actif — 913 tests ✅ — V15 Phase 0A ✅ Phase 0B 4/12 ⏳*

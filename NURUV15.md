@@ -207,37 +207,37 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 
 > **⚠️ Note expert :** La Phase 0 initiale (21 items en 24-48h) était irréaliste pour un seul développeur. Scindée ci-dessous.
 
-### Phase 0A — Stabilité critique (48h)
+### Phase 0A — Stabilité critique (48h) ✅ *Terminée*
 *Objectif : l'application ne crash plus, les fuites mémoire sont colmatées.*
 
-| # | Action | Effort | Source |
-|---|--------|--------|--------|
-| 1 | pyproject.toml : PySide6 + dépendances de base | 1-2 h | #1, #2 |
-| 2 | Supprimer sqlite_compat.py (P0 #7) | 10 min | #1 |
-| 3 | Ajouter cachetools dans pyproject.toml (P0 #3) | 5 min | #2, Expert #7 |
-| 4 | Remplacer pysqlite3 → sqlite3 (P0 #25) | 30 min | #6 |
-| 5 | try/finally connexions SQLite (P0 #27) | 1 h | #6 |
-| 6 | add_done_callback pour async tasks (P0 #28) | 1 h | #6 |
-| 7 | Corriger URL OpenRouter (P0 #26) | 15 min | #6 |
-| 8 | Archiver fichiers _diag_*/_check_*/_test_* de la racine (P0 #10) | 1 h | #1 |
+| # | Action | Effort | Source | Statut |
+|---|--------|--------|--------|--------|
+| 1 | pyproject.toml : PySide6 + dépendances de base | 1-2 h | #1, #2 | ✅ |
+| 2 | Supprimer sqlite_compat.py (P0 #7) | 10 min | #1 | ✅ |
+| 3 | Ajouter cachetools dans pyproject.toml (P0 #3) | 5 min | #2, Expert #7 | ✅ |
+| 4 | Remplacer pysqlite3 → sqlite3 (P0 #25) | 30 min | #6 | ✅ |
+| 5 | try/finally connexions SQLite (P0 #27) | 1 h | #6 | ✅ |
+| 6 | add_done_callback pour async tasks (P0 #28) | 1 h | #6 | ✅ |
+| 7 | Corriger URL OpenRouter (P0 #26) | 15 min | #6 | ✅ |
+| 8 | Archiver fichiers _diag_*/_check_*/_test_* de la racine (P0 #10) | 1 h | #1 | ✅ |
 
 ### Phase 0B — Sécurité & Performance (1 sem)
 *Objectif : le système fonctionne sans danger et sans bloquer l'UI.*
 
-| # | Action | Effort | Source |
-|---|--------|--------|--------|
-| 9 | Sécuriser RAG Injection & Path Traversal (P0 #15) | 4 h | #4 |
-| 10 | Rendre HyDE asynchrone (P0 #16) | 2 h | #4 |
-| 11 | Filtrer les secrets dans les logs (P2 #62) | 2 h | #4 |
-| 12 | Tokenizer réel de Phi-4 (P1 #42) | 4 h | #4 |
-| 13 | Réduire taille max chunks à 1000 car. (P0 #17) | 1 h | #5 |
-| 14 | Désactiver HyDE conditionnellement + activation dynamique (P0 #18) | 2 h | #5 |
-| 15 | Limiter Agent Loop à 3 itérations max (P0 #20) | 1 h | #5 |
-| 16 | Supprimer valeur par défaut HAUTE dans confidence_label (P0 #21) | 15 min | #6 |
-| 17 | Corriger normalisation RRF biaisée (P0 #22) | 1 h | #6 |
-| 18 | Nettoyer .gitignore | 15 min | #6 |
-| 19 | Fusionner src/security/ → prompt_guard.py (P0 #8) | 1-2 h | #1 |
-| 20 | Décodage spéculatif : benchmark draft model + MLX (P0 #31) | 3 j | Expert #7 |
+| # | Action | Effort | Source | Statut |
+|---|--------|--------|--------|--------|
+| 9 | Sécuriser RAG Injection & Path Traversal (P0 #15) | 4 h | #4 | ✅ |
+| 10 | Rendre HyDE asynchrone (P0 #16) | 2 h | #4 | ✅ |
+| 11 | Filtrer les secrets dans les logs (P2 #62) | 2 h | #4 | ✅ |
+| 12 | Tokenizer réel de Phi-4 (P1 #42) | 4 h | #4 | ✅ |
+| 13 | Réduire taille max chunks à 1000 car. (P0 #17) | 1 h | #5 | ⬜ |
+| 14 | Désactiver HyDE conditionnellement + activation dynamique (P0 #18) | 2 h | #5 | ⬜ |
+| 15 | Limiter Agent Loop à 3 itérations max (P0 #20) | 1 h | #5 | ⬜ |
+| 16 | Supprimer valeur par défaut HAUTE dans confidence_label (P0 #21) | 15 min | #6 | ⬜ |
+| 17 | Corriger normalisation RRF biaisée (P0 #22) | 1 h | #6 | ⬜ |
+| 18 | Nettoyer .gitignore | 15 min | #6 | ⬜ |
+| 19 | Fusionner src/security/ → prompt_guard.py (P0 #8) | 1-2 h | #1 | ⬜ |
+| 20 | Décodage spéculatif : benchmark draft model + MLX (P0 #31) | 3 j | Expert #7 | ⬜ |
 
 ### Phase 1 — Dé-duplication & Semantic Router (1-2 sem)
 
