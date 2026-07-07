@@ -1,7 +1,8 @@
-"""NURU V10.3 — PromptGuard centralisé contre l'injection prompt-injection.
+"""
+NURU V10.3 — PromptGuard centralisé contre l'injection prompt-injection et la sécurité.
 
-Mutualise la sanitation des inputs utilisateurs et du contenu de documents indexés
-avant injection dans des prompts LLM. Audit 2026-06-14 — Findings S-001, S-002, S-002b.
+Mutualise la sanitation des inputs utilisateurs, du contenu de documents indexés,
+et la validation des chemins / commandes. Audit 2026-06-14 — Findings S-001, S-002, S-002b.
 
 CONCEPTION
 ----------
@@ -9,7 +10,8 @@ CONCEPTION
 2. Délimiteurs de bloc prompt (===, ```, <<SYS>>, etc.)
 3. Normalisation Unicode (homoglyphes pour neutraliser sans perdre le sens)
 4. Troncature dure (max_chars)
-5. Marquage explicite des contenus user via délimiteurs <<USER_CONTENT>> / <<DOC_CONTENT>>
+5. Marquage explicite des contenus user via délimiteurs USER_CONTENT / DOC_CONTENT
+6. V15 Phase 0B — SecurityManager fusionné depuis src/security/ (P0 #8)
 
 USAGE
 -----
@@ -18,16 +20,20 @@ USAGE
         sanitize_document_content,         # contenu de docs indexés
         build_safe_classify_prompt,        # construire prompts LLM safe
         assert_safe_user_input,            # assertion runtime + log
+        SecurityManager, SecurityConfig, SecurityCheckResult,  # sécurité globale
     )
 """
 from __future__ import annotations
 
+import hashlib
+import logging
 import re
 import unicodedata
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final
+from typing import Final, Optional
 
-logger = __import__("logging").getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 # ── Motifs d'injection connus (étendu vs rag_engine.py :29-34) ─────────────
@@ -180,7 +186,7 @@ def sanitize_document_content(content: str, max_chars: int = 3000) -> str:
     - Normalisation Unicode
     - Neutralisation des motifs d'injection
     - Échappement des délimiteurs de bloc prompt
-    - Wrap dans des marqueurs explicites <<DOC_CONTENT_START>> / <<DOC_CONTENT_END>>
+    - Wrap dans des marqueurs explicites DOC_CONTENT_START / DOC_CONTENT_END
       pour signaler au LLM que le contenu est non-privilégié
     """
     if not content:
@@ -212,11 +218,7 @@ def sanitize_document_content(content: str, max_chars: int = 3000) -> str:
 
 
 def build_safe_user_facts_block(user_facts: list[str]) -> str:
-    """Construit un bloc de faits utilisateur sanitisé.
-
-    Chaque fait est sanitizé séparément, puis encapsulé dans un bloc prompt
-    délimité pour éviter qu'un fait malicieux ne puisse en influencer un autre.
-    """
+    "Construit un bloc de faits utilisateur sanitisé."
     if not user_facts:
         return ""
 
@@ -281,10 +283,175 @@ def sanitize_path(path: str | Path) -> Path:
     return p
 
 
+# ── Classes de sécurité fusionnées depuis src/security/ (V15 Phase 0B, P0 #8) ───
+
+NURU_HOME = Path.home() / ".nuru"
+
+
+@dataclass
+class SecurityConfig:
+    "Configuration de sécurité."
+    allowed_paths: list[str] = field(default_factory=lambda: [
+        str(Path.home()),
+    ])
+    blocked_paths: list[str] = field(default_factory=lambda: [
+        "/etc", "/usr", "/bin", "/sbin", "/var/root",
+    ])
+    max_input_length: int = 100000
+    blocked_commands: list[str] = field(default_factory=lambda: [
+        "rm -rf /", "sudo", "chmod 777", "> /dev/sda",
+    ])
+    enable_sandbox: bool = True
+    integrity_check: bool = True
+
+
+@dataclass
+class SecurityCheckResult:
+    "Résultat d'une vérification de sécurité."
+    passed: bool
+    message: str = ""
+    warnings: list[str] = field(default_factory=list)
+
+
+class SecurityManager:
+    """Gestionnaire de sécurité NURU (fusionné depuis src/security/).
+
+    Usage :
+        security = SecurityManager()
+        security.validate_path("~/Downloads/test.sh")  # True/False
+        security.validate_input("rm -rf /")  # Blocks it
+    """
+
+    def __init__(self, config: Optional[SecurityConfig] = None):
+        self.config = config or SecurityConfig()
+
+    def validate_path(self, path: str | Path) -> bool:
+        "Valide qu'un chemin est autorisé."
+        p = Path(path).expanduser().resolve()
+
+        # Bloquer les chemins système
+        for blocked in self.config.blocked_paths:
+            if str(p).startswith(blocked):
+                logger.warning(f"Chemin bloqué: {p}")
+                return False
+
+        # Vérifier qu'il est dans les dossiers autorisés
+        for allowed in self.config.allowed_paths:
+            allowed_path = str(Path(allowed).expanduser().resolve())
+            if str(p).startswith(allowed_path):
+                return True
+
+        # ~/Downloads est toujours autorisé
+        download_path = str(Path.home() / "Downloads")
+        if str(p).startswith(download_path):
+            return True
+
+        # ~/.nuru est toujours autorisé
+        if str(p).startswith(str(NURU_HOME)):
+            return True
+
+        logger.warning(f"Chemin non autorisé: {p}")
+        return False
+
+    def validate_input(self, text: str) -> SecurityCheckResult:
+        "Valide qu'une entrée utilisateur ne contient pas d'injection."
+        warnings = []
+
+        # Taille max
+        if len(text) > self.config.max_input_length:
+            return SecurityCheckResult(False, f"Input trop long ({len(text)} > {self.config.max_input_length})")
+
+        # Commandes dangereuses
+        for cmd in self.config.blocked_commands:
+            if cmd.lower() in text.lower():
+                warnings.append(f"Tentative de commande bloquée: '{cmd}'")
+                return SecurityCheckResult(False, "Commande dangereuse détectée", warnings)
+
+        # Patterns d'injection
+        injection_patterns = [
+            r"(?:';|' OR |' --|'; DROP|'; DELETE|'; UPDATE)",
+            r"(?:<script>|javascript:|onerror=|onload=)",
+            r"(?:\$\{|`[^`]*`|subprocess\.)",
+        ]
+        for pattern in injection_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                warnings.append(f"Pattern d'injection détecté: {pattern}")
+
+        return SecurityCheckResult(
+            passed=len(warnings) == 0,
+            message="Input valide" if not warnings else "Avertissements",
+            warnings=warnings,
+        )
+
+    def validate_command(self, command_parts: list[str]) -> SecurityCheckResult:
+        "Valide une commande shell et ses arguments."
+        warnings = []
+
+        for part in command_parts:
+            # Chemin
+            if part.startswith("/") and not self.validate_path(part):
+                return SecurityCheckResult(False, f"Chemin non autorisé: {part}")
+
+            # Sous-shell
+            if "`" in part or "$(" in part:
+                warnings.append("Sous-shell détecté")
+
+        return SecurityCheckResult(
+            passed=len(warnings) == 0,
+            message="Commande valide" if not warnings else "Avertissements",
+            warnings=warnings,
+        )
+
+    def check_integrity(self) -> SecurityCheckResult:
+        "Vérification d'intégrité des fichiers critiques."
+        if not self.config.integrity_check:
+            return SecurityCheckResult(True, "Intégrité désactivée")
+
+        warnings = []
+        critical_files = [
+            NURU_HOME / "config" / "settings.yaml",
+            Path("src/personality/guardrails.py"),
+            Path("src/privacy/audit_log.py"),
+        ]
+
+        for path in critical_files:
+            if path.exists():
+                if path.stat().st_size == 0:
+                    warnings.append(f"Fichier vide: {path}")
+            else:
+                warnings.append(f"Fichier manquant: {path}")
+
+        return SecurityCheckResult(
+            passed=len(warnings) == 0,
+            message="Intégrité OK" if not warnings else f"{len(warnings)} avertissements",
+            warnings=warnings,
+        )
+
+    def generate_integrity_hash(self, filepath: Path) -> Optional[str]:
+        "Génère un hash SHA-256 d'un fichier."
+        try:
+            data = filepath.read_bytes()
+            return hashlib.sha256(data).hexdigest()
+        except Exception as e:
+            logger.error(f"Erreur hash {filepath}: {e}")
+            return None
+
+    def to_dict(self) -> dict:
+        return {
+            "allowed_paths": self.config.allowed_paths,
+            "blocked_paths": self.config.blocked_paths,
+            "enable_sandbox": self.config.enable_sandbox,
+            "integrity_check": self.config.integrity_check,
+        }
+
+
 __all__ = [
     "sanitize_for_prompt_injection",
     "sanitize_document_content",
     "build_safe_user_facts_block",
     "assert_safe_user_input",
     "sanitize_path",
+    "SecurityManager",
+    "SecurityConfig",
+    "SecurityCheckResult",
 ]
