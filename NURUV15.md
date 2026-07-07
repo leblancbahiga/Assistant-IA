@@ -92,6 +92,7 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 28 | **Ajouter `add_done_callback` pour les `create_task` async** — 3 tâches sans await dans `orchestrator.py` et `nuru_core.py` | #6 | 1 h |
 | 29 | **Self-Consistency (3-way voting)** — générer 3 réponses indépendantes, voter par similarité cosinus, ne retenir que la plus consensuelle (-40% hallucinations) | #7 | 1 sem |
 | 30 | **MemoryHub : architecture mémoire unifiée 6 types** — Working, Episodic, Semantic, Procedural, User, Error Memory + ConsolidationWorker (daemon 6h) | #7 | 2 sem |
+| 31 | **Décodage spéculatif (Speculative Decoding)** — petit modèle (SmolLM2-360M) prédit 5 tokens, Phi-4-mini valide. Gain : +50 à +150% de vitesse de génération sur M1. | Expert DeepSeek | 1 sem |
 
 #### 🟡 P1 — Majeur (Sprint V15)
 
@@ -113,7 +114,8 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 25 | **Time-Weighted Retrieval** — pondération temporelle des souvenirs épisodiques (les souvenirs récents ont plus de poids) | #5 | 8 h |
 | 26 | **Remplacer BM25 maison par `rank_bm25` standard** — le BM25 actuel n'a pas d'IDF ni de normalisation correcte | #6 | 2 h |
 | 27 | **Ajouter HNSW à sqlite-vec** — passage en recherche vectorielle approchée pour accélérer les requêtes | #6 | 4 h |
-| 28 | **Dataset d'évaluation RAG étendu** — 20+ questions agronomiques pour fiabiliser le Recall@5 (actuellement 92% sur 5 docs seulement) | #6 | 4 h |
+| 29 | **Dataset d'évaluation RAG étendu** — 20+ questions agronomiques pour fiabiliser le Recall@5 (actuellement 92% sur 5 docs seulement) | #6 | 4 h |
+| 30 | **MoE logiciel local** — charger un modèle spécialisé par domaine au lieu d'un seul généraliste (ex: Qwen2.5-3B pour RAG, Qwen2.5-Coder-3B pour code, Gemma3-4B pour raisonnement, MiniLM pour classification) — un seul chargé à la fois, philosophie DeepSeek | Expert DeepSeek | 2 sem |
 
 #### 🔵 P2 — Modéré (Sprint V15+)
 
@@ -132,6 +134,8 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 30 | **Ajouter overlap de 20% au chunking** — éviter la perte de continuité sémantique | #6 | 1 h |
 | 31 | **Filtrer les secrets dans les logs** — ajouter un filtre global pour masquer les clés API en cas d'erreur | #4 | 2 h |
 | 32 | **CI/CD minimal** — GitHub Actions exécutant la suite de tests hors-M1 à chaque push | #1, #2 | 1 sem |
+| 33 | **KV Cache Persistant** — conserver le cache d'attention entre sessions sur les mêmes sujets pour réduire latence, tokens et RAM | Expert DeepSeek | 1 sem |
+| 34 | **Distillation domaine** — créer un dataset Q&A agronomie/gestion projets/réfugiés + fine-tuning Phi-4-mini ou Qwen3-4B pour spécialiser NURU sans modèle géant | Expert DeepSeek | 2 sem |
 
 #### 🟢 P3 — Long terme
 
