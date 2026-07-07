@@ -79,7 +79,7 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 15 | **Sécuriser RAG Injection & Path Traversal** — implémenter `sanitize_path()` dans `ingestion.py`, `FileGuard` pour valider `base_dir`, regex strictes PromptGuard | #4 | 4 h |
 | 16 | **Rendre HyDE asynchrone** — wrapper les appels HyDE dans `asyncio.to_thread` pour débloquer l'EventLoop et libérer le thread principal | #4 | 2 h |
 | 17 | **Réduire la taille max des chunks à 1000 car.** — les chunks 4000 car. actuels noient les petits modèles 4-bit (Lost-in-the-Middle) | #5 | 1 h |
-| 18 | **Désactiver HyDE sur les modèles <7B** — HyDE génère des hypothèses erronées qui polluent la recherche vectorielle sur Phi-4-mini | #5 | 2 h |
+| 18 | **Désactiver HyDE sur les modèles <7B** + activation dynamique par diversité de scores : si écart top-1/top-5 > 0.3, la requête est ambiguë → activer HyDE ; sinon BM25/vectoriel direct | #5, Expert #6 | 2 h |
 | 19 | **Dynamic VRAM Paging** — déchargement agressif de TOUS les modèles (LLM, Whisper, TTS) dès qu'inactifs, RAMMonitor impitoyable | #5 | 4 h |
 | 20 | **Limiter l'Agent Loop à 3 itérations max** — éviter les boucles infinies d'erreur sur les petits modèles | #5 | 1 h |
 | 21 | **Corriger `confidence_label` hardcodé "HAUTE"** — le système annonce toujours "haute confiance" même quand le score RRF est bas | #6 | 30 min |
@@ -143,6 +143,9 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 37 | **Plan de migration des données mémoire** — script de migration pour fusionner les 4 bases existantes (memory_store, long_term_memory, memory_bridge, memory/) en MemoryHub unifié sans perte. | Expert DeepSeek | 3 j |
 | 38 | **Speculative Dreaming** — pendant l'inactivité (idle >5 min), NURU prédit les questions probables via l'agenda/projets/conversations récentes, pré-génère les réponses en cache. Hit rate cible : 30%. | Expert DeepSeek | 2 sem |
 | 39 | **Distillation algorithmique (JSON natif au lieu de ReAct)** — fine-tuner le modèle pour émettre directement des commandes JSON au lieu du prompting ReAct (Thought→Action→Observation). Réduit la taille des prompts système de 60% et élimine les erreurs de format. | Expert DeepSeek | 1 sem |
+| 40 | **Circuit Breaker Cloud** — max 5 appels cloud/h, cache agressif des réponses cloud (TTL 24h), fallback local automatique | Expert #6 | 2 h |
+| 41 | **Batch Processing embeddings** — traiter les embeddings par lots de 32 (+2-3x vitesse indexation) | Expert #6 | 1 h |
+| 42 | **Pruning 30% des poids** — supprimer les poids < seuil de magnitude (-30% RAM, perte qualité à tester) | Expert #6 | 1 sem |
 
 #### 🟢 P3 — Long terme
 
