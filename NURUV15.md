@@ -91,7 +91,7 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 27 | **Ajouter `try/finally` pour les connexions SQLite** — `rag_engine.py` ne ferme pas sur exception (fuites mémoire) | #6 | 1 h |
 | 28 | **Ajouter `add_done_callback` pour les `create_task` async** — 3 tâches sans await dans `orchestrator.py` et `nuru_core.py` | #6 | 1 h |
 | 29 | **Self-Consistency (3-way voting)** — générer 3 réponses indépendantes, voter par similarité cosinus, ne retenir que la plus consensuelle (-40% hallucinations) | #7 | 1 sem |
-| 30 | **MemoryHub : architecture mémoire unifiée 6 types** — Working, Episodic, Semantic, Procedural, User, Error Memory + ConsolidationWorker (daemon 6h) | #7 | 2 sem |
+| 30 | **MemoryHub : architecture mémoire unifiée 6 types** — Working, Episodic, Semantic, Procedural, User, Error Memory + ConsolidationWorker (daemon 6h) + **Memory Router** (gate classifieur qui n'interroge que la mémoire pertinente — ex: factuel→Semantic, personnel→Episodic — gain -60% requêtes mémoire) | #7, Expert | 2 sem |
 | 31 | **Décodage spéculatif (Speculative Decoding)** — petit modèle (SmolLM2-360M) prédit 5 tokens, Phi-4-mini valide. Gain : +50 à +150% de vitesse de génération sur M1. | Expert DeepSeek | 1 sem |
 
 #### 🟡 P1 — Majeur (Sprint V15)
@@ -148,6 +148,7 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 32 | **Bandeau de Confiance dans l'UI** — afficher Sources, Faits, Inférences, Confiance % sous chaque réponse | #4 | 8 h |
 | 35 | **Réévaluer ReAct/Reflexion/ToT avancé** — après mesures objectives du benchmark RAG | #1 | — |
 | 36 | **Refonte UI en Tauri (Rust/Web)** — remplacer PySide6 pour diviser l'empreinte RAM de l'UI par 5 (<100 Mo) et obtenir des animations 60fps natives macOS | #5 | 2-3 mois |
+| | *→ Avis expert : recommande P1 (Sprint 2-3) — 400 Mo de RAM récupérée sur 8 Go = 5% du total, significatif en tension permanente* | Expert | |
 
 ---
 
