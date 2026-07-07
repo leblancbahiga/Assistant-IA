@@ -300,73 +300,81 @@ class RAGEngine:
         conn.execute("PRAGMA synchronous=NORMAL")
         return conn
 
+    @contextmanager
+    def _conn_ctx(self):
+        """Context manager garantissant la fermeture de la connexion SQLite."""
+        conn = self._get_conn()
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+
     def _init_db(self):
         """Initialise la base de données SQLite avec l'extension vec0."""
-        conn = self._get_conn()
-        conn.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING vec0(
-                embedding FLOAT[768],
-                content TEXT,
-                source TEXT,
-                chunk_date TEXT
-            )
-        """)
-        # FTS5 pour BM25 (recherche par mots-clés)
-        conn.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-                content, source, tokenize='porter'
-            )
-        """)
-        # Table de suivi des fichiers indexés
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS indexed_files (
-                filepath TEXT PRIMARY KEY,
-                mtime FLOAT,
-                hash TEXT
-            )
-        """)
-        # V6 : Table Parent-Child pour remontée hiérarchique
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS chunk_hierarchy (
-                chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source TEXT,
-                parent_id INTEGER DEFAULT NULL,
-                doc_summary TEXT DEFAULT '',
-                section_title TEXT DEFAULT '',
-                level TEXT DEFAULT 'section',
-                content TEXT,
-                FOREIGN KEY (parent_id) REFERENCES chunk_hierarchy(chunk_id)
-            )
-        """)
-        # V6 : Table CV structuré (extraction LLM, pas de chunking vectoriel)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS cv_structured (
-                source TEXT PRIMARY KEY,
-                file_hash TEXT,
-                json_data TEXT,
-                extracted_at TEXT
-            )
-        """)
-        # V6 : Table métadonnées structurées pour TOUS les documents
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS doc_structured (
-                source TEXT PRIMARY KEY,
-                file_hash TEXT,
-                doc_type TEXT,
-                json_data TEXT,
-                extracted_at TEXT
-            )
-        """)
-        # V10 : Table de correspondance source→rowid pour les DELETE sur vec0
-        # (les VIRTUAL TABLE vec0 ne supportent pas DELETE WHERE source=?)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS chunk_rowids (
-                source TEXT,
-                rowid INTEGER UNIQUE
-            )
-        """)
-        conn.commit()
-        conn.close()
+        with self._conn_ctx() as conn:
+            conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING vec0(
+                    embedding FLOAT[768],
+                    content TEXT,
+                    source TEXT,
+                    chunk_date TEXT
+                )
+            """)
+            # FTS5 pour BM25 (recherche par mots-clés)
+            conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+                    content, source, tokenize='porter'
+                )
+            """)
+            # Table de suivi des fichiers indexés
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS indexed_files (
+                    filepath TEXT PRIMARY KEY,
+                    mtime FLOAT,
+                    hash TEXT
+                )
+            """)
+            # V6 : Table Parent-Child pour remontée hiérarchique
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chunk_hierarchy (
+                    chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source TEXT,
+                    parent_id INTEGER DEFAULT NULL,
+                    doc_summary TEXT DEFAULT '',
+                    section_title TEXT DEFAULT '',
+                    level TEXT DEFAULT 'section',
+                    content TEXT,
+                    FOREIGN KEY (parent_id) REFERENCES chunk_hierarchy(chunk_id)
+                )
+            """)
+            # V6 : Table CV structuré (extraction LLM, pas de chunking vectoriel)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS cv_structured (
+                    source TEXT PRIMARY KEY,
+                    file_hash TEXT,
+                    json_data TEXT,
+                    extracted_at TEXT
+                )
+            """)
+            # V6 : Table métadonnées structurées pour TOUS les documents
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS doc_structured (
+                    source TEXT PRIMARY KEY,
+                    file_hash TEXT,
+                    doc_type TEXT,
+                    json_data TEXT,
+                    extracted_at TEXT
+                )
+            """)
+            # V10 : Table de correspondance source→rowid pour les DELETE sur vec0
+            # (les VIRTUAL TABLE vec0 ne supportent pas DELETE WHERE source=?)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chunk_rowids (
+                    source TEXT,
+                    rowid INTEGER UNIQUE
+                )
+            """)
 
     def is_file_up_to_date(self, filepath: str, mtime: float = 0, file_hash: str = "") -> bool:
         """Vérifie si le fichier a déjà été indexé avec le même hash SHA256 (V6.2).
@@ -378,31 +386,27 @@ class RAGEngine:
         if not file_hash:
             return False
             
-        conn = self._get_conn()
-        
-        # 1. Vérification par filepath (compatible )
-        row = conn.execute(
-            "SELECT hash FROM indexed_files WHERE filepath = ?", (filepath,)
-        ).fetchone()
-        
-        if row and row[0] == file_hash:
-            conn.close()
-            return True
-        
-        # 2. V6.2 : Vérification GLOBALE par hash (même contenu = déjà indexé)
-        #    Indépendamment du chemin du fichier
-        hash_row = conn.execute(
-            "SELECT filepath FROM indexed_files WHERE hash = ? LIMIT 1", (file_hash,)
-        ).fetchone()
-        
-        if hash_row:
-            logger.info(f"🔄 Déduplication V6.2 : {os.path.basename(filepath)} déjà indexé "
-                       f"sous {os.path.basename(hash_row[0])} (même hash SHA256)")
-            conn.close()
-            return True
-        
-        conn.close()
-        return False
+        with self._conn_ctx() as conn:
+            # 1. Vérification par filepath (compatible )
+            row = conn.execute(
+                "SELECT hash FROM indexed_files WHERE filepath = ?", (filepath,)
+            ).fetchone()
+            
+            if row and row[0] == file_hash:
+                return True
+            
+            # 2. V6.2 : Vérification GLOBALE par hash (même contenu = déjà indexé)
+            #    Indépendamment du chemin du fichier
+            hash_row = conn.execute(
+                "SELECT filepath FROM indexed_files WHERE hash = ? LIMIT 1", (file_hash,)
+            ).fetchone()
+            
+            if hash_row:
+                logger.info(f"🔄 Déduplication V6.2 : {os.path.basename(filepath)} déjà indexé "
+                           f"sous {os.path.basename(hash_row[0])} (même hash SHA256)")
+                return True
+            
+            return False
 
     def mark_file_indexed(self, filepath: str, mtime: float, file_hash: str = ""):
         """Enregistre un fichier comme indexé avec son hash SHA256 (V6.2).

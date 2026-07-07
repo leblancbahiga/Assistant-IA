@@ -223,9 +223,10 @@ class NuruOrchestrator:
             if cached:
                 await self.event_bus.emit("cache_hit", {"query": query})
                 if use_tts and audio_engine:
-                    asyncio.create_task(audio_engine.speak(cached))
+                    asyncio.create_task(audio_engine.speak(cached)).add_done_callback(
+                        lambda t: t.exception() if not t.cancelled() else None
+                    )
                 yield cached
-                return
 
         # ── 4. Récupération contexte (RAGOrchestrator multi-sous-requêtes) ──
         if self.response_guard.is_free:
@@ -429,14 +430,14 @@ class NuruOrchestrator:
             tokens_generated=result.tokens_generated,
             latency_ms=int(duration * 1000) if 'duration' in dir() else 0,
             model=result.model,
-        ))
+        )).add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
         # ── 11. Long-Term Memory : extraction post-réponse ──
         asyncio.create_task(self._ltm_extract_post_response(
             query=original_query,
             response=response_content,
             intent=intent,
-        ))
+        )).add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
     def set_long_term_memory(self, ltm):
         """Injecte le module Long-Term Memory (injection de dépendance)."""

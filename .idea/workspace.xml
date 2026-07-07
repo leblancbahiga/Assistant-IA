@@ -6,17 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="3593a8dd-1a26-409b-af6b-c7b826474b13" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/RAPPORT_AUDIT_V4.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/settings.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/config/settings.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_v12.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_v12.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/ambient_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/ambient_app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/conversation_surface.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/conversation_surface.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/floating_widget.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/floating_widget.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/nuru_window.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/nuru_window.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/presence_orb.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/presence_orb.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/styles.qss" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/styles.qss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/styles_light.qss" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/styles_light.qss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/tokens.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/tokens.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -30,21 +19,21 @@
     <decayedCancelled>
       <entry key="MS100" value="1.0" />
       <entry key="MS500" value="1.0" />
-      <entry key="S2" value="1.0" />
-      <entry key="S5" value="1.0" />
-      <entry key="S10" value="1.0" />
-      <entry key="S30" value="1.0" />
-      <entry key="S60" value="1.0" />
-      <entry key="M2" value="1.0000000000000024" />
-      <entry key="M5" value="1.000001410224878" />
-      <entry key="M10" value="1.001187628872886" />
-      <entry key="M15" value="1.0112683377761222" />
-      <entry key="M30" value="1.1353663545656711" />
-      <entry key="H1" value="2.012088982234318" />
-      <entry key="H2" value="4.885079240962488" />
-      <entry key="H4" value="9.037728852745753" />
-      <entry key="D1" value="15.987160021853917" />
-      <entry key="W1" value="17.696276150698342" />
+      <entry key="S2" value="1.0000000001912925" />
+      <entry key="S5" value="1.0001296242490039" />
+      <entry key="S10" value="1.011433070894211" />
+      <entry key="S30" value="1.2814149866425963" />
+      <entry key="S60" value="1.8668611599476261" />
+      <entry key="M2" value="2.761464864515885" />
+      <entry key="M5" value="3.844377681641943" />
+      <entry key="M10" value="4.367042083489099" />
+      <entry key="M15" value="4.573434269058273" />
+      <entry key="M30" value="4.900169316724478" />
+      <entry key="H1" value="5.859755306364547" />
+      <entry key="H2" value="8.754019679381777" />
+      <entry key="H4" value="12.932517790303073" />
+      <entry key="D1" value="19.958528192860744" />
+      <entry key="W1" value="21.691795394788723" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
@@ -52,37 +41,37 @@
       <entry key="S2" value="0.0" />
       <entry key="S5" value="0.0" />
       <entry key="S10" value="0.0" />
-      <entry key="S30" value="1.2517451754054482E-164" />
-      <entry key="S60" value="1.118814182697667E-82" />
-      <entry key="M2" value="1.0577401300402983E-41" />
-      <entry key="M5" value="4.071473314114359E-17" />
-      <entry key="M10" value="6.3808097559121435E-9" />
-      <entry key="M15" value="3.4402013679316893E-6" />
-      <entry key="M30" value="0.0018547779834610094" />
-      <entry key="H1" value="0.043067133448385087" />
-      <entry key="H2" value="0.20752622351978817" />
-      <entry key="H4" value="0.45555046210029043" />
-      <entry key="D1" value="0.8771814021224199" />
-      <entry key="W1" value="0.9814539256555819" />
+      <entry key="S30" value="1.2906791610868038E-166" />
+      <entry key="S60" value="1.136080613815236E-83" />
+      <entry key="M2" value="3.3705794958956786E-42" />
+      <entry key="M5" value="2.5768066334444427E-17" />
+      <entry key="M10" value="5.076225599246393E-9" />
+      <entry key="M15" value="2.953660736822342E-6" />
+      <entry key="M30" value="0.0017186217550183465" />
+      <entry key="H1" value="0.041456263157915556" />
+      <entry key="H2" value="0.20360811171934076" />
+      <entry key="H4" value="0.45122955545857224" />
+      <entry key="D1" value="0.8757892088770209" />
+      <entry key="W1" value="0.9812312475190229" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="0.22845786255735012" />
-      <entry key="MS500" value="0.7443226275832698" />
-      <entry key="S2" value="0.928838707495901" />
-      <entry key="S5" value="0.9709036240989652" />
-      <entry key="S10" value="0.98534441902259" />
-      <entry key="S30" value="0.9950907449951264" />
-      <entry key="S60" value="0.9975423524819016" />
-      <entry key="M2" value="0.9987704203078431" />
-      <entry key="M5" value="0.9995092807813065" />
-      <entry key="M10" value="1.0008916989384589" />
-      <entry key="M15" value="1.0107913380477442" />
-      <entry key="M30" value="1.135627113077994" />
-      <entry key="H1" value="2.0527081097457844" />
-      <entry key="H2" value="5.090338031459012" />
-      <entry key="H4" value="9.49168890300448" />
-      <entry key="D1" value="16.86398130677725" />
-      <entry key="W1" value="18.677675706790428" />
+      <entry key="MS100" value="0.5105060628535966" />
+      <entry key="MS500" value="0.8741786204103732" />
+      <entry key="S2" value="0.9669411554570831" />
+      <entry key="S5" value="0.9867719135242001" />
+      <entry key="S10" value="1.004702841075994" />
+      <entry key="S30" value="1.2788384535584303" />
+      <entry key="S60" value="1.8648520195956597" />
+      <entry key="M2" value="2.7596954319536935" />
+      <entry key="M5" value="3.843241691040264" />
+      <entry key="M10" value="4.366324909172918" />
+      <entry key="M15" value="4.572685712446261" />
+      <entry key="M30" value="4.900231816312446" />
+      <entry key="H1" value="5.898763031433059" />
+      <entry key="H2" value="8.955356466779785" />
+      <entry key="H4" value="13.382148503360996" />
+      <entry key="D1" value="20.833953913653527" />
+      <entry key="W1" value="22.672971721305238" />
     </decayedShown>
   </component>
   <component name="ProjectColorInfo">{
@@ -114,7 +103,7 @@
     &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/leblancbahiga/Downloads/Assistant IA&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/leblancbahiga/Downloads&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -125,6 +114,11 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/.." />
+    </key>
+  </component>
   <component name="RunManager" selected="Python.nuru_dashboard">
     <configuration name="nuru_dashboard" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="Assistant IA" />

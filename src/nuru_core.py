@@ -282,7 +282,9 @@ class NuruCore:
         """
         # V11.2 : Auto-indexation réactivée avec RAM guard
         # Vérifie la RAM avant chaque fichier pour éviter la saturation
-        asyncio.create_task(self._auto_index_with_ram_guard())
+        asyncio.create_task(self._auto_index_with_ram_guard()).add_done_callback(
+            lambda t: t.exception() if not t.cancelled() else None
+        )
         # V4.5 : Document watcher (watchdog) pour auto-indexation temps réel
         self._watcher = DocumentWatcher(index_callback=self.ingestion.index_file)
         self._watcher.start()

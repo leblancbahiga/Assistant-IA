@@ -46,7 +46,9 @@ if HAS_WATCHDOG:
 
         def _schedule(self, path: str):
             self._pending.add(path)
-            asyncio.create_task(self._debounced_index(path))
+            asyncio.create_task(self._debounced_index(path)).add_done_callback(
+                lambda t: t.exception() if not t.cancelled() else None
+            )
 
         async def _debounced_index(self, path: str):
             await asyncio.sleep(self.debounce)
