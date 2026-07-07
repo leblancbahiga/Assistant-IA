@@ -65,12 +65,12 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 1 | **Fusionner les 2 AgentOrchestrator** — `src/agent/orchestrator.py` (Planner/Executor/Verifier/Recovery, meilleure conception) avec `src/tools/agent_orchestrator.py` (seul réellement appelé). Garder un seul module. | #1 | 1-2 sem |
 | 2 | **Brancher Privacy & Consent Layer** — `src/privacy/consent_layer.py` appelé avant tout accès capteur : voix, vision écran, MCP calendar/gmail. | #1 | 1-2 sem |
 | 3 | **Corriger pyproject.toml** — remplacer PyQt6 par PySide6 + ajouter `[project.dependencies]` | #1, #2 | 1-2 h |
-| 4 | **Supprimer/réparer les tests morts** — 3 fichiers tests avec ModuleNotFoundError/0 items collected | #2 | 1 h |
-| 5 | **Réparer `Orchestrator.pipeline_offline`** — cassé depuis ~6 jours, bloque le mode hors-ligne | #2 | 2 h |
-| 6 | **Externaliser l'identité utilisateur** — actuellement hardcodée dans `nuru_core.py`, risque de fuite en commit public. Déplacer dans `~/.nuru/identity.json` | #2 | 2 h |
+| 4 | **Supprimer/réparer les tests morts** — ⚠️ INFIRMÉ par vérification code réel (Expert #7) : les 12 fichiers non collectés échouent sur `ModuleNotFoundError: mlx` ou `PySide6` — dépendances Apple Silicon qu'un sandbox Linux ne peut installer. 738/815 tests passent ; 51 échecs + 26 erreurs réels à investiguer sur Mac. | #2 | 1 h |
+| 5 | **Réparer `Orchestrator.pipeline_offline`** — ⚠️ INFIRMÉ par vérification (Expert #7) : le test passe après `pip install cachetools`. Le vrai problème est l'absence de `cachetools` dans `pyproject.toml` (déjà P0 #1). Pas un pipeline cassé. | #2 | 2 h |
+| 6 | **Externaliser l'identité utilisateur** — ⚠️ INFIRMÉ par vérification code (Expert #7) : `nuru_core.py` contient zéro occurrence du nom/employeur. Un `src/identity_manager.py` dédié existe déjà. Externalisation déjà faite. | #2 | 2 h |
 | 7 | **Supprimer `sqlite_compat.py`** — lecture mémoire brute CPython via `id()+offset`, risque de segfault latent | #1 | 10 min |
 | 8 | **Fusionner `src/security/` dans `prompt_guard.py`** — une seule couche de sécurité | #1 | 1-2 h |
-| 9 | **Résoudre les doublons de logging** — `logging_config.py` vs `infra/logging_setup.py` | #2 | 1 h |
+| 9 | **Résoudre les doublons de logging** — ⚠️ INFIRMÉ par vérification (Expert #7) : `logging_config.py` n'existe pas dans le dépôt. Le doublon est une hallucination du modèle d'audit. | #2 | 1 h |
 | 10 | **Nettoyer les fichiers `_diag_*.py`, `_check_*.py`, `_test_*.py`** de la racine vers `scripts/` ou `tests/` | #1 | 1 h |
 | 11 | **Streaming des tokens** — utiliser le callback de génération MLX pour envoyer les tokens un par un à l'UI (effet wow immédiat) | #3 | 1 j |
 | 12 | **Unload des modèles après réponse** — purger le LLM de la VRAM 5s après génération pour libérer la RAM | #3 | 2 h |
@@ -82,8 +82,8 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 18 | **Désactiver HyDE sur les modèles <7B** + activation dynamique par diversité de scores : si écart top-1/top-5 > 0.3, la requête est ambiguë → activer HyDE ; sinon BM25/vectoriel direct | #5, Expert #6 | 2 h |
 | 19 | **Dynamic VRAM Paging** — déchargement agressif de TOUS les modèles (LLM, Whisper, TTS) dès qu'inactifs, RAMMonitor impitoyable | #5 | 4 h |
 | 20 | **Limiter l'Agent Loop à 3 itérations max** — éviter les boucles infinies d'erreur sur les petits modèles | #5 | 1 h |
-| 21 | **Corriger `confidence_label` hardcodé "HAUTE"** — le système annonce toujours "haute confiance" même quand le score RRF est bas | #6 | 30 min |
-| 22 | **Corriger la normalisation RRF biaisée** — utiliser un `max_possible` fixe pour que les scores soient comparables entre stratégies | #6 | 1 h |
+| 21 | **Corriger `confidence_label` hardcodé HAUTE** — NUANCE (Expert #7) : le gating (rag_engine.py:701-708) calibre HAUTE/MOYENNE/FAIBLE selon le score RRF, et ABSENT sur recherche vide est déjà appliqué (l.683). Reste HAUTE par défaut (l.671) mais commente non utilise pour le gating. Action : supprimer la valeur par defaut. | #6 | 15 min |
+| 22 | **Corriger la normalisation RRF biaisée** — utiliser un `max_possible` fixe pour que les scores soient comparables entre strategies | #6 | 1 h |
 | 23 | **Extraire les tableaux DOCX avec en-têtes** — préserver la structure des données tabulaires lors de l'ingestion | #6 | 2 h |
 | 24 | **Séparer contenu et métadonnées dans les embeddings** — supprimer les préfixes `[Doc - Section]` qui diluent le signal sémantique (10-17% du chunk) | #6 | 1 h |
 | 25 | **Remplacer `pysqlite3` par `sqlite3` standard** — corriger l'import incompatible | #6 | 30 min |
@@ -146,6 +146,7 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 40 | **Circuit Breaker Cloud** — max 5 appels cloud/h, cache agressif des réponses cloud (TTL 24h), fallback local automatique | Expert #6 | 2 h |
 | 41 | **Batch Processing embeddings** — traiter les embeddings par lots de 32 (+2-3x vitesse indexation) | Expert #6 | 1 h |
 | 42 | **Pruning 30% des poids** — supprimer les poids < seuil de magnitude (-30% RAM, perte qualité à tester) | Expert #6 | 1 sem |
+| 43 | **Compression KV Cache style MLA (Multi-head Latent Attention)** — compression du cache d'attention similaire à DeepSeek MLA. Stocker le KV cache en format latent compressé au lieu de full key/value. Objectif : diviser la RAM dédiée au contexte par 2-4x. Complémentaire à GQA (#36). **Note : Qwen3.5-2B utilise déjà un pattern hybride linear/full attention** (1 couche sur 4 en pleine, reste en linéaire) — choix déjà aligné DeepSeek. | Expert #7 | 2 sem |
 
 #### 🟢 P3 — Long terme
 
