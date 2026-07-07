@@ -52,7 +52,7 @@ class RAGDiagnostic:
         self.query = query
         self.strategies_tried: list[str] = []
         self.strategies_results: dict[str, dict] = {}
-        self.confidence_label: str = "HAUTE"
+        self.confidence_label: str = "MOYENNE"  # V15 Phase 0B : défaut neutre — pas de faux HAUTE
         self.found_chunks: int = 0
         self.verdict: str = ""
         self.timing_ms: float = 0.0

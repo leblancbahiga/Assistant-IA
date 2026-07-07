@@ -229,7 +229,7 @@ class MultiSearchOrchestrator:
         self,
         query: str,
         rewritten_query: str = "",
-        confidence_label: str = "HAUTE",
+        confidence_label: str = "MOYENNE",  # V15 Phase 0B : défaut neutre
         top_k: int = 5,
     ) -> tuple[list[SearchResult], MultiSearchDiagnostic]:
         """Point d'entrée principal — exécute les stratégies appropriées.

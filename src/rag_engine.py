@@ -98,7 +98,7 @@ class RAGResult:
     top_k_actual: int = 0
     tokens_injected: int = 0
     diagnostic: Optional[dict] = None  # V8+ : RAGDiagnostic sérialisé
-    confidence_label: str = "HAUTE"  # V8+ : HAUTE | MOYENNE | FAIBLE | ABSENT
+    confidence_label: str = "MOYENNE"  # V15 Phase 0B : défaut neutre
 
 class RAGEngine:
     """Moteur RAG Hybride : Recherche sémantique (sqlite-vec) + BM25."""
