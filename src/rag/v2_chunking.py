@@ -15,17 +15,19 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# ── Profils de chunking ──
+# ── Profils de chunking V15 Phase 0B : réduits à 1000 car. max
+# (Lost-in-the-Middle sur Phi-4-mini 4096 tokens — des chunks de 1500+ tokens
+#  consomment trop de budget contexte et noient les signaux faibles)
 PROFILES = {
-    "cv": {"max_section": 6000, "min_chunk": 500, "overlap": 200},
-    "rapport": {"max_section": 6000, "min_chunk": 300, "overlap": 100},
-    "note": {"max_section": 2000, "min_chunk": 150, "overlap": 50},
+    "cv": {"max_section": 1000, "min_chunk": 300, "overlap": 80},
+    "rapport": {"max_section": 1000, "min_chunk": 200, "overlap": 50},
+    "note": {"max_section": 1000, "min_chunk": 100, "overlap": 30},
 }
 
 # Par défaut (profil cv)
-MAX_SECTION_CHARS = 6000
-MIN_CHUNK_CHARS = 500
-OVERLAP_CHARS = 200
+MAX_SECTION_CHARS = 1000
+MIN_CHUNK_CHARS = 300
+OVERLAP_CHARS = 80
 
 # Si le texte fait moins de cette taille, on ne chunk pas du tout
 SHORT_DOC_THRESHOLD = 2000  # ~500 tokens — V6.2 : abaissé pour chunker les docs courts
@@ -187,7 +189,7 @@ class HierarchicalChunkerV2:
             return None
 
         return ChunkV2(
-            content=summary_text[:4000],  # 4K chars max pour le résumé
+            content=summary_text[:1000],  # V15 Phase 0B : réduit à 1000 car.
             source=source,
             doc_title=doc_title,
             section_title="Résumé du document",
