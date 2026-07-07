@@ -17,7 +17,7 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable, Final, Optional
 
 from src.config import config
 from src.rag.types import SearchResult
@@ -489,6 +489,12 @@ class MultiSearchOrchestrator:
         if not self._cloud or not self._embedder:
             return []
 
+        # V15 Phase 0B : activation conditionnelle — HyDE coûte 5s + tokens cloud,
+        # inutile pour les requêtes simples (1 mot, entité nommée, fait direct)
+        if not self._should_use_hyde(query):
+            logger.debug(f"⏭️ HyDE désactivé pour requête simple: {query!r}")
+            return []
+
         try:
             from src.rag.hyde import hyde_search
             hyde_results = await hyde_search(
@@ -505,3 +511,38 @@ class MultiSearchOrchestrator:
         except Exception as e:
             logger.warning(f"HyDE échoué: {e}")
             return []
+
+    # ──────────────────────────────────────
+    # V15 Phase 0B : activation conditionnelle HyDE
+
+    _SIMPLE_QUERY_WORDS: Final = frozenset({
+        "bonjour", "salut", "hello", "hi", "merci", "bye", "oui", "non",
+    })
+
+    @staticmethod
+    def _should_use_hyde(query: str) -> bool:
+        """Active HyDE seulement pour les requêtes complexes.
+
+        Skip HyDE quand :
+        - Query ≤ 1 mot (entité simple, personne, lieu)
+        - Query est une salutation/bruit social
+        - Query est un nom propre sans verbe
+        """
+        q = query.strip()
+        if not q or len(q) < 10:
+            return False
+        words = q.split()
+        if len(words) <= 1:
+            return False
+        if q.lower() in MultiSearchOrchestrator._SIMPLE_QUERY_WORDS:
+            return False
+        # Entité nommée seule (pas de verbe) — pattern basique
+        if len(words) <= 3 and not any(
+            c in q for c in ("?", "comment", "pourquoi", "qu'est-ce", "est-ce",
+                             "explique", "décrit", "compare", "différence")
+        ):
+            # 2-3 mots sans verbe → probablement une entité
+            import re
+            if not re.search(r'\b(est|sont|fait|a\b|ont|peut|veut|dit|donne|trouve)\b', q, re.I):
+                return False
+        return True
