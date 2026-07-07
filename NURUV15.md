@@ -90,7 +90,7 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 26 | **Corriger l'URL OpenRouter** — vérifier et mettre à jour l'endpoint API | #6 | 15 min |
 | 27 | **Ajouter `try/finally` pour les connexions SQLite** — `rag_engine.py` ne ferme pas sur exception (fuites mémoire) | #6 | 1 h |
 | 28 | **Ajouter `add_done_callback` pour les `create_task` async** — 3 tâches sans await dans `orchestrator.py` et `nuru_core.py` | #6 | 1 h |
-| 29 | **Self-Consistency (3-way voting)** — générer 3 réponses indépendantes, voter par similarité cosinus, ne retenir que la plus consensuelle (-40% hallucinations) | #7 | 1 sem |
+| 29 | **Self-Consistency (3-way voting)** — générer 3 réponses indépendantes, voter par similarité cosinus, ne retenir que la plus consensuelle (-40% hallucinations). **⚠️ Coût : x3 RAM et latence** — nécessite d'abord VRAM Paging (#6) ou MoE (#30) pour être viable sur M1 8Go | #7 | 1 sem |
 | 30 | **MemoryHub : architecture mémoire unifiée 6 types** — Working, Episodic, Semantic, Procedural, User, Error Memory + ConsolidationWorker (daemon 6h) + **Memory Router** (gate classifieur qui n'interroge que la mémoire pertinente — ex: factuel→Semantic, personnel→Episodic — gain -60% requêtes mémoire) | #7, Expert | 2 sem |
 | 31 | **Décodage spéculatif (Speculative Decoding)** — petit modèle (SmolLM2-360M) prédit 5 tokens, Phi-4-mini valide. Gain : +50 à +150% de vitesse de génération sur M1. | Expert DeepSeek | 1 sem |
 
@@ -135,7 +135,9 @@ Document évolutif — mis à jour à chaque nouveau rapport.
 | 31 | **Filtrer les secrets dans les logs** — ajouter un filtre global pour masquer les clés API en cas d'erreur | #4 | 2 h |
 | 32 | **CI/CD minimal** — GitHub Actions exécutant la suite de tests hors-M1 à chaque push | #1, #2 | 1 sem |
 | 33 | **KV Cache Persistant** — conserver le cache d'attention entre sessions sur les mêmes sujets pour réduire latence, tokens et RAM | Expert DeepSeek | 1 sem |
-| 34 | **Distillation domaine** — créer un dataset Q&A agronomie/gestion projets/réfugiés + fine-tuning Phi-4-mini ou Qwen3-4B pour spécialiser NURU sans modèle géant | Expert DeepSeek | 2 sem |
+| 34 | **Distillation domaine (LoRA NURU)** — créer un dataset Q&A agronomie/gestion projets/réfugiés + fine-tuning Phi-4-mini ou Qwen3-4B pour spécialiser NURU sans modèle géant. **Dataset formaté :** instructions structurées (format sortie, appels d'outils natifs, indicateurs confiance, style NURU cohérent) — LoRA 4-bit ~50-100 Mo | Expert DeepSeek | 2 sem |
+| 35 | **FP8 / AWQ / QAT** — quantification différenciée : attention en FP16, FFN en 4-bit AWQ. Économie 15-20% RAM (700 Mo potentiels sur Phi-4). Vérifier compatibilité MLX sur M1. | Expert DeepSeek | 1 sem |
+| 36 | **Vérifier GQA sur le modèle actuel** — si Phi-4 n'a pas Grouped Query Attention, changer pour Qwen2/Gemma2 qui en ont (cache KV 2-8x plus petit). Impact direct sur RAM et latence. | Expert DeepSeek | 2 j |
 
 #### 🟢 P3 — Long terme
 
@@ -196,7 +198,10 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 
 ### Roadmap V15 (consolidée)
 
-#### Phase 0 — Hotfix & Sécurité (24-48h)
+> **⚠️ Note expert :** La Phase 0 initiale (21 items en 24-48h) était irréaliste pour un seul développeur. Scindée ci-dessous.
+
+#### Phase 0A — Stabilité critique (48h)
+*Objectif : l'application ne crash plus, les fuites mémoire sont colmatées.*
 | # | Action | Effort | Source |
 |---|--------|--------|--------|
 | 1 | pyproject.toml : PySide6 + dépendances de base | 1-2 h | #1, #2 |
@@ -204,22 +209,27 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 | 3 | Supprimer/réparer les tests morts (3 fichiers) | 1 h | #2, #4 |
 | 4 | Réparer pipeline_offline | 2 h | #2 |
 | 5 | Externaliser l'identité utilisateur | 2 h | #2 |
-| 6 | Fusionner les doublons de logging | 1 h | #2, #4 |
-| 7 | Archiver les fichiers _diag_* de la racine | 1 h | #1 |
-| 8 | **Sécuriser RAG Injection & Path Traversal** — `sanitize_path()`, `FileGuard` | 4 h | #4 |
-| 9 | **Rendre HyDE asynchrone** — `asyncio.to_thread` | 2 h | #4 |
-| 10 | **Filtrer les secrets dans les logs** | 2 h | #4 |
-| 11 | **Tokenizer réel de Phi-4** (remplacer `len//4`) | 4 h | #4 |
-| 12 | **Réduire taille max chunks à 1000 car.** | 1 h | #5 |
-| 13 | **Désactiver HyDE conditionnellement (<7B)** | 2 h | #5 |
-| 14 | **Limiter Agent Loop à 3 itérations max** | 1 h | #5 |
-| 15 | **Corriger `confidence_label` hardcodé "HAUTE"** | 30 min | #6 |
-| 16 | **Corriger normalisation RRF biaisée** | 1 h | #6 |
-| 17 | **Corriger `pysqlite3` → `sqlite3`** | 30 min | #6 |
-| 18 | **Ajouter `try/finally` connexions SQLite** | 1 h | #6 |
-| 19 | **Ajouter `add_done_callback` pour async tasks** | 1 h | #6 |
-| 20 | **Corriger URL OpenRouter** | 15 min | #6 |
-| 21 | **Nettoyer .gitignore** | 15 min | #6 |
+| 6 | **Corriger `pysqlite3` → `sqlite3`** | 30 min | #6 |
+| 7 | **Ajouter `try/finally` connexions SQLite** — fuites mémoire | 1 h | #6 |
+| 8 | **Ajouter `add_done_callback` pour async tasks** — 3 create_task sans await | 1 h | #6 |
+| 9 | **Corriger URL OpenRouter** | 15 min | #6 |
+
+#### Phase 0B — Sécurité & Performance (1 sem)
+*Objectif : le système fonctionne sans danger et sans bloquer l'UI.*
+| # | Action | Effort | Source |
+|---|--------|--------|--------|
+| 10 | **Sécuriser RAG Injection & Path Traversal** — `sanitize_path()`, `FileGuard` | 4 h | #4 |
+| 11 | **Rendre HyDE asynchrone** — `asyncio.to_thread` | 2 h | #4 |
+| 12 | **Filtrer les secrets dans les logs** | 2 h | #4 |
+| 13 | **Tokenizer réel de Phi-4** (remplacer `len//4`) | 4 h | #4 |
+| 14 | **Réduire taille max chunks à 1000 car.** | 1 h | #5 |
+| 15 | **Désactiver HyDE conditionnellement (<7B)** | 2 h | #5 |
+| 16 | **Limiter Agent Loop à 3 itérations max** | 1 h | #5 |
+| 17 | **Corriger `confidence_label` hardcodé "HAUTE"** | 30 min | #6 |
+| 18 | **Corriger normalisation RRF biaisée** | 1 h | #6 |
+| 19 | **Nettoyer .gitignore** | 15 min | #6 |
+| 20 | Fusionner les doublons de logging | 1 h | #2, #4 |
+| 21 | Archiver les fichiers _diag_* de la racine | 1 h | #1 |
 
 #### Phase 1 — Dé-duplication (1-2 sem)
 | # | Action | Effort |
@@ -324,4 +334,15 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 
 ---
 
-*Document créé le 7 juillet 2026 — Mis à jour avec les 7 audits experts.*
+## Métriques de succès V15
+
+| Métrique | Actuelle | Cible V15 | Comment |
+|----------|----------|-----------|---------|
+| Temps première réponse | >10 s (swap) | **<3 s** | Mesure utilisateur critique |
+| Swap disque | Permanent | **0 swap** | Signe que RAM suffit |
+| Recall@5 RAG | ~92% (5 docs) | **>70% (50 docs)** | Dataset étendu |
+| RAM totale utilisée | ~8 Go (swap) | **<6 Go** | Marge pour contexte RAG |
+| Hallucinations / session | ~3-5 | **<1** | Auto-évaluation + expert |
+| Taux d'échec outils | ~20% | **<5%** | Agent loop fiable |
+
+*Document créé le 7 juillet 2026 — Mis à jour avec les 7 audits experts et 3 expertises DeepSeek.*
