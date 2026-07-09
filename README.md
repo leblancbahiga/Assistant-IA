@@ -18,7 +18,7 @@ Conçu pour tourner en local d'abord, sur un MacBook Pro M1 de 8 Go de RAM unifi
   <img src="https://img.shields.io/badge/LLM-Phi--4--mini%20(MLX)-FFB000?style=for-the-badge" alt="LLM Phi-4-mini"/>
   <img src="https://img.shields.io/badge/Tests-913%20tests-success?style=for-the-badge" alt="913 tests"/>
   <img src="https://img.shields.io/badge/V15%20Phase%200A-%E2%9C%85-success?style=for-the-badge" alt="Phase 0A done"/>
-  <img src="https://img.shields.io/badge/Phase%200B-4%2F12-blue?style=for-the-badge" alt="Phase 0B 4/12"/>
+  <img src="https://img.shields.io/badge/Phase%200B-12%2F12-brightgreen?style=for-the-badge" alt="Phase 0B 12/12 ✅"/>
   <img src="https://img.shields.io/badge/Status-V12%20actif%20%2B%20V15-success?style=for-the-badge" alt="Status V12+V15"/>
 </p>
 
@@ -324,4 +324,4 @@ MIT. Voir [`LICENSE`](LICENSE) (à ajouter).
 
 ---
 
-*Document mis à jour le 15 juillet 2026 — NURU V12.2 — Dashboard ambiant Z.ai actif — 913 tests ✅ — V15 Phase 0A ✅ Phase 0B 4/12 ⏳*
+*Document mis à jour le 15 juillet 2026 — NURU V12.2 — Dashboard ambiant Z.ai actif — 913 tests ✅ — V15 Phase 0A ✅ Phase 0B 12/12 ✅*

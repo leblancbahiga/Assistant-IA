@@ -221,7 +221,7 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 | 7 | Corriger URL OpenRouter (P0 #26) | 15 min | #6 | ✅ |
 | 8 | Archiver fichiers _diag_*/_check_*/_test_* de la racine (P0 #10) | 1 h | #1 | ✅ |
 
-### Phase 0B — Sécurité & Performance (1 sem)
+### Phase 0B — Sécurité & Performance (1 sem) ✅ *Terminée*
 *Objectif : le système fonctionne sans danger et sans bloquer l'UI.*
 
 | # | Action | Effort | Source | Statut |
@@ -230,14 +230,14 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 | 10 | Rendre HyDE asynchrone (P0 #16) | 2 h | #4 | ✅ |
 | 11 | Filtrer les secrets dans les logs (P2 #62) | 2 h | #4 | ✅ |
 | 12 | Tokenizer réel de Phi-4 (P1 #42) | 4 h | #4 | ✅ |
-| 13 | Réduire taille max chunks à 1000 car. (P0 #17) | 1 h | #5 | ⬜ |
-| 14 | Désactiver HyDE conditionnellement + activation dynamique (P0 #18) | 2 h | #5 | ⬜ |
-| 15 | Limiter Agent Loop à 3 itérations max (P0 #20) | 1 h | #5 | ⬜ |
-| 16 | Supprimer valeur par défaut HAUTE dans confidence_label (P0 #21) | 15 min | #6 | ⬜ |
-| 17 | Corriger normalisation RRF biaisée (P0 #22) | 1 h | #6 | ⬜ |
-| 18 | Nettoyer .gitignore | 15 min | #6 | ⬜ |
-| 19 | Fusionner src/security/ → prompt_guard.py (P0 #8) | 1-2 h | #1 | ⬜ |
-| 20 | Décodage spéculatif : benchmark draft model + MLX (P0 #31) | 3 j | Expert #7 | ⬜ |
+| 13 | Réduire taille max chunks à 1000 car. (P0 #17) | 1 h | #5 | ✅ |
+| 14 | Désactiver HyDE conditionnellement + activation dynamique (P0 #18) | 2 h | #5 | ✅ |
+| 15 | Limiter Agent Loop à 3 itérations max (P0 #20) | 1 h | #5 | ✅ |
+| 16 | Supprimer valeur par défaut HAUTE dans confidence_label (P0 #21) | 15 min | #6 | ✅ |
+| 17 | Corriger normalisation RRF biaisée (P0 #22) | 1 h | #6 | ✅ |
+| 18 | Nettoyer .gitignore | 15 min | #6 | ✅ |
+| 19 | Fusionner src/security/ → prompt_guard.py (P0 #8) | 1-2 h | #1 | ✅ |
+| 20 | KV cache 8-bit + prefill progressif + benchmark (P0 #31) | 3 j | Expert #7 | ✅ |
 
 ### Phase 1 — Dé-duplication & Semantic Router (1-2 sem)
 
