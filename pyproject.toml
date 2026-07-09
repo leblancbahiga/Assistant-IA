@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nuru-v12"
-version = "0.12.0"
-description = "NURU V12 - Personal Cognitive Operating System"
+version = "0.15.0"
+description = "NURU V15 - Personal Cognitive Operating System"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -20,6 +20,9 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "psutil>=5.9.0",
+    "keyring>=24.0.0",
+    "rank-bm25>=0.1.14",
+    "sqlite-vec>=0.1.0",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +45,7 @@ cloud = [
 voice = [
     "mlx-whisper>=0.1.0",
     "pyttsx3>=2.90",
+    "sounddevice>=0.4.5",
 ]
 vision = [
     "pillow>=10.0.0",
@@ -49,6 +53,11 @@ vision = [
 ]
 ui = [
     "PySide6>=6.5.0",
+]
+ml = [
+    "mlx>=0.0.14",
+    "mlx-lm>=0.18.0",
+    "transformers>=4.40.0",
 ]
 
 [tool.black]
