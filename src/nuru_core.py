@@ -5,8 +5,8 @@ import time
 from pathlib import Path
 from typing import AsyncGenerator
 from src.config import config
-from src.rag_engine import RAGEngine, RAGResult
-from src.routing import Router, RouterResult
+from src.rag_engine import RAGEngine
+from src.routing import Router
 from src.llm_local import LocalLLM
 from src.llm_cloud import CloudLLM
 from src.memory_store import MemoryStore
@@ -15,11 +15,7 @@ from src.cloud import WebSearch
 from src.context_manager import ContextBudget
 from src.runtime_manager import RuntimeManager
 from src.core.events import EventBus
-# NURU V10.3 — AUDIT-FIX : PluginSystem et ReflectionEngine supprimés (Arch-01).
-# Étaient des stubs legacy (YAGNI) qui ajoutaient du bruit dans NuruCore.__init__
-# et correspondaient à du code mort — aucun call site ne les utilisait réellement.
-# Si un vrai système de plugins est nécessaire un jour, il sera ajouté frais
-# dans un module dédié (src/plugins/) avec tests et DI explicite.
+# V10.3 : PluginSystem et ReflectionEngine supprimés (stubs YAGNI).
 from src.ingestion import IngestionEngine, SUPPORTED_EXTENSIONS
 from src.ram_monitor import RAMMonitor  # Monitoring RAM
 from src.document_watcher import DocumentWatcher  # Auto-indexation watchdog
@@ -676,22 +672,8 @@ Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail,
                 parts.append(f"\n## Statut NURU\nÉtat : {phase_names.get(phase.value, phase.value)}")
         except Exception:
             pass
-
         return "\n".join(parts)
 
-    def _detect_model_family(self, intent: str) -> str:
-        """Détecte la famille du modèle local pour formater le prompt correctement."""
-        if intent == "COMPLEX":
-            return "phi"
-        try:
-            model_id = self.local_llm._get_required_model(intent)
-            if "phi" in model_id.lower():
-                return "phi"
-            if "gemma" in model_id.lower():
-                return "gemma"
-        except Exception:
-            pass
-        return "phi"
 
     async def process_query(self, query: str, use_tts: bool = False) -> AsyncGenerator[str, None]:
         """Traite une requête utilisateur en déléguant au NuruOrchestrator.
