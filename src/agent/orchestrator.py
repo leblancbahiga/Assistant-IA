@@ -221,6 +221,9 @@ class AgentOrchestrator:
         # V9 : sessions actives
         self._sessions: dict[str, AgentState] = {}
 
+        # V15 P1 #43 : routeur sémantique léger (lazy)
+        self._semantic_router = None
+
         self._initialized = True
         logger.debug("AgentOrchestrator fusionné (V15 P0 #1) initialisé")
 
@@ -300,6 +303,14 @@ class AgentOrchestrator:
             self._resume = ResumeManager()
         return self._resume
 
+    @property
+    def semantic_router(self) -> Any:
+        """Routeur sémantique ultra-léger V15 (P1 #43), lazy-loaded."""
+        if self._semantic_router is None:
+            from src.routing.semantic_router import SemanticRouter
+            self._semantic_router = SemanticRouter()
+        return self._semantic_router
+
     # ═══════════════════════════════════════════════════════════════════
     # MODE 1 : Simple Q&A (V12) — 4-phase run(query)
     # ═══════════════════════════════════════════════════════════════════
@@ -327,9 +338,21 @@ class AgentOrchestrator:
                 trace.error = "Requête vide"
                 return self._build_response(trace)
 
+            # ══ V15 P1 #43 : classification sémantique rapide ══
+            semantic_start = time.monotonic()
+            sr = self.semantic_router.route(query)
+
+            # Court-circuit : SIMPLE → réponse triviale, pas de pipeline LLM
+            if sr.intent == "SIMPLE" and sr.confidence >= 0.8:
+                trace.status = "success"
+                trace.plan_phase["short_circuit"] = True
+                trace.synthesis = self._simple_response(query)
+                trace.duration_ms = (time.monotonic() - start_time) * 1000
+                return self._build_response(trace)
+
             # ── 1. PLAN ───────────────────────────────────────────
             plan_start = time.monotonic()
-            plan = await self._plan(query)
+            plan = await self._plan(query, intent=sr.intent)
             trace.plan_phase = {
                 "decomposed": plan.decomposed,
                 "steps": plan.steps,
@@ -339,6 +362,12 @@ class AgentOrchestrator:
                 "memory_available": plan.memory_available,
                 "memory_recalled": plan.memory_recalled,
                 "duration_ms": round((time.monotonic() - plan_start) * 1000, 1),
+                # V15 P1 #43 : enrichi du routage sémantique
+                "semantic_intent": sr.intent,
+                "semantic_confidence": sr.confidence,
+                "semantic_ms": round(
+                    (time.monotonic() - semantic_start) * 1000, 1
+                ),
             }
 
             # ── 2. EXECUTE ────────────────────────────────────────
@@ -386,12 +415,16 @@ class AgentOrchestrator:
 
     # ── Phase 1 : PLAN (V12) ──────────────────────────────────────────
 
-    async def _plan(self, query: str) -> PlanResult:
+    async def _plan(self, query: str, intent: str | None = None) -> PlanResult:
         """Phase de planification : décompose la requête et collecte les contextes.
 
         1. Décompose la requête en sous-étapes logiques
         2. Consulte RAG pour la recherche documentaire
         3. Consulte MemoryManager pour le contexte utilisateur
+
+        V15 P1 #43 : saute RAG/Memory selon l'intent sémantique.
+        GENERAL et WEB n'ont pas besoin de documents locaux → 0ms RAG.
+        Si intent=None, comportement legacy (RAG incluse).
         """
         plan = PlanResult()
 
@@ -399,17 +432,21 @@ class AgentOrchestrator:
         plan.steps = self._decompose_query(query)
         plan.decomposed = len(plan.steps) >= 1
 
-        # 2. Recherche RAG
-        rag = self.rag_engine
-        if rag is not None:
-            try:
-                context, result = await rag.retrieve(query)
-                plan.rag_available = bool(context and context.strip())
-                plan.rag_documents_found = getattr(result, 'documents_found', 0)
-                plan.rag_confidence = getattr(result, 'confidence_label', "NONE")
-            except Exception as e:
-                logger.debug("RAG retrieve failed during plan: %s", e)
-                plan.rag_available = False
+        # 2. Recherche RAG — sautée si l'intent ne nécessite pas de documents
+        # V15 P1 #43 : GENERAL et WEB n'utilisent pas la RAG locale
+        # Si intent=None, comportement legacy (RAG incluse)
+        should_rag = intent is None or intent not in ("GENERAL", "WEB")
+        if should_rag:
+            rag = self.rag_engine
+            if rag is not None:
+                try:
+                    context, result = await rag.retrieve(query)
+                    plan.rag_available = bool(context and context.strip())
+                    plan.rag_documents_found = getattr(result, 'documents_found', 0)
+                    plan.rag_confidence = getattr(result, 'confidence_label', "NONE")
+                except Exception as e:
+                    logger.debug("RAG retrieve failed during plan: %s", e)
+                    plan.rag_available = False
 
         # 3. Consultation mémoire
         mem = self.memory_manager
@@ -673,6 +710,40 @@ class AgentOrchestrator:
             "trace": trace.to_dict(),
             "trace_summary": self._format_trace_summary(trace),
         }
+
+    def _simple_response(self, query: str) -> str:
+        """Génère une réponse triviale pour les intents SIMPLE (salutations, etc.).
+
+        Court-circuite le pipeline LLM pour économiser 300-500ms et tokens.
+        """
+        q = query.lower().strip().rstrip("?!.,;:")
+        # Salutations
+        if q.startswith("bonjour"):
+            return "Bonjour ! Comment puis-je vous aider aujourd'hui ?"
+        if q.startswith("salut"):
+            return "Salut ! Que puis-je pour vous ?"
+        if q.startswith(("hello", "hi", "hey", "coucou")):
+            return "Bonjour ! En quoi puis-je vous être utile ?"
+        if q.startswith("bonsoir"):
+            return "Bonsoir ! Je suis là si vous avez besoin de quoi que ce soit."
+        # Remerciements
+        if q.startswith(("merci", "thanks")):
+            return "Avec plaisir ! N'hésitez pas si vous avez d'autres questions."
+        # Feedback positif
+        if any(k in q for k in ("super", "parfait", "cool", "génial", "nickel", "top", "bien")):
+            return "Ravi d'avoir pu vous aider ! Autre chose ?"
+        # Au revoir
+        if any(q.startswith(k) for k in ("bye", "aurevoir", "au revoir", "bonne nuit")):
+            return "Au revoir ! Bonne journée."
+        # Demande de répétition
+        if any(k in q for k in ("répète", "repete", "répéter", "clarifier")):
+            return "Bien sûr, que souhaitez-vous que je répète ou clarifie ?"
+        # Identité
+        if any(k in q for k in ("qui es-tu", "qui etes-vous", "qui êtes-vous",
+                                "tu es qui", "vous êtes qui", "quel est ton nom")):
+            return "Je suis NURU, votre assistant cognitif personnel. Je suis là pour vous aider avec vos projets, documents et questions du quotidien."
+        # Fallback
+        return "Je vous écoute. Que puis-je faire pour vous ?"
 
     def _format_trace_summary(self, trace: AgentTrace) -> str:
         """Formate un résumé lisible de la trace d'exécution."""
