@@ -16,6 +16,8 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+from src.privacy.consent_layer import SensorType
+
 
 class MCPTransport(enum.Enum):
     """Type de transport MCP."""
@@ -70,7 +72,10 @@ class MCPClient:
         self._disconnect(name)
 
     async def connect(self, name: str) -> bool:
-        """Établit la connexion à un serveur MCP."""
+        """Établit la connexion à un serveur MCP.
+
+        Vérifie le consentement réseau avant activation.
+        """
         conn = self.connections.get(name)
         if not conn:
             logger.error(f"Connexion inconnue: {name}")
@@ -78,6 +83,17 @@ class MCPClient:
 
         if name in self._processes:
             return True  # Déjà connecté
+
+        # V15 P2 #25 : vérification consentement réseau
+        from src.privacy import get_consent_layer
+        cl = get_consent_layer()
+        if not cl.request_access(
+            SensorType.NETWORK,
+            purpose=f"Connexion MCP au serveur '{name}' ({conn.transport.value})",
+            session_only=True,
+        ):
+            logger.warning(f"MCP: accès réseau refusé par consentement pour '{name}'")
+            return False
 
         try:
             if conn.transport == MCPTransport.STDIO and conn.command:

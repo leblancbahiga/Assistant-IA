@@ -14,6 +14,8 @@ from typing import Optional, Callable, Any
 
 logger = logging.getLogger(__name__)
 
+from src.privacy.consent_layer import SensorType
+
 
 class STTModelSize(enum.Enum):
     """Taille du modèle Whisper (compromis vitesse/précision)."""
@@ -67,21 +69,42 @@ class SpeechToText:
         await stt.unload()
     """
 
-    def __init__(self, config: Optional[STTConfig] = None):
+    def __init__(self, config: Optional[STTConfig] = None, consent_layer=None):
         self.config = config or STTConfig()
         self._model: Any = None
         self._loaded = False
         self._on_result: Optional[Callable[[STTResult], None]] = None
+        self._consent = consent_layer  # Injection DI ou lazy singleton
+
+    @property
+    def consent(self):
+        """Accès paresseux au ConsentLayer."""
+        if self._consent is None:
+            from src.privacy import get_consent_layer
+            self._consent = get_consent_layer()
+        return self._consent
 
     async def load(self) -> bool:
         """Charge le modèle Whisper en mémoire.
 
-        Retourne False si RAM insuffisante.
+        Vérifie le consentement micro avant activation.
+        Retourne False si RAM insuffisante ou consentement refusé.
         """
         if self._loaded:
             return True
+
+        # V15 P2 #25 : vérification consentement micro
+        if not self.consent.request_access(
+            SensorType.MICROPHONE,
+            purpose="Transcription vocale",
+            max_duration=self.config.max_duration_seconds,
+        ):
+            logger.warning("STT: accès micro refusé par consentement")
+            return False
+
         try:
             import psutil
+
             available_gb = psutil.virtual_memory().available / (1024**3)
             if available_gb < 1.0:
                 logger.warning("RAM insuffisante pour STT, skip")
@@ -100,6 +123,9 @@ class SpeechToText:
             return False
 
     async def unload(self) -> None:
+        """Décharge le modèle et désactive le micro (consentement)."""
+        if self._loaded:
+            self.consent.deactivate(SensorType.MICROPHONE)
         self._model = None
         self._loaded = False
         logger.info("STT déchargé")

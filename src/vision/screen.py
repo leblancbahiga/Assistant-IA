@@ -2,16 +2,20 @@
 
 Capture de l'écran macOS via screencapture, OCR local,
 et analyse contextuelle via LLM cloud.
+Consentement requis avant toute capture (V15 P2 #25).
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional
+
+from src.privacy.consent_layer import SensorType
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +24,7 @@ logger = logging.getLogger(__name__)
 class ScreenConfig:
     """Configuration de capture écran."""
     format: str = "png"
-    resolution_scale: float = 0.5     # 50% = ~2 Mo au lieu de 8 Mo
+    resolution_scale: float = 0.5
     max_file_size_mb: int = 5
     include_cursor: bool = False
     enable_ocr: bool = True
@@ -34,7 +38,7 @@ class ScreenResult:
     ocr_text: str = ""
     width: int = 0
     height: int = 0
-    analysis: str = ""               # Analyse LLM du contenu
+    analysis: str = ""
     error: Optional[str] = None
 
 
@@ -50,11 +54,24 @@ class ScreenCapture:
         print(result.analysis)
     """
 
-    def __init__(self, config: Optional[ScreenConfig] = None):
+    def __init__(self, config: Optional[ScreenConfig] = None, consent_layer=None):
         self.config = config or ScreenConfig()
+        self._consent = consent_layer
 
-    async def capture(self, region: Optional[tuple[int, int, int, int]] = None) -> ScreenResult:
+    @property
+    def consent(self):
+        """Accès paresseux au ConsentLayer."""
+        if self._consent is None:
+            from src.privacy import get_consent_layer
+            self._consent = get_consent_layer()
+        return self._consent
+
+    async def capture(
+        self, region: Optional[tuple[int, int, int, int]] = None
+    ) -> ScreenResult:
         """Capture l'écran (ou une région).
+
+        Vérifie le consentement screen_capture avant activation.
 
         Args:
             region: (x, y, w, h) optionnel pour capture partielle
@@ -62,9 +79,17 @@ class ScreenCapture:
         Returns:
             ScreenResult avec le chemin du screenshot et l'OCR
         """
+        # V15 P2 #25 : vérification consentement capture écran
+        if not self.consent.request_access(
+            SensorType.SCREEN_CAPTURE,
+            purpose="Capture écran pour analyse",
+            session_only=True,
+        ):
+            logger.warning("Screen: accès refusé par consentement")
+            return ScreenResult(error="Capture écran refusée par consentement")
+
         tmp = Path(tempfile.mktemp(suffix=f".{self.config.format}"))
         try:
-            # Capture via screencapture macOS
             cmd = ["screencapture", "-x"]
             if region:
                 cmd.extend(["-R", f"{region[0]},{region[1]},{region[2]},{region[3]}"])
@@ -78,12 +103,10 @@ class ScreenCapture:
             if proc.returncode != 0:
                 return ScreenResult(error=f"screencapture: {proc.stderr.decode()}")
 
-            # Dimensions
             width, height = self._get_dimensions(tmp)
             if width == 0:
                 return ScreenResult(error="Impossible de lire les dimensions")
 
-            # OCR
             ocr_text = ""
             if self.config.enable_ocr:
                 ocr_text = await self._ocr(tmp)
@@ -98,81 +121,63 @@ class ScreenCapture:
         except subprocess.TimeoutExpired:
             return ScreenResult(error="Capture timeout")
         except Exception as e:
-            logger.error(f"Erreur capture: {e}")
-            return ScreenResult(error=str(e))
+            return ScreenResult(error=f"Erreur capture: {e}")
 
-    async def capture_and_analyze(self, llm_client) -> ScreenResult:
-        """Capture + analyse LLM du contenu."""
-        base = await self.capture()
-        if base.error or not base.screenshot_path:
-            return base
+    async def capture_and_analyze(self, llm_client: Optional[object] = None) -> ScreenResult:
+        """Capture + analyse LLM.
 
+        Vérifie aussi le consentement avant capture.
+        """
+        result = await self.capture()
+        if result.error or not result.screenshot_path:
+            return result
+        if llm_client is None:
+            return result
         try:
-            # Envoyer l'image au LLM pour analyse
-            import base64 as b64
-            image_data = base.screenshot_path.read_bytes()
-            encoded = b64.b64encode(image_data).decode("utf-8")
-
-            # Prompt d'analyse
-            response = await llm_client.chat(
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Décris ce qui est visible sur l'écran. "
-                         "Sois précis : quelles applications, fenêtres, contenu, "
-                         "boutons sont affichés ?"},
-                        {"type": "image_url", "image_url": {
-                            "url": f"data:image/{self.config.format};base64,{encoded}"}
-                        },
-                    ],
-                }],
-                max_tokens=500,
-                temperature=0.3,
-            )
-            base.analysis = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+            with open(result.screenshot_path, "rb") as f:
+                img_b64 = __import__("base64").b64encode(f.read()).decode()
+            analysis = await llm_client.analyze_image(img_b64)
+            result.analysis = analysis
         except Exception as e:
-            logger.error(f"Erreur analyse LLM: {e}")
-            base.analysis = "[Analyse LLM indisponible]"
+            result.analysis = f"Erreur analyse: {e}"
+        return result
 
-        return base
-
-    async def _ocr(self, image_path: Path) -> str:
-        """OCR via tesserocr (fallback pytesseract)."""
-        try:
-            # Essayer tesserocr (C++, plus rapide)
-            import tesserocr  # type: ignore
-            from PIL import Image
-
-            img = Image.open(image_path)
-            text = tesserocr.image_to_text(img, lang=self.config.ocr_language)
-            return text.strip()
-        except ImportError:
-            try:
-                # Fallback pytesseract
-                import pytesseract  # type: ignore
-                from PIL import Image
-
-                img = Image.open(image_path)
-                text = pytesseract.image_to_string(img, lang=self.config.ocr_language)
-                return text.strip()
-            except ImportError:
-                logger.warning("Aucun OCR installé (tesserocr ou pytesseract)")
-                return ""
-        except Exception as e:
-            logger.error(f"Erreur OCR: {e}")
-            return ""
-
-    def _get_dimensions(self, image_path: Path) -> tuple[int, int]:
-        """Récupère les dimensions de l'image."""
+    def _get_dimensions(self, path: Path) -> tuple[int, int]:
+        """Lit les dimensions de l'image via PIL."""
         try:
             from PIL import Image
-            with Image.open(image_path) as img:
+            with Image.open(path) as img:
                 return img.size
         except ImportError:
             return (0, 0)
         except Exception:
             return (0, 0)
 
+    async def _ocr(self, path: Path) -> str:
+        """OCR local via macOS Vision framework."""
+        try:
+            import subprocess
+            script = f"""
+            use framework "Vision"
+            use scripting additions
 
-# Import asyncio pour la compatibilité async
-import asyncio
+            set imgPath to "{path}"
+            set req to current application's VNRecognizeTextRequest's alloc's init()
+            set handler to current application's VNImageRequestHandler's alloc's initWithURL:(current application's |NSURL|'s fileURLWithPath:imgPath) options:{{}}
+            handler's performRequests:{{req}} |error|:(missing value)
+            set results to req's results()
+            set text to ""
+            repeat with r in results
+                set text to text & (r's topCandidates:(1)'s firstObject()'s string()) & linefeed
+            end repeat
+            return text
+            """
+            proc = await asyncio.to_thread(
+                subprocess.run,
+                ["osascript", "-e", script],
+                capture_output=True, text=True, timeout=30,
+            )
+            return proc.stdout.strip()
+        except Exception as e:
+            logger.debug(f"OCR error: {e}")
+            return ""

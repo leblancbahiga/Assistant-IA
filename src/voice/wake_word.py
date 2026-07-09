@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable
 
+from src.privacy.consent_layer import SensorType
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,19 +57,42 @@ class WakeWordDetector:
         await detector.stop()
     """
 
-    def __init__(self, config: Optional[WakeWordConfig] = None):
+    def __init__(self, config: Optional[WakeWordConfig] = None, consent_layer=None):
         self.config = config or WakeWordConfig()
         self._state = WakeWordState.IDLE
+        self._model = None
         self._openwakeword = None
         self._audio_stream = None
         self._running = False
         self._on_detected: Optional[Callable[[WakeWordResult], None]] = None
         self._on_state_change: Optional[Callable[[WakeWordState], None]] = None
+        self._consent = consent_layer
+
+    @property
+    def consent(self):
+        """Accès paresseux au ConsentLayer."""
+        if self._consent is None:
+            from src.privacy import get_consent_layer
+            self._consent = get_consent_layer()
+        return self._consent
 
     async def start(self) -> bool:
-        """Démarre la détection en continu."""
+        """Démarre la détection en continu.
+
+        Vérifie le consentement micro avant activation.
+        """
         if self._running:
             return True
+
+        # V15 P2 #25 : vérification consentement micro
+        if not self.consent.request_access(
+            SensorType.MICROPHONE,
+            purpose="Détection wake word 'Hey NURU'",
+            max_duration=3600,  # 1h d'écoute continue max
+            session_only=False,  # Persiste entre sessions
+        ):
+            logger.warning("Wake word: accès micro refusé par consentement")
+            return False
 
         try:
             import openwakeword  # type: ignore
@@ -99,7 +124,9 @@ class WakeWordDetector:
             return False
 
     async def stop(self) -> None:
-        """Arrête la détection."""
+        """Arrête la détection et désactive le micro (consentement)."""
+        if self._running:
+            self.consent.deactivate(SensorType.MICROPHONE)
         self._running = False
         self._state = WakeWordState.IDLE
         self._model = None
