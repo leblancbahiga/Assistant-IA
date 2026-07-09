@@ -30,7 +30,7 @@ def _get_agent_orchestrator():
     Initialisation paresseuse.
     """
     try:
-        from src.tools.agent_orchestrator import AgentOrchestrator
+        from src.agent.orchestrator import AgentOrchestrator
         return AgentOrchestrator.get_instance()
     except Exception as e:
         logger.warning("⚠️ AgentOrchestrator non disponible: %s", e)

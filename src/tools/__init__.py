@@ -37,7 +37,8 @@ from src.tools.file_ops import (
 from src.tools.memory_tools import (
     register_memory_tools,
 )
-from src.tools.agent_orchestrator import (
+# AgentOrchestrator fusionné V15 — import direct depuis le module réel
+from src.agent.orchestrator import (
     AgentOrchestrator, AgentTrace, PlanResult, VerifyResult,
 )
 from src.tools.agent_tools import (

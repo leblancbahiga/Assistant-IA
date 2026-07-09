@@ -25,7 +25,7 @@ SRC = PROJECT_ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from src.tools.agent_orchestrator import (
+from src.agent.orchestrator import (
     AgentOrchestrator,
     AgentTrace,
     PlanResult,

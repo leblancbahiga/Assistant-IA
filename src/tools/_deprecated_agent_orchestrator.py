@@ -1,10 +1,12 @@
-"""
-NURU V15 — Shim de compatibilité pour AgentOrchestrator.
+"""NURU V15 — Shim de compatibilité déprécié pour AgentOrchestrator.
+
+⚠️ FICHIER RENOMMÉ (Item 24). Ancien nom : src/tools/agent_orchestrator.py.
+    Ne plus utiliser ce chemin directement.
 
 Importe depuis src.agent.orchestrator (fusionné V15 P0 #1).
 Conserve la rétrocompatibilité des imports :
 
-    from src.tools.agent_orchestrator import (
+    from src.tools._deprecated_agent_orchestrator import (
         AgentOrchestrator, AgentTrace, PlanResult, VerifyResult,
     )
 
@@ -30,4 +32,9 @@ from src.agent.orchestrator import (  # noqa: F401, E402
     VerifyResult,
 )
 
-logger.debug("Shim src.tools.agent_orchestrator chargé")
+__all__ = [
+    "AgentOrchestrator",
+    "AgentTrace",
+    "PlanResult",
+    "VerifyResult",
+]
