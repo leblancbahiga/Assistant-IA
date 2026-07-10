@@ -396,3 +396,98 @@
   expected_source: "concept note YARID training"
   expected_keywords: ["numérique", "digital", "technologie", "application", "mobile"]
   doc_type: fact_check
+
+# ──────────────────────────────────────────────────────────────────────────────
+# V15 Phase 6 — Item 46 : Dataset étendu —
+# Agronomie approfondie, chaînes valeur, climat, edge cases
+# ──────────────────────────────────────────────────────────────────────────────
+
+- question: "Quelle est la chaîne de valeur prioritaire dans le projet YARID ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["chaîne", "valeur", "prioritaire", "filière", "agricole"]
+  doc_type: chaine_valeur
+
+- question: "Quels acteurs interviennent dans la chaîne de valeur maïs à Walikale ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["producteurs", "transformateurs", "commerçants", "maïs", "acteurs"]
+  doc_type: chaine_valeur
+
+- question: "Comment le monitoring tool évalue-t-il la rentabilité des chaînes de valeur ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["rentabilité", "marge", "coût", "revenu", "indicateur"]
+  doc_type: chaine_valeur
+
+- question: "Quelles sont les contraintes post-récolte pour les légumineuses ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["post-récolte", "légumineuse", "stockage", "perte", "conservation"]
+  doc_type: agronomie
+
+- question: "Quels indicateurs nutritionnels sont suivis par le monitoring tool ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["nutrition", "indicateur", "sécurité", "alimentaire", "diversité"]
+  doc_type: agronomie
+
+- question: "Quelle stratégie YARID pour la sécurité alimentaire des ménages vulnérables ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["sécurité", "alimentaire", "ménage", "vulnérable", "stratégie"]
+  doc_type: agronomie
+
+- question: "Quelles pratiques d'adaptation aux sécheresses récurrentes ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["adaptation", "sécheresse", "pratique", "variété", "résistante"]
+  doc_type: climat
+
+- question: "Comment le monitoring évalue-t-il la résilience des exploitations ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["résilience", "exploitation", "monitoring", "indicateur", "évaluation"]
+  doc_type: climat
+
+- question: "Quelle relation entre déforestation et agriculture à Walikale ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["déforestation", "agriculture", "forêt", "Walikale", "impact"]
+  doc_type: climat
+
+- question: "Quelle proportion de femmes dans les groupements YARID ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["femme", "groupement", "agricole", "proportion", "inclusion"]
+  doc_type: fact_check
+
+- question: "Le monitoring tool intègre-t-il un volet genre ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["genre", "indicateur", "femme", "homme", "désagrégé"]
+  doc_type: fact_check
+
+- question: "Quelle différence entre BEACCOM et YARID ?"
+  expected_source: ""
+  expected_keywords: ["BEACCOM", "YARID", "différence", "vulnérabilité", "formation"]
+  doc_type: complexe
+
+- question: "Quels risques agricoles dans TOUS les documents ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["risque", "agricole", "climat", "ravageur", "marché"]
+  doc_type: complexe
+
+- question: "Y a-t-il des documents sur l'élevage dans l'index ?"
+  expected_source: ""
+  expected_keywords: ["élevage", "bétail", "non", "aucun", "absent"]
+  doc_type: edge_case
+
+- question: "Le CV Leblanc mentionne-t-il l'USAID ?"
+  expected_source: "Leblanc-BAHIGA-20240417 (1).pdf"
+  expected_keywords: ["USAID", "non", "pas", "mentionné", "aucun"]
+  doc_type: edge_case
+
+- question: "Quelle superficie agricole suivie par BEACCOM ?"
+  expected_source: "1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx"
+  expected_keywords: ["superficie", "agricole", "hectare", "BEACCOM", "suivi"]
+  doc_type: fact_check
+
+- question: "Quels types de sols dominants dans la zone d'intervention ?"
+  expected_source: "Sustainable -Agriculture Monitoring tool.docx"
+  expected_keywords: ["sol", "type", "acide", "ferralitique", "dominant"]
+  doc_type: agronomie
+
+- question: "Quelle filière a le plus fort potentiel d'emplois jeunes ?"
+  expected_source: "concept note YARID training"
+  expected_keywords: ["filière", "emploi", "jeune", "potentiel", "création"]
+  doc_type: chaine_valeur
