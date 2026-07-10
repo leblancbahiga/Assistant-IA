@@ -346,6 +346,9 @@ class NuruWindow(QMainWindow):
             self._engine.error_occurred.connect(
                 self._on_engine_error, Qt.ConnectionType.UniqueConnection
             )
+            self._engine.strategy_changed.connect(
+                self._on_strategy, Qt.ConnectionType.UniqueConnection
+            )
             self._conversation.start_stream()
             self._engine.send_message(text)
         else:
@@ -359,13 +362,22 @@ class NuruWindow(QMainWindow):
     def _on_engine_done(self, full_response: str):
         """Finalise le streaming et remet l'orb en IDLE."""
         self._conversation.end_stream()
+        self._conversation.hide_strategy()
         self._orb.set_state(OrbState.IDLE)
 
     def _on_engine_error(self, code: str, message: str):
         """Affiche l'erreur dans la bulle de streaming."""
         self._conversation.append_to_stream(f"\n\n[⚠️ {message}]")
         self._conversation.end_stream()
+        self._conversation.hide_strategy()
         self._orb.set_state(OrbState.ERROR)
+
+    def _on_strategy(self, key: str):
+        """Met à jour l'indicateur de stratégie pipeline dans le chat."""
+        if key == "completed":
+            self._conversation.hide_strategy()
+        else:
+            self._conversation.set_strategy(key)
 
     def _add_response(self, text: str):
         self._conversation.add_message(text, is_user=False)

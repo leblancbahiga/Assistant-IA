@@ -27,6 +27,7 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal, QTimer
 
 from src.nuru_core import NuruCore
+from src.core.events import EventBus
 from src.ui.presence_orb import OrbState
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,8 @@ class ConversationEngine(QObject):
     error_occurred = Signal(str, str)  # (code, message)
     # Changement d'état de l'orb
     state_changed = Signal(object)  # OrbState
+    # Stratégie pipeline (routing / rag / generation / completed)
+    strategy_changed = Signal(str)
     # Transcription vocale temps réel
     voice_transcript = Signal(str)
     # Session vocale terminée avec le texte final
@@ -245,6 +248,19 @@ class ConversationEngine(QObject):
         Yields tokens → émet signaux thread-safe vers l'UI.
         """
         full_response = ""
+        first_token = True
+
+        # S'abonner aux étapes du pipeline EventBus
+        def _on_pipeline_step(data):
+            step = data.get("step", "thinking") if isinstance(data, dict) else "thinking"
+            self._safe_emit(self.strategy_changed, step)
+
+        bus = EventBus()
+        bus.subscribe("pipeline.step", _on_pipeline_step)
+
+        # Émettre l'état initial "routing"
+        self._safe_emit(self.strategy_changed, "routing")
+
         try:
             async for token in self._nuru.orchestrator.process_query(
                 text,
@@ -252,8 +268,12 @@ class ConversationEngine(QObject):
             ):
                 full_response += token
                 self._safe_emit(self.token_received, token)
+                if first_token:
+                    first_token = False
+                    self._safe_emit(self.strategy_changed, "generation")
 
             # Finalisation
+            self._safe_emit(self.strategy_changed, "completed")
             self._safe_emit(self.response_complete, full_response)
             self._safe_emit(self.state_changed, OrbState.IDLE)
 
@@ -267,6 +287,7 @@ class ConversationEngine(QObject):
             self._safe_emit(self.state_changed, OrbState.ERROR)
 
         finally:
+            bus.unsubscribe("pipeline.step", _on_pipeline_step)
             self._processing = False
 
     # ── Helpers ──

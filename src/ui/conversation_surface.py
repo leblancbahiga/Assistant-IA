@@ -131,6 +131,16 @@ class ConversationSurface(QWidget):
         layout.setContentsMargins(Spacing.MD, Spacing.MD, Spacing.MD, Spacing.MD)
         layout.setSpacing(Spacing.SM)
 
+        # ── Indicateur de stratégie pipeline (caché par défaut) ──
+        self._strategy_label = QLabel()
+        self._strategy_label.setAlignment(Qt.AlignCenter)
+        self._strategy_label.setStyleSheet(
+            "background: transparent; color: #4A5568; font-size: 11px;"
+            " font-weight: 500; letter-spacing: 0.04em; padding: 4px 0;"
+        )
+        self._strategy_label.setVisible(False)
+        layout.addWidget(self._strategy_label)
+
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -308,3 +318,23 @@ class ConversationSurface(QWidget):
             item = self._inner_layout.takeAt(0)
             if item and item.widget():
                 item.widget().deleteLater()
+
+    # ── Indicateur de stratégie pipeline ──
+
+    STRATEGY_LABELS = {
+        "routing": "🔍  Analyse du contexte…",
+        "rag": "📚  Recherche documents…",
+        "generation": "⚡  Génération…",
+        "completed": "✅  Terminé",
+        "thinking": "💭  Réflexion…",
+    }
+
+    def set_strategy(self, key: str) -> None:
+        """Affiche l'étape courante du pipeline dans la zone de chat."""
+        label = self.STRATEGY_LABELS.get(key, f"⏳ {key}…")
+        self._strategy_label.setText(label)
+        self._strategy_label.setVisible(True)
+
+    def hide_strategy(self) -> None:
+        """Cache l'indicateur de stratégie."""
+        self._strategy_label.setVisible(False)

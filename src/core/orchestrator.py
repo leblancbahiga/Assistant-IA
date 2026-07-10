@@ -214,6 +214,7 @@ class NuruOrchestrator:
             "confidence": route_result.confidence,
             "rag_score": route_result.rag_top_score,
         })
+        await self.event_bus.emit("pipeline.step", {"step": "routing", "detail": route_result.decision})
         logger.info(
             f"🧠 Route: {query[:40]}... → {route_result.decision} "
             f"(conf: {route_result.confidence:.2f})"
@@ -243,6 +244,8 @@ class NuruOrchestrator:
                 query, intent, rag_context, rag_result,
             )
         rag_result = merged_result or rag_result
+        # Émettre l'étape RAG (après multi-retrieval)
+        await self.event_bus.emit("pipeline.step", {"step": "rag", "detail": intent})
 
         # NURU V6 : TokenJuice — compression du contexte RAG et web
         if rag_context:
@@ -310,6 +313,7 @@ class NuruOrchestrator:
                 full_prompt = full_prompt[:max_safe_chars - 100] + "\n[... tronqué ...]"
 
         # ── 7. Génération (streaming) ──
+        await self.event_bus.emit("pipeline.step", {"step": "generation"})
         response_content = ""
         start_gen = time.time()
 
