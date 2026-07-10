@@ -12,6 +12,7 @@ import os
 import re
 import json
 import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
 from dataclasses import dataclass, field
@@ -21,8 +22,25 @@ from src.embedder import Embedder
 from src.rag.query_rewriter import CloudQueryRewriter
 from src.reranker import CrossEncoderReranker
 from src.llm_cloud import CloudLLM
+from src.core.ram_budget import Priority, get_budget
 
 logger = logging.getLogger(__name__)
+
+
+# ── RAMBudgetManager global ─────────────────────────────────────────
+# Initialisation unique : enregistre les composants NURU
+def _init_budget() -> None:
+    budget = get_budget()
+    budget.hard_limit_gb = 6.0
+    budget.soft_limit_gb = 5.0
+    budget.register_component("embedder", Priority.EMBEDDER, estimated_mb=500)
+    budget.register_component("reranker", Priority.RERANKER, estimated_mb=400)
+    budget.register_component("llm", Priority.LLM, estimated_mb=3500)
+    budget.register_component("cache_llm", Priority.CACHE, estimated_mb=200)
+    logger.info("📊 RAMBudgetManager initialisé (hard=6.0 Go, soft=5.0 Go)")
+
+
+_init_budget()
 
 
 # ── PromptGuard V10.2 : Protection anti-injection RAG ──
@@ -766,22 +784,34 @@ class RAGEngine:
 
         #  Phase 0 : Reranker SYSTÉMATIQUE
         # V15 Phase 4 (Item 37) : toujours activé dans le pipeline.
+        # V15 Phase 5 (Item 40) : vérification budget RAM avant chargement.
         should_rerank = self._can_rerank(top1_score)
         reranked: list = []
         
         if should_rerank:
-            #  FIX PyTorch/MLX Conflict : Décharger l'embedder (MLX) AVANT
-            # de charger le reranker (PyTorch/MPS) pour éviter le conflit GPU
-            # entre les deux frameworks sur M1 8 Go.
-            self.embedder.unload()
-            
-            try:
-                self.reranker.load_model()
-                reranked = await self.reranker.rerank(query, combined_results, top_k=effective_k) or []
-            finally:
-                # IMMÉDIATEMENT après usage, décharger le reranker PyTorch/MPS
-                # pour libérer la mémoire GPU avant que le LLM (MLX) ne charge.
-                self.reranker.unload()
+            budget = get_budget()
+            # Vérifier si on peut charger le reranker dans le budget
+            if not budget.can_load("reranker"):
+                logger.warning(
+                    "⏭️ Reranker sauté : budget RAM insuffisant "
+                    f"(swap {budget.probe().swap_percent:.0f}%)"
+                )
+                budget.evict(priority_below=Priority.CACHE)
+            else:
+                #  FIX PyTorch/MLX Conflict : Décharger l'embedder (MLX) AVANT
+                # de charger le reranker (PyTorch/MPS) pour éviter le conflit GPU
+                # entre les deux frameworks sur M1 8 Go.
+                self.embedder.unload()
+                budget.mark_loaded("reranker")
+                
+                try:
+                    self.reranker.load_model()
+                    reranked = await self.reranker.rerank(query, combined_results, top_k=effective_k) or []
+                finally:
+                    # IMMÉDIATEMENT après usage, décharger le reranker PyTorch/MPS
+                    # pour libérer la mémoire GPU avant que le LLM (MLX) ne charge.
+                    self.reranker.unload()
+                    budget.mark_unloaded("reranker")
         
         # Fallback BM25 si reranker non disponible ou désactivé
         if not reranked and combined_results:

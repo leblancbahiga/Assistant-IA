@@ -9,6 +9,7 @@ import time
 from typing import AsyncGenerator, Optional
 from src.config import config
 from src.core.model_manager import ModelManager  # : Gestion RAM centralisée
+from src.core.ram_budget import get_budget, Priority
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,15 @@ class LocalLLM:
         if self._current_model_id == model_id and self._model is not None:
             return
 
+        # V15 Phase 5 (Item 40) : vérification budget RAM avant chargement
+        budget = get_budget()
+        if not budget.can_load("llm"):
+            logger.warning(
+                "⏭️ Chargement LLM refusé par RAMBudgetManager "
+                f"(swap {budget.probe().swap_percent:.0f}%) — éviction en cours"
+            )
+            budget.evict(priority_below=Priority.CACHE)
+
         try:
             # Décharger proprement le modèle précédent s'il y en a un pour libérer la RAM Metal avant de charger le nouveau
             if self._model is not None:
@@ -98,9 +108,12 @@ class LocalLLM:
             # Résolution du chemin local
             resolved_path = config.get_model_path(model_id)
             logger.info(f"Chargement du modèle MLX depuis : {resolved_path}")
-            
+
             self._model, self._tokenizer = load(resolved_path)
             self._current_model_id = model_id
+            # V15 Phase 5 (Item 40) : marquer comme chargé dans le budget RAM
+            budget.mark_loaded("llm")
+            budget.touch("llm")
             logger.info(f"Modèle chargé avec succès.")
         except Exception as e:
             logger.error(f"Erreur lors du chargement du modèle : {e}")
@@ -119,6 +132,8 @@ class LocalLLM:
             self._model = None
             self._tokenizer = None
             self._current_model_id = None
+            # V15 Phase 5 (Item 40) : marquer comme déchargé
+            get_budget().mark_unloaded("llm")
             gc.collect()
             try:
                 mx.clear_cache()
