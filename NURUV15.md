@@ -295,6 +295,20 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 | 45 | Test anti-collision de noms (P0 #13) | 2-3 h | ✅ |
 | 46 | Dataset évaluation RAG étendu (P1 #47) | 4 h | ✅ |
 
+### Phase 6b — UI Improvements (fusion 7 audits UX)
+
+| # | Proposition | Source audit | Effort | Priorité | Statut |
+|---|-------------|--------------|--------|----------|--------|
+| 47 | **Navigation simplifiée** (sidebar 15→8 items, fusion V5/V9, hiérarchie claire) | #5 | 1 j | **P1** | ⏳ |
+| 48 | **Contrastes + tailles police** (accessibilité, lisibilité SF Pro, échelle cohérente) | #5, #3 | 4 h | **P1** | ⏳ |
+| 49 | **Indicateur « Analyse…→ Génération… »** dans les bulles chat pendant RAG | #2 | 2 h | **P1** | ⏳ |
+| 50 | **Sidebar repliable** (220 px ↔ 60 px icônes, gain d'espace) | #5 | 2 j | **P1** | ⏳ |
+| 51 | **Bandeau de Confiance** (sources/faits/inférences/score % sous chaque réponse) | #6 | 2 j | **P2** | ⏳ |
+| 52 | **Command Palette Ctrl+K** (recherche globale, actions rapides, navigation) | #5 | 3 j | **P2** | ⏳ |
+| 53 | **Thème clair/sombre** (toggle utilisateur, persisté dans config) | #5 | 2 j | **P2** | ⏳ |
+| 54 | **Animations fluides + micro-interactions** (transitions, glassmorphism, hover, loading) | #1, #3, #6 | 3 j | **P3** | ⏳ |
+| 55 | **Widget flottant Raycast/Spotlight** (barre de commande ⌘+Espace légère, overlay) | #2, #3 | 1 sem | **P3** | ⏳ |
+
 ---
 
 ## Scores par domaine (consensus des 7 audits)
@@ -371,4 +385,4 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 
 *Document créé le 7 juillet 2026 — Dernière mise à jour : intégration des 7 audits experts + 7 expertises DeepSeek, vérifications code réel (Expert #7).*
 
-**81 propositions uniques** (31 P0, 19 P1, 24 P2, 7 P3) — 4 infirmées/vérifiées, 2 nuancées.
+**90 propositions uniques** (31 P0, 23 P1, 27 P2, 9 P3) — 4 infirmées/vérifiées, 2 nuancées.
