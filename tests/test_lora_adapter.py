@@ -10,21 +10,13 @@ import sys
 import pytest
 from unittest.mock import patch, MagicMock
 
-# ── Mock complet de mlx/mlx_lm avant tout import ──
-for _mod in ["mlx", "mlx.core", "mlx_lm", "mlx_lm.utils", "mlx_lm.sample_utils"]:
-    _m = MagicMock()
-    sys.modules[_mod] = _m
+# ── Mock MLX partagé (ModuleType, compatible isinstance) ──
+from tests.mocks.mlx import patch_mlx, patch_mlx_lm
+patch_mlx()
+patch_mlx_lm()
 
-_mock_mlx_lm = sys.modules["mlx_lm"]
-_mock_mlx_lm.load = MagicMock()
-_mock_mlx_lm.stream_generate = MagicMock()
-_mock_mlx_lm.utils.load_adapters = MagicMock()
-_mock_mlx_lm.sample_utils.make_sampler = MagicMock()
-_mock_mlx_lm.sample_utils.make_repetition_penalty = MagicMock()
-_mock_mlx_lm.sample_utils.make_logits_processors = MagicMock()
-
+# Ajouts spécifiques à ce fichier de test
 _mock_mx = sys.modules["mlx.core"]
-_mock_mx.metal.is_available.return_value = False
 _mock_mx.clear_cache = MagicMock()
 
 

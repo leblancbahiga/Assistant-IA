@@ -62,19 +62,19 @@ Les propositions sont numérotées de façon **unique et séquentielle** sur l'e
 
 | # | Proposition | Source | Effort |
 |---|-------------|--------|--------|
-| 1 | **Fusionner les 2 AgentOrchestrator** — `src/agent/orchestrator.py` (Planner/Executor/Verifier/Recovery) avec `src/tools/agent_orchestrator.py` (seul appelé). Garder un seul module. | #1 | 1-2 sem |
-| 2 | **Brancher Privacy & Consent Layer** — `src/privacy/consent_layer.py` appelé avant tout accès capteur. | #1 | 1-2 sem |
-| 3 | **Corriger pyproject.toml** — remplacer PyQt6 par PySide6 + ajouter `[project.dependencies]`. | #1, #2 | 1-2 h |
+| 1 | **Fusionner les 2 AgentOrchestrator** — `src/agent/orchestrator.py` (Planner/Executor/Verifier/Recovery) avec `src/tools/agent_orchestrator.py` (seul appelé). Garder un seul module. | #1 | 1-2 sem | ✅ |
+| 2 | **Brancher Privacy & Consent Layer** — `src/privacy/consent_layer.py` appelé avant tout accès capteur. | #1 | 1-2 sem | ✅ |
+| 3 | **Corriger pyproject.toml** — remplacer PyQt6 par PySide6 + ajouter `[project.dependencies]`. | #1, #2 | 1-2 h | ✅ |
 | 4 | ➡️ **INFIRMÉ** — Tests morts : les 12 fichiers non collectés échouent sur `ModuleNotFoundError: mlx` ou `PySide6` (dépendances Apple Silicon). 738/815 passent. | #2 | — |
 | 5 | ➡️ **INFIRMÉ** — `pipeline_offline` : le test passe après `pip install cachetools`. Vrai problème : absence de `cachetools` dans `pyproject.toml` (déjà #3). | #2 | — |
 | 6 | ➡️ **INFIRMÉ** — Identité hardcodée : `nuru_core.py` ne contient aucune occurrence. `src/identity_manager.py` dédié existe déjà. | #2 | — |
-| 7 | **Supprimer `sqlite_compat.py`** — lecture mémoire brute CPython via `id()+offset`, risque de segfault latent. | #1 | 10 min |
-| 8 | **Fusionner `src/security/` dans `prompt_guard.py`** — une seule couche de sécurité. | #1 | 1-2 h |
+| 7 | **Supprimer `sqlite_compat.py`** — lecture mémoire brute CPython via `id()+offset`, risque de segfault latent. | #1 | 10 min | ✅ |
+| 8 | **Fusionner `src/security/` dans `prompt_guard.py`** — une seule couche de sécurité. | #1 | 1-2 h | ✅ |
 | 9 | ➡️ **INFIRMÉ** — Doublons logging : `logging_config.py` n'existe pas dans le dépôt. Hallucination du modèle d'audit. | #2 | — |
-| 10 | **Nettoyer les fichiers `_diag_*.py`, `_check_*.py`, `_test_*.py`** de la racine vers `scripts/` ou `tests/`. | #1 | 1 h |
-| 11 | **Streaming des tokens** — callback de génération MLX pour envoyer les tokens un par un à l'UI (effet wow immédiat). | #3 | 1 j |
-| 12 | **Unload des modèles après réponse** — purger le LLM de la VRAM 5s après génération. | #3 | 2 h |
-| 13 | **Ajouter un test d'intégrité anti-collision de noms de classes.** | #1 | 2-3 h |
+| 10 | **Nettoyer les fichiers `_diag_*.py`, `_check_*.py`, `_test_*.py`** de la racine vers `scripts/` ou `tests/`. | #1 | 1 h | ✅ |
+| 11 | **Streaming des tokens** — callback de génération MLX pour envoyer les tokens un par un à l'UI (effet wow immédiat). | #3 | 1 j | ✅ |
+| 12 | **Unload des modèles après réponse** — purger le LLM de la VRAM 5s après génération. | #3 | 2 h | ✅ |
+| 13 | **Ajouter un test d'intégrité anti-collision de noms de classes.** | #1 | 2-3 h | ✅ |
 | 14 | **Indicateur UI d'état interne** — cercle animé "Analyse..." → "Génération..." pendant le RAG. | #3 | 4 h |
 | 15 | **Sécuriser RAG Injection & Path Traversal** — `sanitize_path()`, `FileGuard`, regex PromptGuard. | #4 | 4 h |
 | 16 | **Rendre HyDE asynchrone** — wrapper dans `asyncio.to_thread`. | #4 | 2 h |
@@ -239,61 +239,61 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 | 19 | Fusionner src/security/ → prompt_guard.py (P0 #8) | 1-2 h | #1 | ✅ |
 | 20 | KV cache 8-bit + prefill progressif + benchmark (P0 #31) | 3 j | Expert #7 | ✅ |
 
-### Phase 1 — Dé-duplication & Semantic Router (1-2 sem)
+### Phase 1 — Dé-duplication & Semantic Router (1-2 sem) ✅ *Terminée*
 
-| # | Action | Effort |
-|---|--------|--------|
-| 21 | Fusionner les 2 AgentOrchestrator (P0 #1) | 1-2 sem |
-| 22 | Nettoyer nuru_core.py — archiver V4 legacy (P1 #38) | 2-3 j |
-| 23 | Semantic Router ultra-léger (P1 #43) | 1 sem |
-| 24 | Renommer/re-numéroter src/tools/agent_orchestrator.py | 1 j |
+| # | Action | Effort | Statut |
+|---|--------|--------|--------|
+| 21 | Fusionner les 2 AgentOrchestrator (P0 #1) | 1-2 sem | ✅ |
+| 22 | Nettoyer nuru_core.py — archiver V4 legacy (P1 #38) | 2-3 j | ✅ |
+| 23 | Semantic Router ultra-léger (P1 #43) | 1 sem | ✅ |
+| 24 | Renommer/re-numéroter src/tools/agent_orchestrator.py | 1 j | ✅ |
 
-### Phase 2 — Câblage Privacy & Streaming (1-2 sem)
+### Phase 2 — Câblage Privacy & Streaming (1-2 sem) ✅ *Terminée*
 
-| # | Action | Effort |
-|---|--------|--------|
-| 25 | Brancher consent_layer sur voix, vision, MCP (P0 #2) | 1-2 sem |
-| 26 | Streaming tokens MLX callback (P0 #11) | 1 j |
-| 27 | Unload modèles après réponse (P0 #12) | 2 h |
+| # | Action | Effort | Statut |
+|---|--------|--------|--------|
+| 25 | Brancher consent_layer sur voix, vision, MCP (P0 #2) | 1-2 sem | ✅ |
+| 26 | Streaming tokens MLX callback (P0 #11) | 1 j | ✅ |
+| 27 | Unload modèles après réponse (P0 #12) | 2 h | ✅ |
 
-### Phase 3 — Mémoire & Unification (1-2 sem)
+### Phase 3 — Mémoire & Unification (1-2 sem) ✅ *Terminée*
 
-| # | Action | Effort |
-|---|--------|--------|
-| 28 | Unifier les 4 modules mémoire → MemoryManager 6 couches (P0 #30) | 1 sem |
-| 29 | Implémenter WorkingMemory (P1 #32) | 8 h |
-| 30 | Implémenter ProceduralMemory (P1 #35) | 16 h |
-| 31 | Intégrer SleepCycleManager (P2 #51) | 8 h |
-| 32 | Plan migration données mémoire (P2 #68) | 3 j |
+| # | Action | Effort | Statut |
+|---|--------|--------|--------|
+| 28 | Unifier les 4 modules mémoire → MemoryManager 6 couches (P0 #30) | 1 sem | ✅ |
+| 29 | Implémenter WorkingMemory (P1 #32) | 8 h | ✅ |
+| 30 | Implémenter ProceduralMemory (P1 #35) | 16 h | ✅ |
+| 31 | Intégrer SleepCycleManager (P2 #51) | 8 h | ✅ |
+| 32 | Plan migration données mémoire (P2 #68) | 3 j | ✅ |
 
 ### Phase 4 — Intelligence (1-2 sem)
 
-| # | Action | Effort |
-|---|--------|--------|
-| 33 | Implémenter ConfidenceCalibrator (P1 #33) | 8 h |
-| 34 | Implémenter ReflexionEngine 2 passes (P1 #34) | 24 h |
-| 35 | Implémenter Self-Consistency (P0 #29) — après VRAM Paging | 16 h |
-| 36 | Harnais de benchmark RAG (P1 #36) | 8 h |
-| 37 | Reranker systématique (P1 #37) | 4 h |
+| # | Action | Effort | Statut |
+|---|--------|--------|--------|
+| 33 | Implémenter ConfidenceCalibrator (P1 #33) | 8 h | ✅ |
+| 34 | Implémenter ReflexionEngine 2 passes (P1 #34) | 24 h | ✅ |
+| 35 | Self-Consistency (P0 #29) — BLOQUÉ (swap 90 %, nécessite RAM stable avant) | 16 h | 🔴 |
+| 36 | Harnais de benchmark RAG (P1 #36) | 8 h | ✅ |
+| 37 | Reranker systématique (P1 #37) | 4 h | ✅ |
 
 ### Phase 5 — Optimisations DeepSeek (2-3 sem)
 
-| # | Action | Effort |
-|---|--------|--------|
-| 38 | LoRA-MoE : 3 adaptateurs (RAG, Code, Conversation) (P1 #49) | 2 sem |
-| 39 | Speculative RAG (P1 #48) | 1 sem |
-| 40 | RAMBudgetManager (P1 #50) | 1 sem |
-| 41 | KV Cache Persistant (P2 #64) | 1 sem |
-| 42 | Compression KV Cache style MLA (P2 #74) | 2 sem |
+| # | Action | Effort | Statut |
+|---|--------|--------|--------|
+| 38 | LoRA-MoE : 1 adaptateur RAG (scope réduit, P1 #49) | 2 sem | ✅ |
+| 39 | Speculative RAG (P1 #48) | 1 sem | ✅ |
+| 40 | RAMBudgetManager (P1 #50) | 1 sem | ✅ |
+| 41 | KV Cache Persistant (P2 #64) | 1 sem | ✅ |
+| 42 | Compression KV Cache style MLA (P2 #74) | 2 sem | ⏳ |
 
 ### Phase 6 — CI & Documentation (1 sem)
 
-| # | Action | Effort |
-|---|--------|--------|
-| 43 | CI/CD GitHub Actions (P2 #63) | 1 sem |
-| 44 | ROADMAP.md à jour (P2 #56) | 1 h |
-| 45 | Test anti-collision de noms (P0 #13) | 2-3 h |
-| 46 | Dataset évaluation RAG étendu (P1 #47) | 4 h |
+| # | Action | Effort | Statut |
+|---|--------|--------|--------|
+| 43 | CI/CD GitHub Actions (P2 #63) | 1 sem | ⏳ |
+| 44 | ROADMAP.md à jour (P2 #56) | 1 h | ⏳ |
+| 45 | Test anti-collision de noms (P0 #13) | 2-3 h | ✅ |
+| 46 | Dataset évaluation RAG étendu (P1 #47) | 4 h | ✅ |
 
 ---
 

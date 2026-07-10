@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from src.cache.kv_compress import quantize_kv_cache, dequantize_kv_cache, window_kv_cache
+
 logger = logging.getLogger(__name__)
 
 # Répertoire de cache
@@ -62,6 +64,10 @@ class KVPersistentCache:
         self._index_path = KV_CACHE_DIR / "index.json"
         self._entries: dict[str, KVCacheEntry] = {}  # key = f"{session_id}:{prompt_hash}"
         self._load_index()
+        # V15 Phase 5 (Item 42) : configuration compression KV cache
+        self.quantize: bool = True          # int8 quantization on save
+        self.window_max_tokens: int = 0     # 0 = pas de fenêtrage, >0 = max tokens
+        self.system_prompt_tokens: int = 128
 
     # ─── Gestion de l'index ──────────────────────────────────────────
 
@@ -148,6 +154,13 @@ class KVPersistentCache:
 
         try:
             import mlx.core as mx
+
+            # V15 Phase 5 (Item 42) : fenêtrage + quantification avant sauvegarde
+            if self.window_max_tokens > 0:
+                kv_data = window_kv_cache(kv_data, self.window_max_tokens, self.system_prompt_tokens)
+            if self.quantize:
+                kv_data = quantize_kv_cache(kv_data)
+
             mx.save_safetensors(file_path, kv_data)
 
             # Estimation de la taille
@@ -218,6 +231,9 @@ class KVPersistentCache:
                 kv_data = loaded
             else:
                 kv_data = {"state": loaded}
+
+            # V15 Phase 5 (Item 42) : déquantification transparente
+            kv_data = dequantize_kv_cache(kv_data)
 
             # Mettre à jour le timestamp d'accès
             entry.accessed_at = time.time()
