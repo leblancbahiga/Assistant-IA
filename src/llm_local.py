@@ -10,6 +10,7 @@ from typing import AsyncGenerator, Optional
 from src.config import config
 from src.core.model_manager import ModelManager  # : Gestion RAM centralisée
 from src.core.ram_budget import get_budget, Priority
+from src.cache.kv_cache import KVPersistentCache
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,9 @@ class LocalLLM:
         self.bench: dict[str, list[float]] = {"prompt_ms": [], "tok_s": []}
         # V15 P2 #27 : Tâche de déchargement différé
         self._unload_task: Optional[asyncio.Task] = None
+        # V15 Phase 5 (Item 41) : KV Cache Persistant
+        self._kv_cache = KVPersistentCache(max_entries=10, max_total_mb=1024)
+        self._current_session_id: str = ""
 
     def _schedule_unload(self):
         """Planifie le déchargement 5s après la fin de la génération.
@@ -114,6 +118,20 @@ class LocalLLM:
             # V15 Phase 5 (Item 40) : marquer comme chargé dans le budget RAM
             budget.mark_loaded("llm")
             budget.touch("llm")
+
+            # V15 Phase 5 (Item 41) : restauration du KV cache si disponible
+            # pour éviter de recalculer le préfixe (system prompt + historique)
+            if self._current_session_id:
+                cached_kv = self._kv_cache.restore(
+                    self._model, self._current_session_id, model_id=model_id
+                )
+                if cached_kv is not None:
+                    logger.info(
+                        "♻️ KV cache restauré pour session %s — "
+                        "préfixe non recalculé",
+                        self._current_session_id,
+                    )
+
             logger.info(f"Modèle chargé avec succès.")
         except Exception as e:
             logger.error(f"Erreur lors du chargement du modèle : {e}")
@@ -126,6 +144,17 @@ class LocalLLM:
         """
         if self._model is not None:
             logger.info("🧹 Déchargement du modèle local...")
+
+            # V15 Phase 5 (Item 41) : sauvegarder le KV cache avant déchargement
+            if self._current_session_id and self._current_model_id:
+                self._kv_cache.save(
+                    model=self._model,
+                    session_id=self._current_session_id,
+                    prompt=self._current_session_id,  # placeholder — ID comme clé
+                    turn_number=0,
+                    model_id=self._current_model_id,
+                )
+
             del self._model
             if self._tokenizer is not None:
                 del self._tokenizer
@@ -140,6 +169,10 @@ class LocalLLM:
             except Exception:
                 pass
             logger.info("✅ Modèle local déchargé, cache Metal vidé")
+
+    def set_session(self, session_id: str) -> None:
+        """Définit l'ID de session pour le KV cache persistant."""
+        self._current_session_id = session_id
 
     async def generate_stream(self, prompt: str, intent: str = "RAG") -> AsyncGenerator[str, None]:
         """Génère une réponse via MLX en streaming.
