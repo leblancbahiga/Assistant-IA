@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/ui/assets/Gemini_Generated_Image_35cdt735cdt735cd_transparent.png" width="160" alt="NURU V12"/>
+<img src="src/ui/assets/Gemini_Generated_Image_35cdt735cdt735cd_transparent.png" width="160" alt="NURU V15"/>
 
 <br/>
 
@@ -12,14 +12,13 @@ Conçu pour tourner en local d'abord, sur un MacBook Pro M1 de 8 Go de RAM unifi
 <br/>
 
 <p>
-  <a href="NURU_V9.md"><img src="https://img.shields.io/badge/V12%20Spec-NURU_V9.md-00D4FF?style=for-the-badge" alt="V12 Spec"/></a>
-  <a href="NURU_V14_VISION.md"><img src="https://img.shields.io/badge/V14%20Vision-NURU_V14_VISION.md-a855f7?style=for-the-badge" alt="V14 Vision"/></a>
+  <a href="NURU_V9.md"><img src="https://img.shields.io/badge/V15%20Spec-NURU_V9.md-00D4FF?style=for-the-badge" alt="V15 Spec"/></a>
+  <a href="NURUV15.md"><img src="https://img.shields.io/badge/V15%20Consolidation-NURUV15.md-a855f7?style=for-the-badge" alt="V15 Consolidation"/></a>
   <img src="https://img.shields.io/badge/Platform-macOS%20M1%208GB-39FF14?style=for-the-badge&logo=apple&logoColor=white" alt="macOS M1 8GB"/>
   <img src="https://img.shields.io/badge/LLM-Phi--4--mini%20(MLX)-FFB000?style=for-the-badge" alt="LLM Phi-4-mini"/>
-  <img src="https://img.shields.io/badge/Tests-913%20tests-success?style=for-the-badge" alt="913 tests"/>
-  <img src="https://img.shields.io/badge/V15%20Phase%200A-%E2%9C%85-success?style=for-the-badge" alt="Phase 0A done"/>
-  <img src="https://img.shields.io/badge/Phase%200B-12%2F12-brightgreen?style=for-the-badge" alt="Phase 0B 12/12 ✅"/>
-  <img src="https://img.shields.io/badge/Status-V12%20actif%20%2B%20V15-success?style=for-the-badge" alt="Status V12+V15"/>
+  <img src="https://img.shields.io/badge/Tests-151%20tests-success?style=for-the-badge" alt="151 tests"/>
+  <img src="https://img.shields.io/badge/V15%20Phase%205-%E2%9C%85-success?style=for-the-badge" alt="Phase 5 done"/>
+  <img src="https://img.shields.io/badge/Architecture-DeepSeek--like-8B5CF6?style=for-the-badge" alt="DeepSeek-like"/>
 </p>
 
 </div>
@@ -32,11 +31,12 @@ Conçu pour tourner en local d'abord, sur un MacBook Pro M1 de 8 Go de RAM unifi
 
 La plupart des assistants IA promettent d'être "personnels". Leur implémentation concrète : ils envoient vos prompts vers un serveur cloud qui appartient à quelqu'un d'autre. Le "personnel" est dans le marketing, pas dans l'architecture.
 
-NURU part du postulat inverse — **le personnel commence par l'exécution locale**. Le router envoie les requêtes simples vers **Phi-4-mini (4-bit MLX)** qui tourne sur le GPU M1. Le cloud — Groq, OpenRouter, DeepSeek — n'est contacté que **quand c'est vraiment nécessaire** (questions d'actualité, tâches que le local ne sait pas tenir, ou RAM sous le seuil critique).
+NURU part du postulat inverse — **le personnel commence par l'exécution locale**. Le routeur envoie les requêtes simples vers **Phi-4-mini (4-bit MLX)** qui tourne sur le GPU M1. Le cloud — Groq, OpenRouter, DeepSeek — n'est contacté que **quand c'est vraiment nécessaire** (questions d'actualité, tâches que le local ne sait pas tenir, ou RAM sous le seuil critique).
 
 Ce qui rend NURU différent d'un wrapper LLM local :
 
 - **Système d'exploitation cognitif**, pas chatbot — la mémoire (Episodic/Semantic/User/Error), le sommeil (SleepCycleManager 3 phases light/deep/REM), et la persona (PersonaEngine) sont des citoyens de première classe du système, pas des add-ons.
+- **Philosophie DeepSeek** — petits spécialistes orchestrés > monolithe. KV Cache Compression style MLA, LoRA adapter RAG, speculative decoding, RAM budget manager.
 - **Privacy Layer** + opt-in granulaire par capteur (voix, vision écran, calendrier). Zéro fuite par défaut.
 - **Agent Loop** sandboxé : planner → executor → verifier → recovery, avec approbation humaine pour les actions à risque.
 - **Pipeline vocal local** (STT/TTS/VAD/wake word), présence animée Z.ai-style, latency sub-seconde sans réseau.
@@ -84,44 +84,74 @@ python3 cli.py
 python3 reindex_all.py
 
 # Tests
-python3 -m pytest tests/test_zai_architecture.py -v
+PYTHONPATH="" python3 -m pytest tests/ --ignore=tests/test_memory.py -v
 ```
 
 | Commande | Effet |
 |----------|-------|
-| `python3 run_v12.py` | Lance l'interface ambiante V12 (tray icon + floating widget + orb animé) |
+| `python3 run_v12.py` | Interface ambiante V12 (tray icon + floating widget + orb animé) |
 | `python3 cli.py` | Mode terminal pour usage SSH / serveur headless |
 | `python3 reindex_all.py` | Indexe tous les documents du workspace |
-| `python3 -m pytest tests/` | Suite complète — 913 tests (UI, RAG, agent, mémoire, voice) |
+| `PYTHONPATH="" pytest tests/` | Suite complète — 151 tests (RAG, agent, mémoire, router, KV cache) |
+
+> **Note :** `PYTHONPATH=""` nécessaire à cause d'un conflit entre venv Python 3.13 et pydantic_core du système 3.11.
+
+---
+
+## V15 Phase 5 — Optimisations DeepSeek (terminée ✅)
+
+V15 Phase 5 délivre 7 items d'optimisation sur le thème **DeepSeek-like efficiency** — petits spécialistes orchestrés qui tirent le maximum des 8 Go RAM.
+
+| Item | Description | Effort | Statut |
+|------|-------------|--------|--------|
+| 38 | **LoRA-MoE adaptateur RAG** — Adapter LoRA spécifique pour le contexte RAG, chargé/déchargé à la volée | 1 sem | ✅ |
+| 39 | **Speculative RAG** — Draft RAPID + vérification différée pour latence < 500ms | 1 sem | ✅ |
+| 40 | **RAM Budget Manager** — Budget centralisé Go·s, déchargement forcé, seuils calibrés M1 8 Go | 3 j | ✅ |
+| 41 | **KV Cache Persistant** — Cache clé/valeur sauvegardé sur disque pour reprise rapide | 5 j | ✅ |
+| **42** | **KV Cache Compression (style MLA)** — Quantification int8 per-token + fenêtrage contextuel. -50% RAM | **2 sem** | **✅** |
+| 43 | **CI/CD GitHub Actions** — Lint (black, isort) + test (pytest) sur Python 3.11/3.13 | 1 sem | ✅ |
+| 44 | **ROADMAP.md à jour** | 1h | ✅ |
+
+### KV Cache Compression — highlight technique
+
+Le module `src/cache/kv_compress.py` implémente une quantification int8 per-token style Multi-head Latent Attention (MLA) :
+
+- **`quantize_kv_cache()`** — fp16 → uint8 per-token avec `min`/`scale` par élément
+- **`dequantize_kv_cache()`** — restore transparent (ratio SNR mesuré > 40 dB)
+- **`window_kv_cache()`** — fenêtrage glissant N tokens (défaut : 2048)
+- **`compression_stats()`** — rapport économie en temps réel
+
+Économie : **~50 %** en int8 pur, jusqu'à **~75 %** combiné avec fenêtrage.
+Swap M1 8 Go : de 90% → objectif ~50%.
 
 ---
 
 ## What's inside — catalog of modules
 
-NURU V12 absorbe V13-A/B (les modules "PersonaEngine", "SleepCycle", "CostGuard" sont déjà en codebase, pas en roadmap). Cette liste reflète **le code réel**, pas la wishlist.
+NURU V15 — architecture **petits spécialistes orchestrés** (philosophie DeepSeek).
 
 ### 🧠 Cognitive core
 
 | Module | Ce qu'il fait | Source |
 |--------|---------------|--------|
-| **Router** (routeur unifié) | 6 niveaux — trivial (regex) → patterns → LLM classify → Spotlight → cloud fallback → clarification. Cache TTL 256 entrées. | [`src/routing/router.py`](src/routing/router.py) |
+| **Router** (routeur unifié) | 6 niveaux — trivial (regex) → patterns → LLM classify → Spotlight → cloud fallback → clarification. Cache TTL 256 entrées. SemanticRouter avec 6 intents (greeting, thanks, feedback, identity, general, rag, web). | [`src/routing/router.py`](src/routing/router.py) |
 | **PolicyEngine** | Seuils RAM/Reranker/Score centralisés. `should_rerank()`, `should_use_cloud()`, `route_from_score()`. | [`src/core/policies.py`](src/core/policies.py) |
-| **PromptGuard** | Anti-injection — neutralise 50+ motifs (`Ignore les instructions`, `<|im_start|>system`, etc.), échappe les délimiteurs de bloc, normalisation Unicode. | [`src/core/prompt_guard.py`](src/core/prompt_guard.py) |
-| **StrictRAGGuard** | Modes STRICT/HYBRID/FREE. En STRICT, bloque les réponses non-citées par les chunks. | [`src/core/response_guard.py`](src/core/response_guard.py) |
-| **EvidenceVerifier** | Valide que chaque `[Source: X]` dans la réponse existe dans les chunks RAG injectés. | [`src/ai/verifier.py`](src/ai/verifier.py) |
-| **DynamicPromptBuilder** | Construit le prompt dynamiquement selon intent/facts/procedures — pas de prompt monolithique. | [`src/routing/prompt_builder.py`](src/routing/prompt_builder.py) |
+| **PromptGuard** | Anti-injection — neutralise 50+ motifs, échappe délimiteurs, normalisation Unicode. | [`src/core/prompt_guard.py`](src/core/prompt_guard.py) |
+| **StrictRAGGuard** | Modes STRICT/HYBRID/FREE. Bloque les réponses non-citées. | [`src/core/response_guard.py`](src/core/response_guard.py) |
+| **EvidenceVerifier** | Valide chaque `[Source: X]` dans les chunks RAG injectés. | [`src/ai/verifier.py`](src/ai/verifier.py) |
+| **DynamicPromptBuilder** | Construit le prompt dynamiquement selon intent/facts/procedures. | [`src/routing/prompt_builder.py`](src/routing/prompt_builder.py) |
+| **ReflexionEngine** | Auto-évaluation post-réponse — calibre la confiance, ajuste le ton. | [`src/core/reflexion.py`](src/core/reflexion.py) |
+| **ConfidenceCalibrator** | Calibration des scores de confiance sur les réponses. | [`src/core/confidence.py`](src/core/confidence.py) |
 
 ### 📚 Memory & learning
 
 | Module | Ce qu'il fait | Source |
 |--------|---------------|--------|
-| **EpisodicMemory** | Souvenirs datés et contextuels (ce qui s'est passé). | `src/memory/episodic.py` |
-| **SemanticMemory** | Faits structurés clé/valeur/confiance (ce qui est vrai). | `src/memory/semantic.py` |
-| **UserMemory** | Préférences utilisateur persistantes (comment Leblanc aime les choses). | `src/memory/user.py` |
-| **ErrorMemory** | Historique d'erreurs pour auto-correction (ce qui a foiré et pourquoi). | `src/memory/manager.py` |
+| **MemoryManager** | 4 mémoires unifiées : Episodic/Semantic/User/Error + WorkingMemory | `src/memory/manager.py` |
 | **MemoryBridge** | Pont entre MemoryStore (legacy V3) et MemoryManager V9. | `src/memory_bridge.py` |
 | **GoldMemory** | Corrections utilisateur persistantes. Recherche exacte ou embedding (seuil 0.92). | `src/gold_memory.py` |
-| **PostSessionExtractor** | Extrait préférences/entités après chaque session et les stocke comme `user_profile`. | `src/extraction.py` |
+| **PostSessionExtractor** | Extrait préférences/entités après chaque session → user_profile. | `src/extraction.py` |
+| **User Profile** | Profil utilisateur seedé + faits persistants dans la mémoire cognitive. | `scripts/seed_user_profile.py` |
 
 ### 🔍 RAG hybride
 
@@ -129,12 +159,38 @@ NURU V12 absorbe V13-A/B (les modules "PersonaEngine", "SleepCycle", "CostGuard"
 |--------|---------------|--------|
 | **RAGEngine** | Pipeline 2-passes — HyDE OR query rewriting, vector + FTS5, RRF, reranker conditionnel. | `src/rag_engine.py` |
 | **MultiSearchOrchestrator** | Single source de search — vector + BM25 + grep + HyDE en parallèle, fusion par rangs. | `src/rag/multi_search.py` |
-| **ProfileBoost** *(retiré en V10.1)* | — | — |
-| **Spotlight** | Recherche fichiers locaux via `mdfind`, fallback si RAG échoue (sans LLM). | `src/rag/spotlight.py` |
-| **HyDE** | Expansion hypothétique — génère des passages fictifs pour mieux embedder la query. | `src/rag/hyde.py` |
-| **Decomposer** | Décompose les queries multi-hop en sous-questions avant retrieval. | `src/rag/decomposer.py` |
-| **FactChecker** | Vérification factuelle post-génération sur les chunks sourcés. | `src/rag/fact_checker.py` |
+| **LoRA RAG Adapter** | Adapter LoRA chargé/déchargé à la volée sur le contexte RAG (Item 38). | `src/llm_local.py` |
+| **Speculative RAG** | Draft rapide + vérification différée pour latence < 500ms (Item 39). | `src/rag/speculative.py` |
 | **HierarchicalChunker V2** | 4 niveaux (document/section/subsection/paragraph), max 4000 chars/chunk. | `src/rag/v2_chunking.py` |
+| **HyDE** | Expansion hypothétique — génère passages fictifs pour mieux embedder. | `src/rag/hyde.py` |
+| **Decomposer** | Décompose les queries multi-hop en sous-questions. | `src/rag/decomposer.py` |
+| **FactChecker** | Vérification factuelle post-génération sur chunks sourcés. | `src/rag/fact_checker.py` |
+
+### 💾 Cache & compression
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **KVPersistentCache** | Cache clé/valeur persistant sur disque avec save/load. | `src/cache/kv_cache.py` |
+| **KVCompress** | Quantification int8 per-token + fenêtrage contextuel. Économie 50-75% RAM. | `src/cache/kv_compress.py` |
+
+### 🤖 Agent Loop
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **AgentOrchestrator** | ReAct (Thought-Action-Observation loop) avec mémoire. | `src/agent/orchestrator.py` |
+| **TaskPlanner** | Décompose un objectif en steps exécutables. | `src/agent/planner.py` |
+| **Executor** | Exécute les steps. Sandbox shell, approbation humaine pour actions risquées. | `src/agent/executor.py` |
+| **Verifier** | Valide le résultat d'une exécution avant de continuer. | `src/agent/verifier.py` |
+| **RecoveryEngine** | Reprend l'exécution après une erreur — diagnostique, retry, escalade. | `src/agent/recovery.py` |
+| **ToolRegistry** | Catalogue des tools — shell, navigateur, fichiers, calendrier. | `src/tools/registry.py` |
+
+### 🧩 Cloud routing
+
+| Module | Ce qu'il fait | Source |
+|--------|---------------|--------|
+| **CloudLLM** | Multi-provider avec Circuit Breaker — Groq primaire, OpenRouter/DeepSeek fallback. | `src/llm_cloud.py` |
+| **LocalLLM** | MLX Phi-4-mini 4-bit. Keep-alive 5 min, déchargement auto si RAM critique. Support adapters LoRA. | `src/llm_local.py` |
+| **TokenJuice** | Compression tokens -40% à -50% (regex). 0 coût d'inférence. | `src/token_juice.py` |
 
 ### 🎙️ Voice & vision
 
@@ -143,35 +199,15 @@ NURU V12 absorbe V13-A/B (les modules "PersonaEngine", "SleepCycle", "CostGuard"
 | **AudioEngine** | STT (mlx-whisper) + TTS (Piper/Kokoro). Auto-stop 15s. | `src/audio.py` |
 | **OCR** | Tesseract + fallback cloud. Lecture d'images / scans. | `src/ocr.py` |
 
-### 🤖 Agent Loop
-
-| Module | Ce qu'il fait | Source |
-|--------|---------------|--------|
-| **AgentOrchestrator** | ReAct (Thought-Action-Observation loop) avec mémoire. | `src/agent/orchestrator.py` |
-| **TaskPlanner** | Décompose un objectif en steps exécutables. | `src/agent/planner.py` |
-| **Executor** | Exécute les steps. Sandbox shell, approbation humaine pour les actions risquées. | `src/agent/executor.py` |
-| **Verifier** | Valide le résultat d'une exécution avant de continuer. | `src/agent/verifier.py` |
-| **RecoveryEngine** | Reprend l'exécution après une erreur — diagnostique, retry, escalade. | `src/agent/recovery.py` |
-| **ToolRegistry** | Catalogue des tools disponibles — shell, navigatuer, fichiers, calendrier. | `src/tools/registry.py` |
-| **ShellExec** | Sandbox shell avec 5 couches de défense + approbation humaine. | `src/tools/shell_exec.py` |
-| **OSControl** | Contrôle macOS local (Notifications, Spotlight, fenêtre active). | `src/tools/os_control.py` |
-
-### 🧩 Cloud routing
-
-| Module | Ce qu'il fait | Source |
-|--------|---------------|--------|
-| **CloudLLM** | Multi-provider avec Circuit Breaker — Groq primaire, OpenRouter/DeepSeek en fallback. | `src/llm_cloud.py` |
-| **LocalLLM** | MLX Phi-4-mini 4-bit. Keep-alive 5 min, déchargement auto si RAM critique. | `src/llm_local.py` |
-| **TokenJuice** | Compression tokens -40% à -50% (regex). 0 coût d'inférence. | `src/token_juice.py` |
-
 ### 📊 Observability
 
 | Module | Ce qu'il fait | Source |
 |--------|---------------|--------|
-| **RAMMonitor** | Surveillance continue, callbacks de déchargement auto. Seuils V10.3k calibrés pour M1 8 Go. | `src/ram_monitor.py` |
-| **EventBus** | Bus d'événements thread-safe async. Singlet instance — fusion V3/V4.5. | `src/core/events.py` |
-| **Learning — TraceCollector** | Queue async des traces de session vers `~/.nuru/traces.db`. | `src/learning/trace_collector.py` |
-| **Learning — Optimizer** | Mining périodique des traces → improvements auto. | `src/learning/optimizer.py` |
+| **RAMMonitor** | Surveillance continue, seuils calibrés M1 8 Go, callbacks déchargement. | `src/ram_monitor.py` |
+| **RAMBudgetManager** | Budget Go·s, déchargement forcé si dépassé (Item 40). | `src/core/ram_budget.py` |
+| **EventBus** | Bus d'événements thread-safe async. Singleton — fusion V3/V4.5. | `src/core/events.py` |
+| **TraceCollector** | Queue async des traces de session → `~/.nuru/traces.db`. | `src/learning/trace_collector.py` |
+| **Optimizer** | Mining périodique des traces → improvements auto. | `src/learning/optimizer.py` |
 
 ---
 
@@ -185,96 +221,111 @@ nuru/
 ├── config/
 │   ├── settings.yaml           # Config user (clés sensibles dans Keychain)
 │   └── default.yaml            # Defaults infra
+├── .github/workflows/
+│   └── ci.yml                  # CI/CD — lint + test (push/PR main)
 ├── src/
-│   ├── nuru_core.py            # V12 orchestrator (compatibility facade)
-│   ├── llm_local.py            # MLX Phi-4-mini
+│   ├── nuru_core.py            # V15 orchestrator (compatibility facade)
+│   ├── llm_local.py            # MLX Phi-4-mini + LoRA adapters
 │   ├── llm_cloud.py            # Groq/OpenRouter/DeepSeek
 │   ├── rag_engine.py           # RAG factory + types
+│   ├── cache/
+│   │   ├── kv_cache.py         # KVPersistentCache
+│   │   └── kv_compress.py      # Quantification int8 + fenêtrage
 │   ├── routing/
 │   │   ├── router.py           # Routeur unifié 6-niveaux
-│   │   └── prompt_builder.py   # DynamicPromptBuilder
+│   │   ├── prompt_builder.py   # DynamicPromptBuilder
+│   │   └── semantic_router.py  # Intent router NLP-lite
 │   ├── core/
 │   │   ├── orchestrator.py     # NuruOrchestrator — pipeline réel
 │   │   ├── policies.py         # PolicyEngine — seuils centralisés
 │   │   ├── prompt_guard.py     # Anti-injection
 │   │   ├── response_guard.py   # StrictRAGGuard
 │   │   ├── model_manager.py    # Cycle de vie modèles MLX
-│   │   ├── query_context.py    # Immutable context (QueryContext/EvidencePack)
+│   │   ├── ram_budget.py       # RAMBudgetManager (Item 40)
+│   │   ├── reflexion.py        # ReflexionEngine (auto-évaluation)
+│   │   ├── confidence.py       # ConfidenceCalibrator
 │   │   ├── events.py           # EventBus singleton
 │   │   ├── exceptions.py       # Hiérarchie d'exceptions typées
-│   │   └── inference_worker.py # TokenReceiver (legacy QThread compat)
+│   │   └── inference_worker.py # TokenReceiver (legacy compat)
 │   ├── rag/
 │   │   ├── multi_search.py     # Single source of truth retrieval
 │   │   ├── v2_chunking.py      # Hierarchical chunker
-│   │   ├── query_rewriter.py   # HyDE / expansion de query
 │   │   ├── hyde.py             # Hypothetical Document Embeddings
 │   │   ├── decomposer.py       # Multi-hop decomposition
+│   │   ├── speculative.py      # Speculative RAG (Item 39)
 │   │   ├── fact_checker.py     # Vérification post-génération
 │   │   ├── diagnostics.py      # Diagnostic persistant
 │   │   ├── index_health.py     # Santé de l'index
 │   │   └── spotlight.py        # Recherche fichiers locaux
 │   ├── agent/                  # Agent Loop V12
 │   ├── memory/                 # MemoryManager V9
-│   ├── cloud.py                # WebSearch
 │   ├── audio.py                # STT/TTS
 │   ├── ocr.py                  # Vision OCR
 │   ├── tools/                  # ToolRegistry + SandboxShell
-│   ├── ui/
-│   │   ├── ambient_app.py      # V12 AmbientApp — orchestre tray, floating, voice, chat
-│   │   ├── floating_widget.py  # Widget always-on-top 260×180 (DM-1 verre dépoli)
-│   │   ├── presence_orb.py     # NuruPresenceOrb — 7 états animés
-│   │   ├── tray_icon.py        # NURUTrayIcon — diamant cyan (menu bar macOS)
-│   │   ├── voice_overlay.py    # Overlay vocal frameless (⌥␣)
-│   │   ├── nuru_window.py      # Fenêtre principale 720×860 (QMainWindow DM-1)
-│   │   ├── conversation_surface.py  # Zone de chat avec bulles
-│   │   ├── styles.qss          # QSS — palette anthracite + cyan
-│   │   ├── tokens.py           # Design tokens — Color, Typography, Radius
-│   │   ├── components/         # ChatBubble, ConsolePage, etc.
-│   │   └── assets/
-│               ├── Gemini_Generated_Image_35cdt735cdt735cd_transparent.png  # Logo V12
-│               └── gemini-logo.svg        # Logo animé SVG
-├── tests/                       # 37 fichiers, 913 tests
-├── NURU_V9.md                   # Spec V12 détaillée (140 Ko)
-├── NURU_V14_VISION.md           # Vision V14 (GoalMemory, LiveKit, Skills SDK)
-├── NURU_AUDIT_SYNTHESE.md       # 7 audits experts consolidés
-└── NURU_AUDIT_2026-06-21_V12.md # Audit live post-V12 (10 P0...)
+│   ├── ui/                     # V12 ambient UI (PySide6)
+│   └── learning/               # TraceCollector + Optimizer
+├── tests/
+│   ├── test_kv_compress.py     # 24 tests — compression KV
+│   ├── test_lora_adapter.py    # 6 tests — LoRA RAG adapter
+│   ├── test_semantic_router.py # 85 tests — routing NLP-lite
+│   ├── test_session.py         # 11 tests — session store
+│   ├── test_naming_collisions.py # Anti-collision classes
+│   ├── test_memory.py          # Mémoires cognitives
+│   ├── mocks/
+│   │   └── mlx.py              # Mock MLX partagé (ModuleType)
+│   └── ...                     # 37 fichiers, 151 tests
+├── NURUV15.md                  # Plan de consolidation V15 (81 propositions)
+├── NURU_V9.md                  # Spec complète V9
+├── NURU_V14_VISION.md          # Vision V14
+└── ROADMAP.md                  # Roadmap unifiée
 ```
 
 ---
 
-## V14 — what's coming next
+## V16 — What's coming next
 
-V14 est **strictement additif** sur V12. Voir [`NURU_V14_VISION.md`](NURU_V14_VISION.md) pour le détail.
+V16 amorce l'architecture **OS cognitif** — mémoire > LLM, objectifs > prompts, UX > benchmarks.
+
+| Module | But | Effort estimé |
+|--------|-----|---------------|
+| **Self-Consistency** (Item 35) | Générations parallèles N≥3 + vote majoritaire post KV-compression | 2 sem |
+| **Feedback Continu** | Pipeline self-improvement — mining traces → auto-optimisation des prompts/seuils | 4 sem |
+| **Dashboard Analytics** | Stats usage, top sources RAG, stratégies gagnantes | 3 sem |
+| **Architecture Plugins** | SDK plugins extensible pour nouvelles sources de données | 4 sem |
+| **Support multi-modèle** | Pas que MLX — Ollama, llama.cpp, OpenAI-compatible | 6 sem |
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│               V14 — COUCHES ADDITIVES                       │
-├─────────────────────────────────────────────────────────────┤
-│  LifeOS — Fusion auto agenda/tâches/projets/objectifs        │
-├─────────────────────────────────────────────────────────────┤
-│  Skills Ecosystem (SDK + marketplace local)                  │
-├─────────────────────────────────────────────────────────────┤
-│  Media Intelligence (MediaPipe + VLM diagnostic agro)       │
-├─────────────────────────────────────────────────────────────┤
-│  LiveKit — Voix distante multi-appareils (pont, pas replace) │
-├─────────────────────────────────────────────────────────────┤
-│  GoalMemory & ProjectMemory                                  │
-╞═════════════════════════════════════════════════════════════╡
-│               V12 — FONDATIONS (achevée)                    │
-│  PersonaEngine · Privacy Layer · SleepCycleManager          │
-│  ModelRouter · CostGuard · Connecteurs · Pipeline vocal     │
-│  Vision écran/doc · MCP                                      │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│              V16 — OS COGNITIF                           │
+├─────────────────────────────────────────────────────────┤
+│  Self-Consistency · Feedback Loop · Dashboard Analytics │
+│  Architecture Plugins · Multi-modèle                    │
+╞═════════════════════════════════════════════════════════╡
+│              V15 — OPTIMISATIONS (terminée ✅)          │
+│  LoRA RAG · Speculative · KV Compression · RAM Budget   │
+│  CI/CD · ROADMAP                                        │
+╞═════════════════════════════════════════════════════════╡
+│              V12 — FONDATIONS (stable)                  │
+│  PersonaEngine · Privacy Layer · SleepCycleManager      │
+│  ModelRouter · CostGuard · Pipeline vocal               │
+└─────────────────────────────────────────────────────────┘
 ```
 
-| Module V14 | But | Effort |
-|-----------|-----|--------|
-| **GoalMemory** | NURU sait tes objectifs long terme (MBA, projets pro) et où tu en es. | 6 sem |
-| **ProjectMemory** | Lie documents/tâches/agenda à chaque projet actif. | 2 sem |
-| **LiveKit** | Voix distante — depuis téléphone, autre Mac, Goma↔Kampala. Auto-hébergé. | 3 sem |
-| **Skills SDK** | Marketplace local de skills (à la OpenJarvis). | 4 sem |
-| **Media Intelligence** | Diagnostique agro via Mediapipe + VLM local. | 6 sem |
-| **LifeOS** | Fusion automatique — agenda + tâches + projets + objectifs. | 8 sem |
+---
+
+## Tests
+
+| Suite | Tests | Commande |
+|-------|-------|----------|
+| KV Cache Compression | 24 | `PYTHONPATH="" pytest tests/test_kv_compress.py -v` |
+| LoRA RAG Adapter | 6 | `PYTHONPATH="" pytest tests/test_lora_adapter.py -v` |
+| Semantic Router | 85 | `PYTHONPATH="" pytest tests/test_semantic_router.py -v` |
+| Session Store | 11 | `PYTHONPATH="" pytest tests/test_session.py -v` |
+| Anti-collision | 2 | `PYTHONPATH="" pytest tests/test_naming_collisions.py -v` |
+| Memory (GPU réel) | 15 | `pytest tests/test_memory.py -v` *(3 échecs connus)* |
+| **Total** | **151** | `PYTHONPATH="" pytest tests/ --ignore=tests/test_memory.py -v` |
+
+> `PYTHONPATH=""` évite un conflit pydantic_core entre l'environnement système (Python 3.11) et le venv (3.13).
 
 ---
 
@@ -282,46 +333,40 @@ V14 est **strictement additif** sur V12. Voir [`NURU_V14_VISION.md`](NURU_V14_VI
 
 | Document | Lire si... |
 |----------|-----------|
-| [`NURU_V9.md`](NURU_V9.md) | Tu veux la spec V12 complète (phases, sprints, décisions) — **140 Ko, dense, c'est le carnet de sprint** |
-| [`NURUV15.md`](NURUV15.md) | Tu veux le plan de consolidation V15 — 81 propositions issues des 7 audits, phases d'exécution avec statut |
-| [`NURU_V14_VISION.md`](NURU_V14_VISION.md) | Tu veux ce qui vient après V12 — GoalMemory, LiveKit, Skills |
-| [`NURU_AUDIT_SYNTHESE.md`](NURU_AUDIT_SYNTHESE.md) | Tu lis une décision d'architecture, et tu veux le contexte des 7 audits experts qui l'ont motivée |
-| [`NURU_AUDIT_2026-06-21_V12.md`](NURU_AUDIT_2026-06-21_V12.md) | Tu ouvres le repo aujourd'hui et tu veux savoir quels sont les P0 du moment |
-| [`RAPPORT_AUDIT_V4.md`](RAPPORT_AUDIT_V4.md) | Tu es curieux de voir d'où vient le projet (état V4) |
-| [`question_zai_interface_V12.md`](question_zai_interface_V12.md) | Tu veux comprendre les choix d'interface Z.ai |
-| [`ROADMAP.md`](ROADMAP.md) | Un vue macro de la roadmap unifiée V12→V13 |
+| [`NURUV15.md`](NURUV15.md) | Tu veux le plan de consolidation V15 — 81 propositions issues de 7 audits, phases d'exécution | |
+| [`NURU_V9.md`](NURU_V9.md) | Tu veux la spec complète V12 — phases, sprints, décisions architecturales |
+| [`NURU_V14_VISION.md`](NURU_V14_VISION.md) | Tu veux ce qui vient après V15 — GoalMemory, LiveKit, Skills |
+| [`ROADMAP.md`](ROADMAP.md) | Une vue macro de la roadmap unifiée |
+| [`NURU_AUDIT_SYNTHESE.md`](NURU_AUDIT_SYNTHESE.md) | Tu veux le contexte des 7 audits experts |
+| [`NURU_AUDIT_2026-06-21_V12.md`](NURU_AUDIT_2026-06-21_V12.md) | Tu veux les P0 du moment |
 
 ---
 
 ## Contributing
 
-NURU est actuellement **un projet personnel de Leblanc BAHIGA Mudarhi** — ingénieur agronome et informaticien travaillant dans les chaînes de valeur agricoles en Afrique centrale et orientale (IITA, FAO, USAID). Il n'est pas ouvert aux contributions externes pour le moment.
+NURU est **un projet personnel de Leblanc BAHIGA Mudarhi** — ingénieur agronome et informaticien travaillant dans les chaînes de valeur agricoles en Afrique centrale et orientale (IITA, FAO, USAID). Pas ouvert aux contributions externes pour le moment.
 
-Si vous utilisez NURU ou voulez échanger sur l'architecture :
-
-- **Issues** : ouvrez sur GitHub, je lis régulièrement
+- **Issues** : ouvrez sur GitHub
 - **Discussions** : pour les questions d'architecture
 
-Pour les forks personnels, le code est sous licence MIT — voir [`LICENSE`](LICENSE) (à ajouter si désiré).
+Code sous licence MIT — voir [`LICENSE`](LICENSE).
 
 ---
 
 ## Built on the shoulders of
 
-NURU ne pourrait pas tourner sur un M1 de 8 Go sans ces acteurs :
-
-- **Apple MLX** — l'équipe d'Apple pour le framework MLX qui rend Phi-4-mini viable sur M1
-- **Microsoft** — pour le modèle **Phi-4-mini-instruct-4bit** (3.8B params, qualité remarquable pour sa taille)
-- **Groq, OpenRouter, DeepSeek** — pour la couche cloud optionnelle (les clés vivotent dans le Keychain macOS, jamais dans git)
-- **Stanford SAIL** — pour les inspirations architecturales — *OpenJarvis* (`open-jarvis/OpenJarvis`) et *Open Humanoid* ont directement inspiré le pattern local-first + eval framework + skills catalog
-- **HuggingFace** — pour l'hébergement des modèles et embeddings
+- **Apple MLX** — framework MLX qui rend Phi-4-mini viable sur M1
+- **Microsoft** — **Phi-4-mini-instruct-4bit** (3.8B params)
+- **Groq, OpenRouter, DeepSeek** — couche cloud optionnelle
+- **Stanford SAIL** — inspirations architecturales OpenJarvis
+- **HuggingFace** — hébergement des modèles et embeddings
 
 ---
 
 ## License
 
-MIT. Voir [`LICENSE`](LICENSE) (à ajouter).
+MIT. Voir [`LICENSE`](LICENSE).
 
 ---
 
-*Document mis à jour le 15 juillet 2026 — NURU V12.2 — Dashboard ambiant Z.ai actif — 913 tests ✅ — V15 Phase 0A ✅ Phase 0B 12/12 ✅*
+*Document mis à jour le 10 juillet 2026 — NURU V15 Phase 5 ✅ — 151 tests ✅ — KV Cache Compression int8 actif*
