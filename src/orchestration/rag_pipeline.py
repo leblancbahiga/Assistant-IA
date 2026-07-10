@@ -25,6 +25,7 @@ from typing import AsyncGenerator, Optional
 from src.config import config
 from src.core.exceptions import RAGError, LLMError, ConfigError
 from src.routing.router import RAG_KEYWORDS
+from src.rag.speculative import SpeculativeRAG
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,12 @@ class RAGOrchestrator:
         self.event_bus = event_bus
         self.response_guard = response_guard
         self.evidence_verifier = evidence_verifier
+        # V15 Phase 5 (Item 39) : Speculative RAG — génération rapide parallèle
+        self.speculative = SpeculativeRAG(
+            rag_engine=rag_engine,
+            cloud_llm=cloud_llm,
+            confidence_threshold=0.7,
+        )
 
     # ══════════════════════════════════════════
     # 1. Retrieval principal
@@ -364,3 +371,12 @@ class RAGOrchestrator:
             logger.debug(f"V8+ FactChecker ignoré: {e}")
 
         return False, None
+
+    # ══════════════════════════════════════════
+    # 6. Speculative RAG
+    # ══════════════════════════════════════════
+
+    async def answer_speculative(self, query: str) -> tuple:
+        """Réponse spéculative : génération rapide + RAG parallèle."""
+        response, is_spec = await self.speculative.answer(query)
+        return response, is_spec, self.speculative.get_stats()
