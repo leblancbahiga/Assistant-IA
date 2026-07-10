@@ -1,11 +1,13 @@
 import mlx.core as mx
 from mlx_lm import load, stream_generate
+from mlx_lm.utils import load_adapters
 from mlx_lm.sample_utils import make_sampler, make_repetition_penalty, make_logits_processors
 import psutil
 import logging
 import gc
 import asyncio
 import time
+from pathlib import Path
 from typing import AsyncGenerator, Optional
 from src.config import config
 from src.core.model_manager import ModelManager  # : Gestion RAM centralisée
@@ -38,6 +40,8 @@ class LocalLLM:
         # V15 Phase 5 (Item 41) : KV Cache Persistant
         self._kv_cache = KVPersistentCache(max_entries=10, max_total_mb=1024)
         self._current_session_id: str = ""
+        # V15 Phase 5 (Item 38) : LoRA adaptateur RAG
+        self._lora_adapter_path: Optional[str] = None
 
     def _schedule_unload(self):
         """Planifie le déchargement 5s après la fin de la génération.
@@ -115,6 +119,19 @@ class LocalLLM:
 
             self._model, self._tokenizer = load(resolved_path)
             self._current_model_id = model_id
+
+            # V15 Phase 5 (Item 38) : Chargement adaptateur LoRA RAG si existant
+            if self._lora_adapter_path:
+                adapter_dir = Path(self._lora_adapter_path)
+                if (adapter_dir / "adapters.safetensors").exists():
+                    try:
+                        self._model = load_adapters(self._model, self._lora_adapter_path)
+                        logger.info("🧩 Adaptateur LoRA chargé depuis %s", self._lora_adapter_path)
+                    except Exception as e:
+                        logger.warning("⚠️ Échec chargement LoRA (%s) — inference sans adaptateur", e)
+                else:
+                    logger.info("ℹ️ Aucun adaptateur LoRA trouvé dans %s", self._lora_adapter_path)
+
             # V15 Phase 5 (Item 40) : marquer comme chargé dans le budget RAM
             budget.mark_loaded("llm")
             budget.touch("llm")
@@ -173,6 +190,11 @@ class LocalLLM:
     def set_session(self, session_id: str) -> None:
         """Définit l'ID de session pour le KV cache persistant."""
         self._current_session_id = session_id
+
+    def set_lora_adapter(self, path: str) -> None:
+        """Définit le chemin de l'adaptateur LoRA (rechargé au prochain load_model)."""
+        self._lora_adapter_path = path
+        logger.info("🧩 Adaptateur LoRA configuré: %s", path)
 
     async def generate_stream(self, prompt: str, intent: str = "RAG") -> AsyncGenerator[str, None]:
         """Génère une réponse via MLX en streaming.
