@@ -284,14 +284,14 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 | 39 | Speculative RAG (P1 #48) | 1 sem | ✅ |
 | 40 | RAMBudgetManager (P1 #50) | 1 sem | ✅ |
 | 41 | KV Cache Persistant (P2 #64) | 1 sem | ✅ |
-| 42 | Compression KV Cache style MLA (P2 #74) | 2 sem | ⏳ |
+| 42 | Compression KV Cache style MLA (P2 #74) | 2 sem | ✅ |
 
 ### Phase 6 — CI & Documentation (1 sem)
 
 | # | Action | Effort | Statut |
 |---|--------|--------|--------|
-| 43 | CI/CD GitHub Actions (P2 #63) | 1 sem | ⏳ |
-| 44 | ROADMAP.md à jour (P2 #56) | 1 h | ⏳ |
+| 43 | CI/CD GitHub Actions (P2 #63) | 1 sem | ✅ |
+| 44 | ROADMAP.md à jour (P2 #56) | 1 h | ✅ |
 | 45 | Test anti-collision de noms (P0 #13) | 2-3 h | ✅ |
 | 46 | Dataset évaluation RAG étendu (P1 #47) | 4 h | ✅ |
 
