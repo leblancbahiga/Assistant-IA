@@ -259,31 +259,15 @@ class RAGEngine:
         finally:
             conn.close()
 
-    def _should_use_reranker(self, top1_score: float) -> bool:
-        """V6.1 : Reranking SYSTÉMATIQUE — toujours actif si RAM suffisante.
+    def _can_rerank(self, top1_score: float) -> bool:
+        """V15 Phase 4 (Item 37) : Reranker SYSTÉMATIQUE.
 
-        Le reranker cross-encoder améliore la pertinence de tous les résultats,
-        pas seulement ceux de la zone grise. Seules restrictions :
-        1. Score minimum 0.15 (pas la peine de reranker du bruit)
-        2. RAM disponible > 1.5 Go (évite le swap)
+        Supprime la gate RAM — le reranker est toujours activé dans le
+        pipeline. Seule condition : un score minimal pour éviter de
+        reranker du bruit.
         """
         if top1_score < 0.15:
             return False
-
-        # Vérification RAM
-        try:
-            import psutil
-            ram_free_mb = psutil.virtual_memory().available / (1024 * 1024)
-            if ram_free_mb < self._rerank_min_ram_mb:
-                logger.info(
-                    f"⏭️ Reranker désactivé : RAM insuffisante "
-                    f"({ram_free_mb:.0f} MB < {self._rerank_min_ram_mb} MB requis)"
-                )
-                return False
-        except Exception as e:
-            logger.warning(f"⚠️ _should_use_reranker: psutil a échoué: {e}")
-            return False
-
         return True
 
     def _get_conn(self):
@@ -780,10 +764,9 @@ class RAGEngine:
                 result.retrieval_time_ms = (time.time() - t_start) * 1000
                 return "", result
 
-        #  Phase 0 : Reranker CONDITIONNEL
-        # N'active le cross-encoder QUE si le score est dans la zone grise
-        # ET que la RAM disponible est suffisante.
-        should_rerank = self._should_use_reranker(top1_score)
+        #  Phase 0 : Reranker SYSTÉMATIQUE
+        # V15 Phase 4 (Item 37) : toujours activé dans le pipeline.
+        should_rerank = self._can_rerank(top1_score)
         reranked: list = []
         
         if should_rerank:
