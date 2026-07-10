@@ -675,7 +675,7 @@ Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail,
         return "\n".join(parts)
 
 
-    async def process_query(self, query: str, use_tts: bool = False) -> AsyncGenerator[str, None]:
+    async def process_query(self, query: str, use_tts: bool = False, stream_session=None) -> AsyncGenerator[str, None]:
         """Traite une requête utilisateur en déléguant au NuruOrchestrator.
 
         Délègue l'intégralité du pipeline (routage, RAG, génération,
@@ -687,6 +687,7 @@ Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail,
         async for token in self.orchestrator.process_query(
             query=query, session_id="default",
             use_tts=use_tts, audio_engine=self.audio if use_tts else None,
+            stream_session=stream_session,
         ):
             yield token
 

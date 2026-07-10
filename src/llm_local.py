@@ -23,18 +23,44 @@ class LocalLLM:
         self._tokenizer = None
         self._current_model_id = None
         self._last_temperature = 0.7
-        # : Délégation au ModelManager
-        self._model_manager = ModelManager(keep_alive_seconds=300)
+        # V15 P2 #27 : Délégation au ModelManager avec keep-alive réduit à 5s
+        self._model_manager = ModelManager(keep_alive_seconds=5)
         # V10 Audit: Lock thread-safe pour generate_stream()
         self._gen_lock = asyncio.Lock()
         # V15 Phase 0B — P0 #31 : cache de prompt pour les requêtes répétées
         self._prompt_cache: dict[int, object] = {}
         # Statistiques de benchmark
         self.bench: dict[str, list[float]] = {"prompt_ms": [], "tok_s": []}
+        # V15 P2 #27 : Tâche de déchargement différé
+        self._unload_task: Optional[asyncio.Task] = None
 
     def _schedule_unload(self):
-        """Planifie le déchargement après keep_alive secondes d'inactivité."""
-        self._model_manager.keep_alive()
+        """Planifie le déchargement 5s après la fin de la génération.
+
+        V15 P2 #27 : keep_alive réduit de 300s à 5s pour libérer
+        la RAM Metal immédiatement après la réponse.
+        """
+        self._cancel_unload()
+
+        async def _delayed():
+            try:
+                await asyncio.sleep(self._model_manager._keep_alive)
+                if self._model is not None:
+                    logger.info("⏰ Keep-alive expiré (5s). Déchargement auto.")
+                    self.unload()
+            except asyncio.CancelledError:
+                pass
+
+        try:
+            self._unload_task = asyncio.create_task(_delayed())
+        except RuntimeError:
+            pass
+
+    def _cancel_unload(self):
+        """Annule le déchargement différé (nouvelle requête arrivée)."""
+        if self._unload_task is not None:
+            self._unload_task.cancel()
+            self._unload_task = None
 
     def _get_required_model(self, intent: str) -> str:
         """Détermine quel modèle charger (1.5B ou 4B)."""

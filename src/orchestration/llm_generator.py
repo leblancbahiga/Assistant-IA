@@ -92,10 +92,12 @@ class LLMGenerator:
         web_context: str = "",
         rag_context: str = "",
         original_query: str = "",
+        stream_session=None,  # V15 P2 #26 : StreamSession optionnel
     ) -> AsyncGenerator[str, None]:
         """Section 7 : Génération avec fallback cloud/local.
 
         Yields les tokens de réponse.
+        Optionnel : stream_session pour callbacks + abort.
         """
         ram_too_low = ctx.ram_free_mb < 1000
         hybrid = getattr(ctx, 'hybrid_strategy', 'local_only')
@@ -129,6 +131,10 @@ class LLMGenerator:
             async for token in self.cloud_llm.generate_stream(
                 user_message, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
             ):
+                if stream_session:
+                    if stream_session.is_cancelled:
+                        break
+                    stream_session.emit(token)
                 yield token
             return
 
@@ -167,6 +173,10 @@ class LLMGenerator:
                 async for token in self.cloud_llm.generate_stream(
                     anchored_prompt, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
                 ):
+                    if stream_session:
+                        if stream_session.is_cancelled:
+                            break
+                        stream_session.emit(token)
                     yield token
                 return
 
@@ -176,26 +186,40 @@ class LLMGenerator:
             gen = self.local_llm.generate_stream(full_prompt, intent=intent)
             if self.runtime:
                 async for token in self.runtime.schedule_generator("generation", gen):
+                    if stream_session:
+                        if stream_session.is_cancelled:
+                            break
+                        stream_session.emit(token)
                     yield token
             else:
                 async for token in gen:
+                    if stream_session:
+                        if stream_session.is_cancelled:
+                            break
+                        stream_session.emit(token)
                     yield token
         except (LLMError, RAGError) as e:
             logger.error(f"Local fail: {e}. Fallback Cloud.")
+            if stream_session:
+                stream_session.emit(" [Bascule Cloud...] ")
             yield " [Bascule Cloud...] "
             cloud_prompt = user_message
             cloud_sys = system_prompt
             if rag_context and rag_context.strip() and "AUCUNE SOURCE" not in rag_context:
                 cloud_sys = (
-                    f"{system_prompt}\n\n"
-                    f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag_context.strip()}\n\n"
-                    f"Instructions : utilise EXCLUSIVEMENT le contexte ci-dessus pour répondre. "
-                    f"Si l'information n'y est pas, dis-le clairement.\n\n"
-                    f"Question : {user_message}"
-                )
+                        f"{system_prompt}\n\n"
+                        f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag_context.strip()}\n\n"
+                        f"Instructions : utilise EXCLUSIVEMENT le contexte ci-dessus pour répondre. "
+                        f"Si l'information n'y est pas, dis-le clairement.\n\n"
+                        f"Question : {user_message}"
+                    )
                 cloud_prompt = user_message
             logger.info(f"☁️ Local-fail fallback — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
             async for token in self.cloud_llm.generate_stream(
                 cloud_prompt, intent=intent, system_prompt=cloud_sys, temperature=cloud_temp
             ):
+                if stream_session:
+                    if stream_session.is_cancelled:
+                        break
+                    stream_session.emit(token)
                 yield token

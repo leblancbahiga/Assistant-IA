@@ -171,10 +171,12 @@ class NuruOrchestrator:
         session_id: str = "default",
         use_tts: bool = False,
         audio_engine=None,
+        stream_session=None,  # V15 P2 #26 : StreamSession optionnel
     ) -> AsyncGenerator[str, None]:
         """Pipeline complet : route → RAG → génère → stream.
 
         Yields les tokens de réponse.
+        Optionnel : stream_session pour callbacks + abort.
         """
         # ── 1. Contexte avec état réseau réel (NURU V5) ──
         is_online = await self.llm_gen.check_connectivity()
@@ -316,6 +318,7 @@ class NuruOrchestrator:
                 system_prompt, full_prompt, query, intent, ctx,
                 web_context=web_context, rag_context=rag_context,
                 original_query=original_query,
+                stream_session=stream_session,  # V15 P2 #26
             ):
                 response_content += token
                 yield token
