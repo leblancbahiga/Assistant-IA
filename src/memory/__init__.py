@@ -16,6 +16,8 @@ __all__ = [
     "SemanticMemory",
     "UserMemory",
     "ErrorMemory",
+    "WorkingMemory",
+    "ProceduralMemory",
     "MemoryRetriever",
     "MemoryManager",
     "ConsolidationWorker",
@@ -49,6 +51,16 @@ def UserMemory(*args, **kwargs):
 
 def ErrorMemory(*args, **kwargs):
     from src.memory.errors import ErrorMemory as _cls
+    return _cls(*args, **kwargs)
+
+
+def WorkingMemory(*args, **kwargs):
+    from src.memory.working import WorkingMemory as _cls
+    return _cls(*args, **kwargs)
+
+
+def ProceduralMemory(*args, **kwargs):
+    from src.memory.procedural import ProceduralMemory as _cls
     return _cls(*args, **kwargs)
 
 
