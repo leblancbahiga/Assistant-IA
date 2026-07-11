@@ -56,7 +56,7 @@ class BubbleWidget(QFrame):
             label = QLabel(text)
             label.setWordWrap(True)
             label.setStyleSheet(
-                f"color: {text_color}; font-size: {Typography.SIZE_BODY}px;"
+                f"color: {text_color}; font-size: {Typography.SIZE_BODY + 1}px;"
                 f" font-family: {Typography.FAMILY_BODY}; background: transparent;"
             )
             layout.addWidget(label)
@@ -70,7 +70,7 @@ class BubbleWidget(QFrame):
                 QTextBrowser {{
                     background: transparent;
                     color: {text_color};
-                    font-size: {Typography.SIZE_BODY}px;
+                    font-size: {Typography.SIZE_BODY + 1}px;
                     font-family: {Typography.FAMILY_BODY};
                     border: none;
                     padding: 0;

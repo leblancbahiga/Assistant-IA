@@ -13,7 +13,7 @@ QWidget {
     background-color: transparent;
     color: #E8ECF1;
     font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 14px;
+    font-size: 15px;
 }
 
 /* ── SIDEBAR ──────────────────────────────────────────────────── */
@@ -41,13 +41,13 @@ QWidget {
     border: 1px solid rgba(0, 212, 255, 0.20);
     border-radius: 6px;
     padding: 2px 8px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.04em;
 }
 #NavSectionLabel {
-    color: #4A5568;
-    font-size: 11px;
+    color: #5A6478;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -55,12 +55,12 @@ QWidget {
 }
 #NavButton {
     background-color: transparent;
-    color: #8B95A5;
+    color: #9BA5B5;
     border: none;
     border-radius: 6px;
     padding: 8px 14px;
     text-align: left;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 400;
     margin: 1px 8px;
     letter-spacing: 0.01em;
@@ -205,8 +205,8 @@ QWidget {
 /* ModelInfoFooter */
 #ModelInfoFooter {
     background-color: transparent;
-    color: #4A5568;
-    font-size: 11px;
+    color: #5A6478;
+    font-size: 12px;
     padding: 12px 14px;
     border-top: 1px solid rgba(0, 212, 255, 0.12);
 }
@@ -223,7 +223,7 @@ QWidget {
     min-height: 48px;
 }
 #ChatHeaderTitle {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
     color: #8B95A5;
 }
@@ -292,8 +292,8 @@ QWidget {
     padding: 0;
 }
 #ConfidenceLabel {
-    font-size: 11px;
-    color: #4A5568;
+    font-size: 12px;
+    color: #5A6478;
     margin-right: 6px;
 }
 #ConfidenceBar {
@@ -378,7 +378,7 @@ QScrollBar::sub-line:vertical {
 }
 #BubbleText {
     color: #E8ECF1;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.55;
     background: transparent;
 }
@@ -396,15 +396,15 @@ QScrollBar::sub-line:vertical {
     padding: 6px 0 2px;
 }
 #BubbleFooterLabel {
-    font-size: 10px;
-    color: #4A5568;
+    font-size: 11px;
+    color: #5A6478;
     letter-spacing: 0.02em;
 }
 #BubbleFooter QPushButton {
     background-color: transparent;
     border: none;
-    color: #4A5568;
-    font-size: 10px;
+    color: #5A6478;
+    font-size: 11px;
     padding: 2px 6px;
     border-radius: 3px;
 }
@@ -430,7 +430,7 @@ QScrollBar::sub-line:vertical {
     background-color: transparent;
     color: #E8ECF1;
     border: none;
-    font-size: 13px;
+    font-size: 14px;
     padding: 4px;
     selection-background-color: rgba(0, 212, 255, 0.25);
 }
