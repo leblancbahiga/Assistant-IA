@@ -86,7 +86,8 @@ class ChatOverlay(QWidget):
 
         self.setStyleSheet(f"""
             ChatOverlay {{
-                background: rgba(10, 14, 23, 0.95);
+                background: rgba(10, 16, 30, 0.92);
+                border: 1px solid rgba(0, 240, 255, 0.08);
                 border-radius: {Radius.WIDGET}px;
             }}
         """)
@@ -190,7 +191,8 @@ class ChatOverlay(QWidget):
         bubble = QLabel(f"<b style='color:{Color.TEXT_PRIMARY}'>Vous</b> : {text}")
         bubble.setWordWrap(True)
         bubble.setStyleSheet(f"""
-            background: rgba(0, 212, 255, 0.10);
+            background: rgba(0, 240, 255, 0.08);
+            border: 1px solid rgba(0, 240, 255, 0.10);
             color: {Color.TEXT_PRIMARY};
             border-radius: {Radius.MEDIUM}px;
             padding: 8px 12px;
@@ -200,7 +202,7 @@ class ChatOverlay(QWidget):
         QTimer.singleShot(500, lambda: self._respond(f"Reçu : *{text}*"))
 
     def _respond(self, text: str):
-        bubble = QLabel(f"<b style='color:{Color.CYAN}'>NURU</b> : {text}")
+        bubble = QLabel(f"<b style='color:#7C3AED'>NURU</b> : {text}")
         bubble.setWordWrap(True)
         bubble.setStyleSheet(f"""
             background: {Color.BG_SURFACE1};
@@ -456,11 +458,11 @@ class AmbientApp:
         # Sync floating widget status text
         state_labels = {
             OrbState.IDLE:      ("Assistant prêt", Color.TEXT_SECONDARY),
-            OrbState.LISTENING: ("En écoute...", "#00E599"),
+            OrbState.LISTENING: ("En écoute...", "#00FFAA"),
             OrbState.THINKING:  ("Réflexion...", "#FFB800"),
-            OrbState.SPEAKING:  ("Parle...", Color.CYAN),
-            OrbState.ACTING:    ("Action...", Color.CYAN),
-            OrbState.ERROR:     ("Erreur", Color.ROSE),
+            OrbState.SPEAKING:  ("Parle...", "#00F0FF"),
+            OrbState.ACTING:    ("Action...", "#7C3AED"),
+            OrbState.ERROR:     ("Erreur", "#FF3366"),
         }
         label, color = state_labels.get(state, ("Assistant prêt", Color.TEXT_SECONDARY))
         self._floating_widget.setStatus(label, color)

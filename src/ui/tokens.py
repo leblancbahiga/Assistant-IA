@@ -1,76 +1,90 @@
 """
-NURU V12 — Design Tokens (Design System DM-1 "Deep Cyan").
+NURU V15 — Design System "NEON COGNITIVE"
+——————————————————————————————
+Palette néon cybernétique + verre morphique pour système cognitif avancé.
 
-Palette extraite du mockup board V12 (nuru_v12_mockup_board.html) :
-  bg-deep:       #0A0E17   — fond principal, dot grid
-  bg-surface1:   #151B26   — cartes, surfaces surélevées
-  bg-surface2:   #1C2433   — surface secondaire
-  accent-cyan:   #00D4FF   — orb, glow, liens, focus
-  accent-green:  #00E599   — état idle, succès
-  accent-amber:  #FFB800   — état thinking, notifications
-  accent-rose:   #FF4D6A   — état erreur
-  text-primary:  #E8ECF1   — texte principal
-  text-secondary:#8B95A5   — légendes, captions
-  text-dim:      #4A5568   — placeholders, désactivé
-  border:        rgba(0, 212, 255, 0.12) — séparateurs discrets
-  border-strong: rgba(0, 212, 255, 0.30) — focus, hover
+Philosophie visuelle :
+  - Fond espace profond (#05080F) avec champs de particules
+  - Panneaux en verre morphique (glass-morphism) avec reflets
+  - Cyan néon (#00F0FF) comme primaire — énergie, conscience
+  - Violet néon (#7C3AED) comme secondaire — profondeur, cognition
+  - Vert cyber (#00FFAA) — succès, présence
+  - Ambre (#FFB800) — réflexion, alerte
+  - Rose néon (#FF3366) — erreur, signal
 
-Typo : Inter primaire, JetBrains Mono pour le code.
-Rayons : 8 / 12 px (macOS natif, M1 friendly).
+Contraintes M1 8 Go :
+  - Pas de QGraphicsBlurEffect (trop coûteux) — simulé par gradients
+  - Particules limitées (~50 max)
+  - Single QTimer pour toutes les animations
 """
 
 from dataclasses import dataclass
 from typing import ClassVar
 
 
-# ── Palette DM-1 "Deep Cyan" (mockup board V12) ─────────────────
+# ── Palette NEON COGNITIVE ─────────────────────────────────────────
 
 @dataclass(frozen=True)
 class Color:
-    """Design System DM-1 — NURU V12 mockup board exact."""
+    """NEON COGNITIVE — née du cyan, élevée par le violet."""
 
     # Fonds
-    BG_DEEP: str = "#0A0E17"       # fond principal — orb plein écran, dot grid
-    BG_SURFACE1: str = "#151B26"   # cartes, surfaces surélevées (anciennement BG_ELEVATED)
-    BG_ELEVATED: str = "#151B26"   # alias de compatibilité
-    BG_SURFACE2: str = "#1C2433"   # surface secondaire
-    BG_OVERLAY: str = "rgba(10, 14, 23, 0.92)"  # overlay vocal semi-transparent
+    BG_DEEP: str = "#05080F"       # espace profond — fond principal
+    BG_SURFACE1: str = "rgba(12, 20, 40, 0.72)"  # verre morphique
+    BG_ELEVATED: str = "rgba(12, 20, 40, 0.72)"  # alias compatibilité
+    BG_SURFACE2: str = "rgba(18, 28, 52, 0.65)"  # verre secondaire
+    BG_SURFACE3: str = "rgba(24, 36, 64, 0.60)"  # verre troisième plan
+    BG_OVERLAY: str = "rgba(5, 8, 15, 0.88)"     # overlay vocal
 
-    # Accent — DM-1
-    CYAN: str = "#00D4FF"          # accent principal — orb, glow, liens, focus
-    CYAN_GLOW: str = "rgba(0, 212, 255, 0.15)"   # halo / glow animation
-    CYAN_FAINT: str = "rgba(0, 212, 255, 0.08)"  # fond subtiles
-    GREEN: str = "#00E599"         # état idle, succès — Listening
-    AMBER: str = "#FFB800"         # état thinking — warm notifications
-    ROSE: str = "#FF4D6A"          # état error
-    WARM: str = "#FFB800"         # alias compatibilité (anciennement accent-warm)
+    # Accents néon
+    CYAN: str = "#00F0FF"           # primaire — néon cyan
+    CYAN_GLOW: str = "rgba(0, 240, 255, 0.15)"   # halo doux
+    CYAN_GLOW_STRONG: str = "rgba(0, 240, 255, 0.30)"  # halo fort
+    CYAN_FAINT: str = "rgba(0, 240, 255, 0.06)"  # fond subtil
+    CYAN_SHADOW: str = "rgba(0, 240, 255, 0.4)"  # ombre néon
 
-    # Texte
-    TEXT_PRIMARY: str = "#E8ECF1"  # texte principal
-    TEXT_SECONDARY: str = "#8B95A5"  # légendes, captions
-    TEXT_MUTED: str = "#4A5568"    # placeholders, désactivé
-
-    # Bordures
-    BORDER: str = "rgba(0, 212, 255, 0.12)"       # séparateurs discrets
-    BORDER_STRONG: str = "rgba(0, 212, 255, 0.30)"  # focus, hover
-
-    # Alias hérités (compatibilité)
-    BG_CARD: str = "#151B26"
+    VIOLET: str = "#7C3AED"         # secondaire — violet néon
+    VIOLET_GLOW: str = "rgba(124, 58, 237, 0.20)"
+    VIOLET_FAINT: str = "rgba(124, 58, 237, 0.08)"
 
     # États
-    SUCCESS: str = "#00E599"
-    ERROR: str = "#FF4D6A"
+    GREEN: str = "#00FFAA"          # succès, présence idle
+    GREEN_GLOW: str = "rgba(0, 255, 170, 0.15)"
+    AMBER: str = "#FFB800"          # réflexion, alerte
+    AMBER_GLOW: str = "rgba(255, 184, 0, 0.15)"
+    ROSE: str = "#FF3366"           # erreur, signal fort
+    ROSE_GLOW: str = "rgba(255, 51, 102, 0.15)"
 
-    # Overlay warm
-    BG_OVERLAY_WARM: str = "rgba(255, 184, 0, 0.12)"
+    # Texte
+    TEXT_PRIMARY: str = "#E8F0FF"   # blanc légèrement bleuté
+    TEXT_SECONDARY: str = "#8BA0C8"  # bleu-gris clair
+    TEXT_MUTED: str = "rgba(139, 160, 200, 0.45)"  # discret
 
-    # Palettes swap
+    # Bordures verre morphique
+    BORDER: str = "rgba(0, 240, 255, 0.08)"        # séparation subtile
+    BORDER_MEDIUM: str = "rgba(0, 240, 255, 0.15)" # hover
+    BORDER_STRONG: str = "rgba(0, 240, 255, 0.35)" # focus, actif
+    BORDER_VIOLET: str = "rgba(124, 58, 237, 0.20)" # violette
+
+    # Reflets verre (highlight interne)
+    GLASS_HIGHLIGHT: str = "rgba(255, 255, 255, 0.04)"
+    GLASS_HIGHLIGHT_STRONG: str = "rgba(255, 255, 255, 0.08)"
+
+    # Aliases hérités
+    BG_CARD: str = BG_SURFACE1
+    SUCCESS: str = GREEN
+    ERROR: str = ROSE
+    WARM: str = AMBER
+    BG_OVERLAY_WARM: str = "rgba(255, 184, 0, 0.10)"
+
+    # Palettes swap pour préférence clair/sombre
     DARK: ClassVar[dict] = {
         "bg": BG_DEEP,
         "card": BG_SURFACE1,
         "surface": BG_SURFACE1,
         "surface2": BG_SURFACE2,
         "accent": CYAN,
+        "violet": VIOLET,
         "text": TEXT_PRIMARY,
         "text_secondary": TEXT_SECONDARY,
         "text_dim": TEXT_MUTED,
@@ -81,65 +95,69 @@ class Color:
     }
 
     LIGHT: ClassVar[dict] = {
-        "bg": "#F0F4F8",
+        "bg": "#E8F0FF",
         "card": "#FFFFFF",
         "surface": "#FFFFFF",
-        "surface2": "#E8ECF1",
-        "accent": "#0099BB",
-        "text": "#1A2332",
-        "text_secondary": "#6B7A90",
-        "text_dim": "#A0AAB8",
-        "border": "#D1D9E6",
-        "green": "#00B377",
-        "amber": "#CC9300",
-        "rose": "#D43D57",
+        "surface2": "#D6E4F0",
+        "accent": "#0088CC",
+        "violet": "#6D28D9",
+        "text": "#0A1628",
+        "text_secondary": "#4A6580",
+        "text_dim": "#8BA0C0",
+        "border": "#C0D4E8",
+        "green": "#008866",
+        "amber": "#996600",
+        "rose": "#CC2255",
     }
 
 
-# ── Typographie DM-1 : Inter primaire, JetBrains Mono code ─────────
+# ── Typographie ────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class Typography:
-    """Inter primaire, JetBrains Mono pour le code — DM-1 exact."""
+    """SF Pro + JetBrains Mono — lisibilité maximale sur fond sombre."""
 
-    FAMILY_BODY: str = "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
-    FAMILY_CODE: str = "'JetBrains Mono', 'SF Mono', Monaco, monospace, sans-serif"
+    FAMILY_BODY: str = "'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+    FAMILY_CODE: str = "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace"
+    FAMILY_DISPLAY: str = "'SF Pro Display', 'Inter', sans-serif"
 
     # Poids
-    WEIGHT_LIGHT: int = 300       # Overlay prompt, transcript
-    WEIGHT_REGULAR: int = 400     # Body, Caption, Code
-    WEIGHT_MEDIUM: int = 500      # Usage intermédiaire
-    WEIGHT_SEMIBOLD: int = 600    # Titre assistant, H2
-    WEIGHT_BOLD: int = 700        # H1, NURU label
+    WEIGHT_THIN: int = 200
+    WEIGHT_LIGHT: int = 300
+    WEIGHT_REGULAR: int = 400
+    WEIGHT_MEDIUM: int = 500
+    WEIGHT_SEMIBOLD: int = 600
+    WEIGHT_BOLD: int = 700
 
-    # Tailles
-    SIZE_ORB_LABEL: int = 24     # pt — titre assistant
-    SIZE_HEADING_1: int = 18     # pt — H1
-    SIZE_HEADING_2: int = 15     # pt — H2
-    SIZE_BODY: int = 13          # pt — messages, réponses
-    SIZE_CAPTION: int = 11       # pt — métadonnées, timestamps
-    SIZE_CODE: int = 12          # pt — JetBrains Mono
-    SIZE_OVERLAY: int = 28       # pt — prompt vocal
+    # Tailles (pt)
+    SIZE_ORB_LABEL: int = 22
+    SIZE_HEADING_1: int = 17
+    SIZE_HEADING_2: int = 14
+    SIZE_BODY: int = 13
+    SIZE_CAPTION: int = 11
+    SIZE_CODE: int = 11
+    SIZE_OVERLAY: int = 26
+    SIZE_SMALL: int = 10
 
 
-# ── Rayons DM-1 ─────────────────────────────────────────────────
+# ── Rayons ─────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class Radius:
-    """Système de rayons DM-1 — macOS natif, M1 friendly."""
+    """Rayons harmonieux — glass-morphism friendly."""
 
-    SMALL: int = 4     # badges, petits indicateurs
-    MEDIUM: int = 8    # cartes, conteneurs
-    LARGE: int = 12   # overlay, floating widget
-    WIDGET: int = 12   # floating widget coins arrondis
+    XS: int = 4
+    SM: int = 6
+    MEDIUM: int = 10
+    LARGE: int = 14
+    WIDGET: int = 16
+    PILL: int = 999  # arrondi maximal
 
 
-# ── Espacements (base 4px) ───────────────────────────────────────
+# ── Espacements (base 4px) ────────────────────────────────────────
 
 @dataclass(frozen=True)
 class Spacing:
-    """Système base 4px."""
-
     XS: int = 4
     SM: int = 8
     MD: int = 12
@@ -148,55 +166,54 @@ class Spacing:
     XXL: int = 24
     XXXL: int = 32
     HUGE: int = 48
+    MASSIVE: int = 64
 
 
-# ── Orb DM-1 ──────────────────────────────────────────────────────
+# ── Orb ────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class OrbSizes:
-    """Tailles exactes NuruPresenceOrb (DM-1)."""
+    WINDOW: int = 130       # fenêtre principale — plus large
+    OVERLAY: int = 200      # VoiceOverlay
+    FLOATING: int = 80      # FloatingWidget mini-orb
+    AURA_MAX: int = 50      # particules max autour de l'orb
 
-    WINDOW: int = 120      # fenêtre principale
-    OVERLAY: int = 200     # VoiceOverlay
-    FLOATING: int = 80     # FloatingWidget mini-orb
 
-
-# ── Animations DM-1 ─────────────────────────────────────────────
+# ── Animations ─────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class AnimDuration:
-    """Durées exactes DM-1."""
-
-    ORB_PULSE: int = 4000         # 4s — respiration idle
-    ORB_HALO_SPIN: int = 8000     # 8s — halo réflexion
-    ORB_PULSE_ACCEL: int = 1500   # 1.5s — respond
-    STATE_TRANSITION: int = 300   # 300ms — transitions
-    OVERLAY_SHOW: int = 250       # 250ms — apparition overlay
-    OVERLAY_HIDE: int = 250       # 250ms — disparition
-    OVERLAY_TIMEOUT: int = 8000   # 8s — timeout vocal
-    SOUND_WAVE_DURATION: int = 2000  # 2s — onde sonore
-    SOUND_WAVE_OFFSET: int = 600  # 0.6s — décalage entre cercles
-    TOAST_SHOW: int = 300         # 300ms
-    TOAST_VISIBLE: int = 4000     # 4s
-    TOAST_HIDE: int = 200         # 200ms
-    CHAT_BUBBLE: int = 200        # 200ms — apparition bulle
-    FLOATING_FADE: int = 30000    # 30s — auto-dim floating widget
+    ORB_PULSE: int = 3000          # 3s — respiration
+    ORB_HALO_SPIN: int = 6000      # 6s — rotation halo
+    ORB_PARTICLE_SPIN: int = 8000  # 8s — particules orbitales
+    STATE_TRANSITION: int = 400    # 400ms — transitions douces
+    OVERLAY_SHOW: int = 300
+    OVERLAY_HIDE: int = 250
+    OVERLAY_TIMEOUT: int = 8000
+    SOUND_WAVE_DURATION: int = 2000
+    TOAST_SHOW: int = 300
+    TOAST_VISIBLE: int = 4000
+    TOAST_HIDE: int = 200
+    CHAT_BUBBLE: int = 250
+    FLOATING_FADE: int = 30000
+    GLOW_SHIFT: int = 4000         # 4s — shift de couleur du glow
 
 
-# ── Tailles fenêtres DM-1 ────────────────────────────────────────
+# ── Fenêtres ───────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class WindowSizes:
-    """Tailles exactes des fenêtres (DM-1)."""
-
-    WINDOW_WIDTH: int = 720
-    WINDOW_HEIGHT: int = 860
+    WINDOW_WIDTH: int = 760
+    WINDOW_HEIGHT: int = 900
     WINDOW_MIN_WIDTH: int = 480
     WINDOW_MIN_HEIGHT: int = 600
 
-    FLOATING_WIDTH: int = 260    # FloatingWidget — DM-1: 260×180
-    FLOATING_HEIGHT: int = 180   # (doc: 220×160 + padding)
-    FLOATING_SIZE: int = 260     # alias (carré pour compatibilité)
+    FLOATING_WIDTH: int = 280
+    FLOATING_HEIGHT: int = 200
+    FLOATING_SIZE: int = 280
 
     OVERLAY_WIDTH_PCT: float = 0.6
     OVERLAY_HEIGHT_PCT: float = 0.4
+
+    SIDEBAR_WIDTH: int = 200
+    SIDEBAR_COLLAPSED: int = 52

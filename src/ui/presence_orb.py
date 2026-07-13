@@ -1,123 +1,192 @@
 """
-NURU V12 — Presence Orb Component
-Design System DM-1 "Deep Cyan"
-PySide6 / QPainter / QPropertyAnimation
-Target: macOS M1 8GB
+NURU V15 — Presence Orb "NEON COGNITIVE"
+——————————————————————————————
+Orb cybernétique multicouche avec particules orbitales.
 
-Specs extraites du mockup board V12:
-  - Background: #0A0E17, dot grid at 4% opacity
-  - Orb: Cyan sphere #00D4FF with radial gradient (white center → cyan edge)
-  - GlowRing: 3 concentric rings, 30%/15%/5% opacity, QPainter radialGradient
-  - Shadows: single-level only (M1 8GB constraint)
-  - Animations: QPropertyAnimation, max 5% CPU
+Architecture visuelle (du fond au premier plan) :
+  Layer 7 : Fond espace profond #05080F
+  Layer 6 : Grille de points dynamique (pulsing)
+  Layer 5 : Champ de particules orbitales (cercles lumineux)
+  Layer 4 : Aura — gradient radial doux
+  Layer 3 : Anneaux rotatifs (halo rings) — 1 à 3 selon état
+  Layer 2 : Orb principale — gradient radial 4 stops
+  Layer 1 : Specular highlight (réflexion source lumineuse)
+  Layer 0 : Core flash — point lumineux central
+
+Contraintes M1 8 Go :
+  - Single QTimer 50ms (20 FPS)
+  - Particules limitées (~30)
+  - QPainter uniquement (pas de QGraphicsBlurEffect)
+  - Cache QPixmap pour fond statique
 """
 
+import math
+import random
 from enum import Enum, auto
 
 from PySide6.QtCore import (
-    Qt, QRectF, QPointF, QTimer, QPropertyAnimation, Property, QEasingCurve, Signal
+    Qt, QRectF, QPointF, QTimer, QPropertyAnimation, Property,
+    QEasingCurve, Signal, QSize
 )
 from PySide6.QtGui import (
-    QPainter, QColor, QRadialGradient, QPen, QBrush, QFont, QPainterPath, QPolygonF
+    QPainter, QColor, QRadialGradient, QConicalGradient, QLinearGradient,
+    QPen, QBrush, QFont, QPainterPath, QPolygonF, QPixmap, QTransform
 )
 from PySide6.QtWidgets import QWidget
 
 
 class OrbState(Enum):
-    """États de l'orb — DM-1."""
+    """États de l'orb — NEON COGNITIVE."""
     IDLE = auto()
     LISTENING = auto()
     THINKING = auto()
     SPEAKING = auto()
     ACTING = auto()
     ERROR = auto()
-    SLEEP = auto()  # Phase sommeil LIGHT/DEEP/REM
+    SLEEP = auto()
 
 
-# Couleurs DM-1 par état
+# ── Palette NEON COGNITIVE par état ────────────────────────────────
+
 STATE_COLORS = {
-    OrbState.IDLE:     QColor(0, 212, 255),    # Cyan
-    OrbState.LISTENING: QColor(0, 229, 153),   # Green
-    OrbState.THINKING: QColor(255, 184, 0),    # Amber
-    OrbState.SPEAKING: QColor(0, 212, 255),    # Cyan
-    OrbState.ACTING:   QColor(0, 212, 255),    # Cyan
-    OrbState.ERROR:    QColor(255, 77, 106),   # Rose
-    OrbState.SLEEP:    QColor(75, 85, 120),    # Bleu-gris dim
+    OrbState.IDLE:      QColor(0, 240, 255),    # Cyan néon
+    OrbState.LISTENING: QColor(0, 255, 170),    # Vert cyber
+    OrbState.THINKING:  QColor(255, 184, 0),    # Ambre
+    OrbState.SPEAKING:  QColor(0, 240, 255),    # Cyan néon
+    OrbState.ACTING:    QColor(124, 58, 237),   # Violet néon
+    OrbState.ERROR:     QColor(255, 51, 102),   # Rose néon
+    OrbState.SLEEP:     QColor(60, 70, 100),    # Bleu-gris dim
+}
+
+STATE_SECONDARY = {
+    OrbState.IDLE:      QColor(124, 58, 237),   # Violet
+    OrbState.LISTENING: QColor(0, 240, 255),    # Cyan
+    OrbState.THINKING:  QColor(255, 120, 0),    # Orange
+    OrbState.SPEAKING:  QColor(124, 58, 237),   # Violet
+    OrbState.ACTING:    QColor(0, 240, 255),    # Cyan
+    OrbState.ERROR:     QColor(255, 180, 0),    # Ambre
+    OrbState.SLEEP:     QColor(40, 50, 80),     # Gris bleu
 }
 
 STATE_GLOW_ALPHA = {
-    OrbState.IDLE:      40,
-    OrbState.LISTENING: 80,
-    OrbState.THINKING:  30,
-    OrbState.SPEAKING:  60,
-    OrbState.ACTING:    60,
-    OrbState.ERROR:     90,
-    OrbState.SLEEP:     15,  # Luminescence minimale
+    OrbState.IDLE:      60,
+    OrbState.LISTENING: 100,
+    OrbState.THINKING:  45,
+    OrbState.SPEAKING:  85,
+    OrbState.ACTING:    75,
+    OrbState.ERROR:     110,
+    OrbState.SLEEP:     20,
 }
 
 STATE_RING_COUNT = {
-    OrbState.IDLE:      1,
+    OrbState.IDLE:      2,
     OrbState.LISTENING: 3,
     OrbState.THINKING:  2,
-    OrbState.SPEAKING:  2,
-    OrbState.ACTING:    2,
+    OrbState.SPEAKING:  3,
+    OrbState.ACTING:    3,
     OrbState.ERROR:     1,
     OrbState.SLEEP:     1,
 }
 
+STATE_PARTICLE_COUNT = {
+    OrbState.IDLE:      20,
+    OrbState.LISTENING: 30,
+    OrbState.THINKING:  25,
+    OrbState.SPEAKING:  25,
+    OrbState.ACTING:    20,
+    OrbState.ERROR:     15,
+    OrbState.SLEEP:     8,
+}
+
+STATE_ROTATION_SPEED = {
+    OrbState.IDLE:      0.15,
+    OrbState.LISTENING: 0.30,
+    OrbState.THINKING:  0.60,
+    OrbState.SPEAKING:  0.40,
+    OrbState.ACTING:    0.50,
+    OrbState.ERROR:     0.20,
+    OrbState.SLEEP:     0.05,
+}
+
+STATE_PULSE_AMPLITUDE = {
+    OrbState.IDLE:      0.025,
+    OrbState.LISTENING: 0.050,
+    OrbState.THINKING:  0.080,
+    OrbState.SPEAKING:  0.040,
+    OrbState.ACTING:    0.035,
+    OrbState.ERROR:     0.060,
+    OrbState.SLEEP:     0.010,
+}
+
+
+class OrbParticle:
+    """Particule orbitale autour de l'orb."""
+
+    def __init__(self, index: int, total: int):
+        angle = (index / total) * 6.2832 + random.uniform(0, 1.0)
+        radius = random.uniform(0.85, 1.40)
+        orbit_speed = random.uniform(0.3, 0.8)
+        phase_offset = random.uniform(0, 6.2832)
+
+        self.angle = angle
+        self.orbit_radius = radius
+        self.orbit_speed = orbit_speed
+        self.phase_offset = phase_offset
+        self.size = random.uniform(1.5, 3.5)
+        self.opacity = random.uniform(0.3, 0.8)
+        self.z_offset = random.uniform(-0.3, 0.3)  # profondeur 3D simulée
+
 
 class PresenceOrb(QWidget):
-    """Sphère cyan translucide avec halo radial doux et pulsing."""
+    """Orb cybernétique multicouche avec particules orbitales animées."""
 
-    state_changed = Signal(OrbState)  # émet OrbState au lieu de str
+    state_changed = Signal(OrbState)
 
-    def __init__(self, parent=None, orb_size: int = 120):
+    def __init__(self, parent=None, orb_size: int = 130):
         super().__init__(parent)
         if orb_size:
             self.setFixedSize(orb_size, orb_size)
+
+        # État
         self._orb_opacity = 1.0
         self._glow_opacity = 0.8
         self._pulse_phase = 0.0
+        self._ring_rotation = 0.0
         self._state = OrbState.IDLE
+        self._target_orb_opacity = 1.0
+        self._target_glow_opacity = 0.6
+        self._ring_count = 2
+        self._state_color = STATE_COLORS[OrbState.IDLE]
+        self._state_secondary = STATE_SECONDARY[OrbState.IDLE]
+        self._rotation_speed = 0.15
+        self._pulse_amplitude = 0.025
 
-        # Design tokens DM-1
-        self.COLOR_BG = QColor(10, 14, 23)        # #0A0E17
-        self.COLOR_SURFACE1 = QColor(21, 27, 38)  # #151B26
-        self.COLOR_CYAN = QColor(0, 212, 255)      # #00D4FF
-        self.COLOR_CYAN_DIM = QColor(0, 212, 255, 100)  # 40% alpha
-        self.COLOR_TEXT = QColor(232, 236, 241)    # #E8ECF1
-        self.COLOR_TEXT_DIM = QColor(139, 149, 165)  # #8B95A5
-        self.COLOR_GREEN = QColor(0, 229, 153)     # #00E599
-        self.COLOR_AMBER = QColor(255, 184, 0)     # #FFB800
-        self.COLOR_ROSE = QColor(255, 77, 106)     # #FF4D6A
-        self.COLOR_DOT_GRID = QColor(26, 34, 52, 12)  # #1A2234 at ~5%
+        # Cache pour fond statique
+        self._bg_pixmap = None
+        self._bg_dirty = True
 
-        # Pulsing animation timer (low CPU: single timer for all animations)
+        # Particules orbitales
+        self._particles = self._create_particles(OrbState.IDLE)
+
+        # Timer principal (20 FPS — single timer pour tout)
         self._pulse_timer = QTimer(self)
         self._pulse_timer.timeout.connect(self._update_pulse)
-        self._pulse_timer.start(50)  # 20 FPS — enough for smooth pulsing, low CPU
-
-        # Smooth state transition
-        self._target_orb_opacity = 1.0
-        self._target_glow_opacity = 0.8
-        self._target_rotation = 0.0
-        self._current_rotation = 0.0
+        self._pulse_timer.start(50)
 
         self.setState(OrbState.IDLE)
 
+    # ── API publique ──────────────────────────────────────────────
+
     def set_state(self, state: OrbState):
-        """Nouvelle API DM-1 : set_state avec OrbState enum."""
         self._state = state
         self._apply_state_config()
         self.state_changed.emit(state)
         self.update()
 
     def setState(self, state: OrbState):
-        """Alias DM-1 (camelCase) — compatible."""
         self.set_state(state)
 
     def setWindowState(self, state):
-        """API rétrocompatible : accepte str ou OrbState."""
         if isinstance(state, str):
             state_map = {
                 "idle": OrbState.IDLE,
@@ -130,163 +199,291 @@ class PresenceOrb(QWidget):
             state = state_map.get(state, OrbState.IDLE)
         self.set_state(state)
 
+    def get_state(self) -> OrbState:
+        return self._state
+
+    # ── Configuration ─────────────────────────────────────────────
+
     def _apply_state_config(self):
-        """Applique la configuration visuelle pour l'état actuel."""
         state = self._state
-        state_configs = {
-            OrbState.IDLE:      {"orb": 1.0, "glow": 0.6, "rot_spd": 0.00},
-            OrbState.LISTENING: {"orb": 1.0, "glow": 1.0, "rot_spd": 0.02},
-            OrbState.THINKING:  {"orb": 0.9, "glow": 0.5, "rot_spd": 0.06},
-            OrbState.SPEAKING:  {"orb": 1.0, "glow": 0.9, "rot_spd": 0.03},
-            OrbState.ACTING:    {"orb": 1.0, "glow": 0.9, "rot_spd": 0.04},
-            OrbState.ERROR:     {"orb": 0.8, "glow": 0.7, "rot_spd": 0.02},
-            OrbState.SLEEP:     {"orb": 0.4, "glow": 0.2, "rot_spd": 0.01},
-        }
-        config = state_configs.get(state, state_configs[OrbState.IDLE])
-        self._target_orb_opacity = config["orb"]
-        self._target_glow_opacity = config["glow"]
-        self._target_rotation = config["rot_spd"]
-        self._ring_count = STATE_RING_COUNT.get(state, 1)
-        self._state_color = STATE_COLORS.get(state, QColor(0, 212, 255))
+        self._target_orb_opacity = 1.0
+        self._target_glow_opacity = 1.0  # sera interpolé
+        self._state_color = STATE_COLORS.get(state, STATE_COLORS[OrbState.IDLE])
+        self._state_secondary = STATE_SECONDARY.get(state, STATE_SECONDARY[OrbState.IDLE])
+        self._ring_count = STATE_RING_COUNT.get(state, 2)
+        self._rotation_speed = STATE_ROTATION_SPEED.get(state, 0.15)
+        self._pulse_amplitude = STATE_PULSE_AMPLITUDE.get(state, 0.025)
+
+        # Limiter glow selon état
+        glow = STATE_GLOW_ALPHA.get(state, 60) / 100.0
+        self._target_glow_opacity = glow
+
+        # Re-créer les particules si le compte a changé
+        target_count = STATE_PARTICLE_COUNT.get(state, 20)
+        if len(self._particles) != target_count:
+            self._particles = self._create_particles(state)
+
+    def _create_particles(self, state: OrbState) -> list:
+        count = STATE_PARTICLE_COUNT.get(state, 20)
+        return [OrbParticle(i, count) for i in range(count)]
+
+    # ── Animation ─────────────────────────────────────────────────
 
     def _update_pulse(self):
-        """Animation frame update — called at 20 FPS."""
-        self._pulse_phase += 0.03
+        self._pulse_phase += 0.04
         if self._pulse_phase > 6.2832:
             self._pulse_phase -= 6.2832
 
-        # Smooth interpolation toward targets
-        self._orb_opacity += (self._target_orb_opacity - self._orb_opacity) * 0.08
-        self._glow_opacity += (self._target_glow_opacity - self._glow_opacity) * 0.08
-        self._current_rotation += (self._target_rotation - self._current_rotation) * 0.08
+        # Interpolation douce vers cibles
+        self._orb_opacity += (self._target_orb_opacity - self._orb_opacity) * 0.06
+        self._glow_opacity += (self._target_glow_opacity - self._glow_opacity) * 0.06
+
+        # Rotation continue des anneaux
+        self._ring_rotation += self._rotation_speed
+        if self._ring_rotation > 360:
+            self._ring_rotation -= 360
+
+        # Mise à jour des particules
+        for p in self._particles:
+            p.angle += 0.02 * p.orbit_speed
+            if p.angle > 6.2832:
+                p.angle -= 6.2832
 
         self.update()
+
+    # ── Dessin ─────────────────────────────────────────────────────
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
+
         w, h = self.width(), self.height()
         cx, cy = w / 2, h / 2
+        base_r = min(w, h) * 0.28
+        pulse = 1.0 + self._pulse_amplitude * math.sin(self._pulse_phase)
+        orb_r = base_r * pulse
+        c = self._state_color
+        s = self._state_secondary
+        alpha_mult = self._orb_opacity
+        glow_mult = self._glow_opacity
 
-        # ── Layer 7: Background #0A0E17 ──
-        painter.fillRect(self.rect(), self.COLOR_BG)
+        # ── Layer 7: Background ──
+        painter.fillRect(self.rect(), QColor(5, 8, 15))
 
-        # ── Layer 6: Dot Grid (4% opacity, spacing ~20px) ──
+        # ── Layer 6: Dot Grid (pulsing) ──
         self._draw_dot_grid(painter, w, h)
 
-        # ── Layer 2: GlowRing — concentric rings ──
-        self._draw_glow_rings(painter, cx, cy)
+        # ── Layer 5: Particules orbitales ──
+        self._draw_particles(painter, cx, cy, orb_r, c, s, alpha_mult, glow_mult)
 
-        # ── Layer 1: PresenceOrb — main sphere ──
-        self._draw_orb(painter, cx, cy, min(w, h) * 0.28)
+        # ── Layer 4: Aura (glow radial) ──
+        self._draw_aura(painter, cx, cy, orb_r, c, glow_mult)
 
-        # ── Layer 0: NURU wordmark (via QLabel dans NuruWindow) ──
-        # Le texte QPainter est désactivé — le logo brand V3
-        # est affiché via QLabel dans NuruWindow._build_ui()
+        # ── Layer 3: Anneaux rotatifs ──
+        self._draw_rings(painter, cx, cy, orb_r, c, s, alpha_mult, glow_mult)
+
+        # ── Layer 2: Orb principale ──
+        self._draw_orb(painter, cx, cy, orb_r, c, alpha_mult)
+
+        # ── Layer 1: Specular ──
+        self._draw_specular(painter, cx, cy, orb_r, alpha_mult)
+
+        # ── Layer 0: Core flash ──
+        self._draw_core(painter, cx, cy, orb_r, c, alpha_mult, glow_mult)
 
         painter.end()
 
+    # ── Couches de dessin individuelles ────────────────────────────
+
     def _draw_dot_grid(self, painter: QPainter, w: int, h: int):
-        """Grille de points subtile à ~4-5% opacité, espacement ~20px."""
+        """Grille de points avec pulsing d'opacité."""
+        dot_alpha = int(8 + 4 * math.sin(self._pulse_phase * 0.5))
         painter.setPen(Qt.NoPen)
-        painter.setBrush(self.COLOR_DOT_GRID)
-        spacing = 20
+        painter.setBrush(QColor(30, 40, 80, dot_alpha))
+
+        spacing = 18
         dot_r = 1
-        for x in range(spacing, w, spacing):
-            for y in range(spacing, h, spacing):
+        offset = int(self._ring_rotation * 0.1) % spacing
+        for x in range(offset, w + spacing, spacing):
+            for y in range(offset, h + spacing, spacing):
                 painter.drawEllipse(QPointF(x, y), dot_r, dot_r)
 
-    def _draw_glow_rings(self, painter: QPainter, cx: float, cy: float):
-        """Anneaux concentriques avec la couleur de l'état actuel."""
-        base_radius = min(self.width(), self.height()) * 0.32
-        c = self._state_color if hasattr(self, '_state_color') else self.COLOR_CYAN
+    def _draw_particles(self, painter: QPainter, cx: float, cy: float,
+                         orb_r: float, c: QColor, s: QColor,
+                         alpha: float, glow: float):
+        """Particules orbitant autour de l'orb."""
+        painter.setPen(Qt.NoPen)
 
-        ring_configs = [
-            {"radius_mult": 1.0,  "opacity": 0.30, "width": 2.0},
-            {"radius_mult": 1.15, "opacity": 0.15, "width": 1.5},
-            {"radius_mult": 1.30, "opacity": 0.05, "width": 1.0},
-        ]
+        for p in self._particles:
+            # Position 3D simulée avec ellipse (z_offset → excentricité verticale)
+            r = orb_r * p.orbit_radius
+            x = cx + r * math.cos(p.angle)
+            y = cy + r * math.sin(p.angle * 0.7 + p.z_offset) * 0.6
 
-        for i, cfg in enumerate(ring_configs):
-            if i >= self._ring_count:
-                break
+            # Opacité pulsée
+            pulse_opacity = 0.3 + 0.5 * (0.5 + 0.5 * math.sin(self._pulse_phase + p.phase_offset))
+            particle_alpha = int(p.opacity * pulse_opacity * glow * alpha * 255)
 
-            pulse = 0.02 * (1 + self._pulse_phase) * self._glow_opacity
-            radius = base_radius * cfg["radius_mult"] + pulse * base_radius
-            opacity = cfg["opacity"] * self._glow_opacity
-            rotation = self._current_rotation * (i + 1) * 30  # degrés
+            if particle_alpha < 5:
+                continue
 
-            color = QColor(c.red(), c.green(), c.blue(), int(255 * opacity))
-            pen = QPen(color, cfg["width"])
-            pen.setStyle(Qt.SolidLine)
-            painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
-            painter.save()
-            painter.translate(cx, cy)
-            painter.rotate(rotation)
-            painter.drawEllipse(QPointF(0, radius * 0.1), radius, radius * 0.85)
-            painter.restore()
+            # Couleur: alterner primaire/secondaire
+            is_primary = (int(p.angle * 10) % 3) != 0
+            col = c if is_primary else s
+            color = QColor(col.red(), col.green(), col.blue(), particle_alpha)
+            painter.setBrush(color)
 
-        # Soft radial glow behind orb (single-level shadow, M1 friendly)
-        glow_radius = base_radius * 1.5
+            # Taille pulsée
+            size_pulse = p.size * (0.8 + 0.4 * (0.5 + 0.5 * math.sin(self._pulse_phase * 0.7 + p.phase_offset)))
+            painter.drawEllipse(QPointF(x, y), size_pulse, size_pulse)
+
+    def _draw_aura(self, painter: QPainter, cx: float, cy: float,
+                   orb_r: float, c: QColor, glow: float):
+        """Aura lumineuse autour de l'orb."""
+        glow_radius = orb_r * 2.0
         gradient = QRadialGradient(cx, cy, glow_radius)
-        glow_alpha = int(STATE_GLOW_ALPHA.get(self._state, 40) * self._glow_opacity)
-        gcolor = self._state_color if hasattr(self, '_state_color') else self.COLOR_CYAN
-        gradient.setColorAt(0.0, QColor(gcolor.red(), gcolor.green(), gcolor.blue(), glow_alpha))
-        gradient.setColorAt(0.5, QColor(gcolor.red(), gcolor.green(), gcolor.blue(), glow_alpha // 3))
-        gradient.setColorAt(1.0, QColor(gcolor.red(), gcolor.green(), gcolor.blue(), 0))
+
+        glow_alpha = int(60 * glow)
+        gradient.setColorAt(0.0, QColor(c.red(), c.green(), c.blue(), glow_alpha))
+        gradient.setColorAt(0.3, QColor(c.red(), c.green(), c.blue(), glow_alpha // 2))
+        gradient.setColorAt(0.6, QColor(c.red(), c.green(), c.blue(), glow_alpha // 5))
+        gradient.setColorAt(1.0, QColor(c.red(), c.green(), c.blue(), 0))
+
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(gradient))
         painter.drawEllipse(QPointF(cx, cy), glow_radius, glow_radius)
 
-    def _draw_orb(self, painter: QPainter, cx: float, cy: float, radius: float):
-        """Sphère avec gradient radial — couleur de l'état actuel."""
-        pulse = 1.0 + 0.03 * (1 + self._pulse_phase)
-        r = radius * pulse
-        c = self._state_color if hasattr(self, '_state_color') else self.COLOR_CYAN
+    def _draw_rings(self, painter: QPainter, cx: float, cy: float,
+                    orb_r: float, c: QColor, s: QColor,
+                    alpha: float, glow: float):
+        """Anneaux concentriques rotatifs."""
+        for i in range(self._ring_count):
+            ring_r = orb_r * (1.25 + i * 0.20)
+            ring_opacity = int(glow * alpha * (0.20 - i * 0.05))
 
-        # Main orb gradient
-        gradient = QRadialGradient(cx - r * 0.2, cy - r * 0.2, r * 1.2)
-        alpha = int(255 * self._orb_opacity)
+            if ring_opacity < 3:
+                continue
 
-        # Couleurs dérivées de l'état
-        bright = QColor(min(255, c.red() + 80), min(255, c.green() + 80),
-                        min(255, c.blue() + 100), alpha)
-        mid = QColor(c.red(), c.green(), c.blue(), alpha)
-        dark = QColor(max(0, c.red() - 80), max(0, c.green() - 80),
-                      max(0, c.blue() - 60), int(alpha * 0.8))
-        edge = QColor(max(0, c.red() - 140), max(0, c.green() - 140),
-                      max(0, c.blue() - 120), int(alpha * 0.3))
+            color = QColor(c.red(), c.green(), c.blue(), ring_opacity)
+            pen = QPen(color, max(1.0, 2.0 - i * 0.5))
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+
+            # Rotation individuelle par anneau
+            rotation = self._ring_rotation * (1.0 + i * 0.5)
+            painter.save()
+            painter.translate(cx, cy)
+            painter.rotate(rotation)
+
+            # Légère excentricité pour effet 3D
+            y_offset = ring_r * 0.05 * (i + 1)
+            painter.drawEllipse(QPointF(0, y_offset), ring_r, ring_r * 0.80)
+
+            painter.restore()
+
+            # Second anneau (contra-rotatif, couleur secondaire, plus fin)
+            if i < 2:
+                pen2 = QPen(QColor(s.red(), s.green(), s.blue(), ring_opacity // 2), max(0.5, 1.5 - i * 0.4))
+                painter.setPen(pen2)
+                rotation2 = -self._ring_rotation * (0.7 + i * 0.3)
+                painter.save()
+                painter.translate(cx, cy)
+                painter.rotate(rotation2)
+                painter.drawEllipse(QPointF(0, -y_offset * 0.5), ring_r * 0.95, ring_r * 0.75)
+                painter.restore()
+
+        # Fine ligne lumineuse externe (glow)
+        glow_pen = QPen(QColor(c.red(), c.green(), c.blue(), int(glow * alpha * 40)), 0.5)
+        painter.setPen(glow_pen)
+        painter.setBrush(Qt.NoBrush)
+        glow_r = orb_r * 1.8
+        painter.drawEllipse(QPointF(cx, cy), glow_r, glow_r)
+
+    def _draw_orb(self, painter: QPainter, cx: float, cy: float,
+                  orb_r: float, c: QColor, alpha: float):
+        """Sphère principale avec gradient radial 4 stops."""
+        if alpha < 0.01:
+            return
+
+        gradient = QRadialGradient(cx - orb_r * 0.25, cy - orb_r * 0.25, orb_r * 1.3)
+        a = int(255 * alpha)
+
+        # Cœur blanc → cyan → violet → foncé (dégradé 4 stops)
+        bright = QColor(
+            min(255, c.red() + 100),
+            min(255, c.green() + 100),
+            min(255, c.blue() + 120), a
+        )
+        mid = QColor(c.red(), c.green(), c.blue(), a)
+        dark = QColor(
+            max(0, c.red() - 60),
+            max(0, c.green() - 60),
+            max(0, c.blue() - 40), int(a * 0.85)
+        )
+        edge = QColor(
+            max(0, c.red() - 100),
+            max(0, c.green() - 100),
+            max(0, c.blue() - 80), int(a * 0.35)
+        )
 
         gradient.setColorAt(0.0, bright)
-        gradient.setColorAt(0.3, mid)
-        gradient.setColorAt(0.7, dark)
+        gradient.setColorAt(0.25, mid)
+        gradient.setColorAt(0.65, dark)
         gradient.setColorAt(1.0, edge)
 
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(gradient))
-        painter.drawEllipse(QPointF(cx, cy), r, r)
+        painter.drawEllipse(QPointF(cx, cy), orb_r, orb_r)
 
-        # Specular highlight (top-left refraction)
-        highlight_r = r * 0.35
-        hx = cx - r * 0.25
-        hy = cy - r * 0.25
-        highlight = QRadialGradient(hx, hy, highlight_r)
-        highlight.setColorAt(0.0, QColor(255, 255, 255, int(120 * self._orb_opacity)))
-        highlight.setColorAt(1.0, QColor(255, 255, 255, 0))
-        painter.setBrush(QBrush(highlight))
+    def _draw_specular(self, painter: QPainter, cx: float, cy: float,
+                       orb_r: float, alpha: float):
+        """Réflexion lumineuse haute-gauche (effet verre/globe 3D)."""
+        if alpha < 0.01:
+            return
+
+        highlight_r = orb_r * 0.40
+        hx = cx - orb_r * 0.28
+        hy = cy - orb_r * 0.28
+
+        gradient = QRadialGradient(hx, hy, highlight_r)
+        gradient.setColorAt(0.0, QColor(255, 255, 255, int(140 * alpha)))
+        gradient.setColorAt(0.5, QColor(255, 255, 255, int(40 * alpha)))
+        gradient.setColorAt(1.0, QColor(255, 255, 255, 0))
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(gradient))
         painter.drawEllipse(QPointF(hx, hy), highlight_r, highlight_r)
 
-    def _draw_logo(self, painter: QPainter, cx: float, y: float):
-        """Texte 'NURU' centré sous l'orb en cyan."""
-        font = QFont("Inter", 14, QFont.Weight.Bold)
-        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 4)
-        painter.setFont(font)
-        painter.setPen(QColor(0, 212, 255, int(200 * self._orb_opacity)))
-        painter.drawText(QRectF(cx - 60, y, 120, 30), Qt.AlignCenter, "NURU")
+        # Petit reflet secondaire (bas-droite, très subtil)
+        h2_r = orb_r * 0.15
+        gradient2 = QRadialGradient(cx + orb_r * 0.35, cy + orb_r * 0.35, h2_r)
+        gradient2.setColorAt(0.0, QColor(255, 255, 255, int(30 * alpha)))
+        gradient2.setColorAt(1.0, QColor(255, 255, 255, 0))
+        painter.setBrush(QBrush(gradient2))
+        painter.drawEllipse(QPointF(cx + orb_r * 0.35, cy + orb_r * 0.35), h2_r, h2_r)
+
+    def _draw_core(self, painter: QPainter, cx: float, cy: float,
+                   orb_r: float, c: QColor, alpha: float, glow: float):
+        """Point lumineux central (flash core)."""
+        if alpha < 0.01:
+            return
+
+        core_r = orb_r * 0.12
+        core_alpha = int(glow * alpha * 200 * (0.7 + 0.3 * math.sin(self._pulse_phase * 2.0)))
+
+        gradient = QRadialGradient(cx, cy, core_r)
+        gradient.setColorAt(0.0, QColor(255, 255, 255, core_alpha))
+        gradient.setColorAt(0.5, QColor(
+            min(255, c.red() + 150),
+            min(255, c.green() + 150),
+            min(255, c.blue() + 150), core_alpha // 2
+        ))
+        gradient.setColorAt(1.0, QColor(c.red(), c.green(), c.blue(), 0))
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(gradient))
+        painter.drawEllipse(QPointF(cx, cy), core_r, core_r)
 
 
-# ── Alias DM-1 : NuruPresenceOrb = PresenceOrb ──
-# Les imports du projet utilisent NuruPresenceOrb, mais le code V12
-# utilise PresenceOrb. Cet alias assure la compatibilité.
+# ── Alias compatibilité ────────────────────────────────────────────
 NuruPresenceOrb = PresenceOrb

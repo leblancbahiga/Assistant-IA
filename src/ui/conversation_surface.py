@@ -118,11 +118,11 @@ class BubbleWidget(QFrame):
             pct = min(int(score * 100), 100)
             bar_chars = "█" * (pct // 10) + "░" * (10 - pct // 10)
             if pct >= 70:
-                bar_color = "#00D4FF"
+                bar_color = "#00F0FF"
             elif pct >= 40:
-                bar_color = "#F59E0B"
+                bar_color = "#FFB800"
             else:
-                bar_color = "#EF4444"
+                bar_color = "#FF3366"
             parts.append(f'<span style="color:{bar_color};font-weight:600;">{bar_chars} {pct}%</span>')
 
         # Sources
@@ -187,14 +187,18 @@ class BubbleWidget(QFrame):
         html = md
         html = re.sub(
             r'```(\w*)\n(.*?)```',
-            r'<pre style="background:#151B26;padding:8px;border-radius:6px;'
-            r'font-family:JetBrains Mono;font-size:11px;overflow-x:auto;">\2</pre>',
+            r'<pre style="background:rgba(5,8,15,0.6);padding:10px 14px;'
+            r'border-radius:8px;border:1px solid rgba(0,240,255,0.08);'
+            r'font-family:JetBrains Mono;font-size:11px;overflow-x:auto;'
+            r'color:#00F0FF;margin:6px 0;">\2</pre>',
             html, flags=re.DOTALL
         )
         html = re.sub(
             r'`([^`]+)`',
-            r'<code style="background:#151B26;padding:1px 4px;border-radius:3px;'
-            r'font-family:JetBrains Mono;font-size:11px;">\1</code>',
+            r'<code style="background:rgba(5,8,15,0.5);padding:2px 6px;'
+            r'border-radius:4px;border:1px solid rgba(0,240,255,0.08);'
+            r'font-family:JetBrains Mono;font-size:11px;'
+            r'color:#7C3AED;">\1</code>',
             html
         )
         html = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', html)
