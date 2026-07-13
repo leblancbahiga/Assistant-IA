@@ -4,6 +4,7 @@ import logging
 import hashlib
 from pathlib import Path
 from typing import List, Optional
+import numpy as np
 import fitz  # PyMuPDF
 from docx import Document
 from src.config import config
@@ -143,17 +144,25 @@ class IngestionEngine:
                 primary_chunks = v2_chunks if v2_chunks else semantic_chunks
 
                 chunks = []
-                # V10.3l FIX : BATCH embedding — tous les chunks en un appel MLX
-                # Au lieu de N appels séquentiels (N×1s), un seul appel (1×N)
+                # V15 #72 : Batch Processing — lots de 32 chunks max
+                # pour éviter OOM sur M1 8 Go et +2-3x vitesse d'indexation
                 chunk_dicts = [c.to_dict() for c in primary_chunks]
                 contents = [d["content"] for d in chunk_dicts]
                 if contents:
-                    embeddings = await self.embedder.embed(contents, is_query=False)
+                    batch_size = 32
+                    all_embeddings = []
+                    for i in range(0, len(contents), batch_size):
+                        batch = contents[i:i + batch_size]
+                        batch_emb = await self.embedder.embed(batch, is_query=False)
+                        if batch_emb is not None and len(batch_emb) > 0:
+                            all_embeddings.append(batch_emb)
+                        await asyncio.sleep(0.01)  # laisse respirer le CPU
+                    all_embeddings = np.concatenate(all_embeddings) if all_embeddings else None
                     for i, c in enumerate(primary_chunks):
                         chunks.append({
                             "content": contents[i],
                             "source": os.path.basename(filepath),
-                            "embedding": embeddings[i] if embeddings is not None and i < len(embeddings) else None,
+                            "embedding": all_embeddings[i] if all_embeddings is not None and i < len(all_embeddings) else None,
                             "date": "",
                             "title": c.section_title or c.doc_title,
                             "level": c.level,
