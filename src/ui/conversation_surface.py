@@ -10,11 +10,11 @@ Zone de chat avec bulles alignées :
 import logging
 import time
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QLabel, QSizePolicy,
-    QHBoxLayout, QFrame, QTextBrowser,
+    QHBoxLayout, QFrame, QTextBrowser, QGraphicsOpacityEffect,
 )
 
 from src.ui.tokens import Color, Typography, Radius, Spacing
@@ -245,16 +245,17 @@ class ConversationSurface(QWidget):
                 border-radius: 3px;
             }}
             QScrollBar::handle:vertical {{
-                background: {Color.TEXT_MUTED};
+                background: rgba(0, 212, 255, 0.20);
                 border-radius: 3px;
                 min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: rgba(0, 212, 255, 0.40);
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 height: 0;
             }}
         """)
-
-        self._inner = QWidget()
         self._inner.setStyleSheet("background: transparent;")
         self._inner_layout = QVBoxLayout(self._inner)
         self._inner_layout.setContentsMargins(0, 0, 0, 0)
@@ -289,6 +290,7 @@ class ConversationSurface(QWidget):
             row.addWidget(bubble)
             row.addStretch()
             self._last_assistant_bubble = bubble
+            self._fade_in_widget(bubble, 250)
 
         container = QWidget()
         container.setStyleSheet("background: transparent;")
@@ -316,6 +318,7 @@ class ConversationSurface(QWidget):
 
         self._streaming_bubble = BubbleWidget("", is_user=False)
         self._last_assistant_bubble = self._streaming_bubble
+        self._fade_in_widget(self._streaming_bubble, 200)
         row.addWidget(self._streaming_bubble)
         row.addStretch()
 
@@ -436,3 +439,16 @@ class ConversationSurface(QWidget):
     def hide_strategy(self) -> None:
         """Cache l'indicateur de stratégie."""
         self._strategy_label.setVisible(False)
+
+    def _fade_in_widget(self, widget: QWidget, duration: int = 200) -> None:
+        """Ajoute un effet de fade-in subtil sur un widget (bulle, etc.)."""
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        anim = QPropertyAnimation(effect, b"opacity")
+        anim.setDuration(duration)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.start(QPropertyAnimation.DeleteWhenStopped)
+        # Référence pour éviter le GC
+        widget._fade_anim = anim

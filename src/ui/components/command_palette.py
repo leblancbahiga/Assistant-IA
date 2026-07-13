@@ -21,15 +21,15 @@ import logging
 from dataclasses import dataclass, field
 from typing import Callable
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QKeySequence, QFont
 from PySide6.QtWidgets import (
     QFrame, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QApplication,
-    QSizePolicy,
+    QSizePolicy, QGraphicsOpacityEffect,
 )
 
-from src.ui.tokens import Color, Typography, Radius, Spacing
+from src.ui.tokens import Color, Typography, Radius, Spacing, AnimDuration
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +157,13 @@ class CommandPalette(QFrame):
         self.setStyleSheet(self.STYLE)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
         self.setVisible(False)
+        # Opacity effect pour fade-in
+        self._opacity = QGraphicsOpacityEffect(self)
+        self._opacity.setOpacity(0.0)
+        self.setGraphicsEffect(self._opacity)
+        self._fade_anim = QPropertyAnimation(self._opacity, b"opacity")
+        self._fade_anim.setDuration(AnimDuration.OVERLAY_SHOW)
+        self._fade_anim.setEasingCurve(QEasingCurve.OutCubic)
 
         # Layout principal (backdrop)
         backdrop_layout = QVBoxLayout(self)
@@ -231,14 +238,17 @@ class CommandPalette(QFrame):
         if not self.parent():
             return
         self._visible = True
+        self.setGeometry(self.parent().rect())
+        # Démarrer la fade-in depuis zéro
+        self._opacity.setOpacity(0.0)
         self.setVisible(True)
         self.raise_()
-        self.setFocus()
+        self._fade_anim.setStartValue(0.0)
+        self._fade_anim.setEndValue(1.0)
+        self._fade_anim.start()
         self._search.clear()
         self._search.setFocus()
         self._filter_commands("")
-        # Redimensionner au parent
-        self.setGeometry(self.parent().rect())
         logger.debug("Palette affichée")
 
     def hide_palette(self) -> None:

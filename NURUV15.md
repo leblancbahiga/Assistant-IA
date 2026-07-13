@@ -306,7 +306,7 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 | 51 | **Bandeau de Confiance** (sources/score % sous chaque réponse) | #6 | 4 h | **P1** | ✅ |
 | 52 | **Command Palette Ctrl+K** (recherche globale, actions rapides, navigation) | #5 | 3 j | **P2** | ✅ |
 | 53 | **Thème clair/sombre** (toggle utilisateur, persisté dans config) | #5 | 2 j | **P2** | ✅ |
-| 54 | **Animations fluides + micro-interactions** (transitions, glassmorphism, hover, loading) | #1, #3, #6 | 3 j | **P3** | ⏳ |
+| 54 | **Animations fluides + micro-interactions** (transitions, glassmorphism, hover, loading) | #1, #3, #6 | 3 j | **P3** | ✅ |
 | 55 | **Widget flottant Raycast/Spotlight** (barre de commande ⌘+Espace légère, overlay) | #2, #3 | 1 sem | **P3** | ⏳ |
 
 > *Obsolète — le redesign DM-1 de V12 a déjà supprimé la sidebar, rendant la simplification sans objet.

@@ -80,6 +80,11 @@ class NuruInputBar(QWidget):
                 border-color: {Color.CYAN};
                 color: {Color.CYAN};
             }}
+            QPushButton:pressed {{
+                background: rgba(0, 212, 255, 0.25);
+                padding-top: 2px;
+                padding-left: 2px;
+            }}
         """)
         layout.addWidget(self._mic)
 
@@ -260,6 +265,11 @@ class NuruWindow(QMainWindow):
             QPushButton:hover {{
                 background: {Color.CYAN_GLOW};
                 color: {Color.CYAN};
+            }}
+            QPushButton:pressed {{
+                background: rgba(0, 212, 255, 0.25);
+                padding-top: 2px;
+                padding-left: 2px;
             }}
         """)
         self._menu = QMenu(self._menu_btn)
