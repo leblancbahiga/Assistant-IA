@@ -81,7 +81,7 @@ class CommandListItem(QWidget):
             sc_lbl.setStyleSheet(
                 "background: rgba(255,255,255,0.06); color: #6B7280;"
                 " font-size: 10px; padding: 2px 6px; border-radius: 3px;"
-                f" font-family: '{Typography.FAMILY_MONO}';"
+                f" font-family: '{Typography.FAMILY_CODE}';"
             )
             layout.addWidget(sc_lbl)
 

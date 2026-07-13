@@ -256,6 +256,7 @@ class ConversationSurface(QWidget):
                 height: 0;
             }}
         """)
+        self._inner = QWidget()
         self._inner.setStyleSheet("background: transparent;")
         self._inner_layout = QVBoxLayout(self._inner)
         self._inner_layout.setContentsMargins(0, 0, 0, 0)

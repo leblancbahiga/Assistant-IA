@@ -290,13 +290,20 @@ class RAGEngine:
 
     def _get_conn(self):
         """Ouvre une nouvelle connexion avec support sqlite-vec (Thread-safe).
-        
+
         V8+ : Mode WAL activé pour supporter les accès concurrents 
         (multi-stratégie parallèle sans 'database is locked').
+        V15+ : Fallback silencieux sur Python 3.13+ où enable_load_extension
+        n'est pas disponible (FTS5 + BM25 seulement, pas de vectoriel).
         """
         conn = sqlite3.connect(str(self.db_path), timeout=20)
-        conn.enable_load_extension(True)
-        sqlite_vec.load(conn)
+        try:
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+        except AttributeError:
+            # Python 3.13+ : enable_load_extension désactivé dans le build
+            # Fallback : FTS5 + BM25, pas de vectoriel
+            pass
         # V8+ : WAL mode + synchronous NORMAL pour lectures concurrentes
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
