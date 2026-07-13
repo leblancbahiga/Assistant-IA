@@ -85,7 +85,7 @@ Les propositions sont numérotées de façon **unique et séquentielle** sur l'e
 | 21 | **Corriger `confidence_label`** — **NUANCÉ** (Expert #7) : le gating calibre déjà HAUTE/MOYENNE/FAIBLE selon le score RRF avec ABSENT sur recherche vide. Reste un HAUTE par défaut (l.671) commenté "non utilisé pour le gating". Action : supprimer la valeur par défaut. | #6 | 15 min |
 | **#22** | **Corriger la normalisation RRF biaisée** — `total_max_possible` pondéré par le nombre réel de résultats par stratégie. | #6 | 1 h | **P0** | ✅ |
 | 23 | **Extraire les tableaux DOCX avec en-têtes** — préserver la structure tabulaire. | #6 | 2 h |
-| 24 | **Séparer contenu et métadonnées dans les embeddings** — supprimer les préfixes `[Doc - Section]` (10-17% du chunk). | #6 | 1 h |
+| 24 | **Séparer contenu et métadonnées dans les embeddings** — supprimer les préfixes `[Doc - Section]` (10-17% du chunk). ✅ **DONE** (V2 chunking déjà propre) | #6 | 1 h |
 | 25 | **Remplacer `pysqlite3` par `sqlite3` standard**. | #6 | 30 min |
 | 26 | **Corriger l'URL OpenRouter** — vérifier et mettre à jour l'endpoint API. | #6 | 15 min |
 | 27 | **Ajouter `try/finally` pour les connexions SQLite** — fuites mémoire dans `rag_engine.py`. | #6 | 1 h |
