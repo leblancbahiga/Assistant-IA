@@ -97,7 +97,7 @@ class Config(BaseSettings):
     session_window: int = 5
 
     # ── Audio ──
-    stt_model: str = "small"
+    stt_model: str = "tiny"
     tts_enabled: bool = True
     tts_engine: str = "piper"
 
