@@ -367,11 +367,20 @@ class SecurityManager:
                 warnings.append(f"Tentative de commande bloquée: '{cmd}'")
                 return SecurityCheckResult(False, "Commande dangereuse détectée", warnings)
 
-        # Patterns d'injection
+        # Patterns d'injection (étendus V15 #15)
         injection_patterns = [
-            r"(?:';|' OR |' --|'; DROP|'; DELETE|'; UPDATE)",
-            r"(?:<script>|javascript:|onerror=|onload=)",
-            r"(?:\$\{|`[^`]*`|subprocess\.)",
+            # SQL injection
+            r"(?:';.*|' OR .*|' --|'; DROP|'; DELETE|'; UPDATE|'; INSERT|'; SELECT)",
+            # XSS
+            r"(?:<script.*?>|javascript:|onerror=|onload=|onclick=|onfocus=|onmouseover=)",
+            # Shell injection
+            r"(?:\$\{|`[^`]*`|subprocess\.|os\.system|os\.popen|shutil\.)",
+            # Path traversal encoded
+            r"(?:%2e%2e%2f|%2e%2e\\\\|\.\.\\\\|\.\./|\.\.%00)",
+            # Template injection
+            r"(?:\{\{.*\}\}|\{%[^%]*%\})",
+            # File read attempts
+            r"(?:/etc/passwd|/etc/shadow|C:\\\\windows\\\\|/proc/self/)",
         ]
         for pattern in injection_patterns:
             if re.search(pattern, text, re.IGNORECASE):
@@ -445,6 +454,188 @@ class SecurityManager:
         }
 
 
+# ── FileGuard — Garde des opérations fichier ────────────────────────────────
+
+_SAFE_EXTENSIONS: Final[set[str]] = {
+    ".txt", ".md", ".py", ".json", ".yaml", ".yml", ".toml", ".ini",
+    ".csv", ".xml", ".html", ".css", ".js", ".ts",
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
+    ".pdf", ".docx", ".doc", ".xlsx", ".xls", ".pptx",
+    ".mp3", ".wav", ".ogg", ".flac",
+    ".mp4", ".mov", ".avi",
+    ".zip", ".tar", ".gz",
+    ".log", ".sqlite", ".db",
+    ".bin", ".dat", ".pkl",
+}
+
+_CRITICAL_FILES: Final[set[str]] = {
+    "pysqlite3",  # ne pas écraser pysqlite3
+    ".nuru/config/settings.yaml",
+    ".nuru/config/config.yaml",
+}
+
+
+class FileGuard:
+    """Garde des opérations fichier — validation avant toute I/O.
+
+    Wrapper sécurisé autour de read/write/delete/list_dir qui :
+      - Valide le chemin via `sanitize_path()` (path traversal)
+      - Vérifie l'extension si une liste blanche est fournie
+      - Empêche l'écrasement des fichiers critiques
+      - Log chaque opération pour audit
+
+    Usage :
+        guard = FileGuard()
+        content = guard.read("~/Documents/notes.md")
+        guard.write("~/Documents/resultat.txt", "contenu")
+    """
+
+    def __init__(self, allowed_extensions: set[str] | None = None):
+        self._allowed_extensions = allowed_extensions or _SAFE_EXTENSIONS
+        self._audit_log: list[dict] = []
+
+    # ── API publique ──
+
+    def read(self, path: str | Path, *, encoding: str = "utf-8") -> str:
+        """Lit un fichier après validation de sécurité.
+
+        Args:
+            path: Chemin du fichier à lire.
+            encoding: Encodage (default utf-8).
+
+        Returns:
+            Contenu du fichier (str).
+
+        Raises:
+            ValueError: Path traversal, extension non autorisée, fichier introuvable.
+            PermissionError: Fichier système bloqué.
+        """
+        safe = sanitize_path(path)
+        self._check_extension(safe)
+        self._log("read", safe)
+        return safe.read_text(encoding=encoding)
+
+    def read_binary(self, path: str | Path) -> bytes:
+        """Lit un fichier binaire après validation."""
+        safe = sanitize_path(path)
+        self._check_extension(safe)
+        self._log("read", safe)
+        return safe.read_bytes()
+
+    def write(
+        self, path: str | Path, content: str, *, encoding: str = "utf-8"
+    ) -> Path:
+        """Écrit un fichier après validation de sécurité.
+
+        Args:
+            path: Chemin de destination.
+            content: Contenu textuel à écrire.
+            encoding: Encodage (default utf-8).
+
+        Returns:
+            Path résolu du fichier écrit.
+
+        Raises:
+            ValueError: Path traversal, extension non autorisée.
+            PermissionError: Tentative d'écrasement d'un fichier critique.
+        """
+        safe = sanitize_path(path)
+        self._check_critical(safe)
+        self._check_extension(safe)
+        safe.parent.mkdir(parents=True, exist_ok=True)
+        safe.write_text(content, encoding=encoding)
+        self._log("write", safe)
+        return safe
+
+    def write_binary(self, path: str | Path, data: bytes) -> Path:
+        """Écrit un fichier binaire après validation."""
+        safe = sanitize_path(path)
+        self._check_critical(safe)
+        self._check_extension(safe)
+        safe.parent.mkdir(parents=True, exist_ok=True)
+        safe.write_bytes(data)
+        self._log("write", safe)
+        return safe
+
+    def delete(self, path: str | Path) -> None:
+        """Supprime un fichier après validation.
+
+        Raises:
+            ValueError: Path traversal, fichier critique.
+            FileNotFoundError: Fichier inexistant.
+        """
+        safe = sanitize_path(path)
+        self._check_critical(safe)
+        if not safe.exists():
+            raise FileNotFoundError(f"Fichier introuvable : {safe}")
+        safe.unlink()
+        self._log("delete", safe)
+
+    def list_dir(self, path: str | Path, *, pattern: str = "*") -> list[Path]:
+        """Liste le contenu d'un dossier après validation.
+
+        Args:
+            path: Chemin du dossier.
+            pattern: Glob pattern (default '*').
+
+        Returns:
+            Liste des chemins enfants.
+
+        Raises:
+            ValueError: Path traversal.
+            NotADirectoryError: Si le chemin n'est pas un dossier.
+        """
+        safe = sanitize_path(path)
+        if not safe.is_dir():
+            raise NotADirectoryError(f"Pas un dossier : {safe}")
+        self._log("list_dir", safe)
+        return list(safe.glob(pattern))
+
+    def exists(self, path: str | Path) -> bool:
+        """Vérifie l'existence d'un fichier après validation."""
+        safe = sanitize_path(path)
+        return safe.exists()
+
+    # ── Audit ──
+
+    @property
+    def audit_log(self) -> list[dict]:
+        """Dernières opérations fichier (pour débogage / traçabilité)."""
+        return list(self._audit_log)
+
+    def clear_audit(self) -> None:
+        self._audit_log.clear()
+
+    # ── Interne ──
+
+    def _check_extension(self, path: Path) -> None:
+        """Vérifie que l'extension du fichier est autorisée."""
+        ext = path.suffix.lower()
+        if ext and ext not in self._allowed_extensions:
+            raise ValueError(
+                f"Extension non autorisée : '{ext}' "
+                f"(autorisées : {', '.join(sorted(self._allowed_extensions))})"
+            )
+
+    def _check_critical(self, path: Path) -> None:
+        """Empêche l'écrasement des fichiers critiques."""
+        for name in _CRITICAL_FILES:
+            if name in str(path):
+                raise PermissionError(
+                    f"Écriture refusée : {path} est un fichier critique"
+                )
+
+    def _log(self, operation: str, path: Path) -> None:
+        """Log l'opération pour audit."""
+        entry = {
+            "operation": operation,
+            "path": str(path),
+            "resolved": str(path.resolve()),
+        }
+        self._audit_log.append(entry)
+        logger.debug(f"FileGuard.{operation}: {path}")
+
+
 __all__ = [
     "sanitize_for_prompt_injection",
     "sanitize_document_content",
@@ -454,4 +645,5 @@ __all__ = [
     "SecurityManager",
     "SecurityConfig",
     "SecurityCheckResult",
+    "FileGuard",
 ]
