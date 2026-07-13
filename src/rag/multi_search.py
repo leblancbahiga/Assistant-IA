@@ -143,8 +143,9 @@ def reciprocal_rank_fusion(
 
     for results, label in zip(strategy_results, strategy_labels):
         weight = STRATEGY_WEIGHTS.get(label, 0.5)
-        # Contribution max théorique de cette stratégie (rang 1)
-        total_max_possible += weight * (1.0 / (k + 1))
+        # Contribution max possible de cette stratégie avec son nb réel de résultats
+        for rank in range(1, len(results) + 1):
+            total_max_possible += weight * (1.0 / (k + rank))
 
         for rank, r in enumerate(results, start=1):
             key = (r.content[:400], r.source)

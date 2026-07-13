@@ -83,7 +83,7 @@ Les propositions sont numérotées de façon **unique et séquentielle** sur l'e
 | 19 | **Dynamic VRAM Paging** — déchargement agressif de TOUS les modèles dés qu'inactifs. | #5 | 4 h |
 | 20 | **Limiter l'Agent Loop à 3 itérations max** — éviter les boucles infinies d'erreur. | #5 | 1 h |
 | 21 | **Corriger `confidence_label`** — **NUANCÉ** (Expert #7) : le gating calibre déjà HAUTE/MOYENNE/FAIBLE selon le score RRF avec ABSENT sur recherche vide. Reste un HAUTE par défaut (l.671) commenté "non utilisé pour le gating". Action : supprimer la valeur par défaut. | #6 | 15 min |
-| 22 | **Corriger la normalisation RRF biaisée** — utiliser un `max_possible` fixe. | #6 | 1 h |
+| **#22** | **Corriger la normalisation RRF biaisée** — `total_max_possible` pondéré par le nombre réel de résultats par stratégie. | #6 | 1 h | **P0** | ✅ |
 | 23 | **Extraire les tableaux DOCX avec en-têtes** — préserver la structure tabulaire. | #6 | 2 h |
 | 24 | **Séparer contenu et métadonnées dans les embeddings** — supprimer les préfixes `[Doc - Section]` (10-17% du chunk). | #6 | 1 h |
 | 25 | **Remplacer `pysqlite3` par `sqlite3` standard**. | #6 | 30 min |
@@ -103,7 +103,7 @@ Les propositions sont numérotées de façon **unique et séquentielle** sur l'e
 | 34 | **Implémenter ReflexionEngine** — auto-critique + correction en 2 passes max. **⚠️ Coût : 2x tokens et latence** — nécessite décodage spéculatif (#31) ou optimisation pipeline M1. | #2 | 24 h |
 | 35 | **Implémenter ProceduralMemory** — workflows appris par l'usage. | #2 | 16 h |
 | 36 | **Harnais de benchmark RAG** — 30-50 paires question/document connu, Recall@5/10, MRR, NDCG. | #1, #2 | 8 h |
-| 37 | **Activer le reranker systématiquement** (pas conditionnel). | #2 | 4 h |
+| 37 | **Activer le reranker systématiquement** (pas conditionnel). | #2 | 4 h | ✅ |
 | 38 | **Nettoyer `nuru_core.py`** — archiver le pipeline V4 legacy (`process_query()`). | #1 | 2-3 j |
 | 39 | **Small-to-Big Retrieval** — récupérer petits chunks pertinents, puis document parent complet. | #3 | 8 h |
 | 40 | **Sandbox pour outils** — liste blanche de répertoires, protection injection PDF. | #3 | 8 h |
