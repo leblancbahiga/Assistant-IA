@@ -810,6 +810,18 @@ class RAGEngine:
                 logger.info("↪️ Fallback BM25 pour éviter un rejet injustifié.")
                 reranked = self.bm25_rerank(query, combined_results, top_k=3)
         
+        # V15 #39 : Small-to-Big — expandre les chunks trop courts avec le contexte parent
+        if reranked:
+            expanded = []
+            for content, source, score in reranked:
+                if len(content) < 2000:
+                    parent = self._fetch_parent_context(source, content)
+                    if parent and parent != content:
+                        logger.debug(f"↗️ Small-to-Big: {source} ({len(content)}→{len(parent)} chars)")
+                        content = parent
+                expanded.append((content, source, score))
+            reranked = expanded
+        
         result.chunks_injected = len(reranked)
         result.top_k_actual = len(reranked)
         # V10.1 : Utiliser le score du reranker (pas le RRF normalisé)
@@ -1053,6 +1065,23 @@ class RAGEngine:
                     "INSERT INTO chunks_fts(content, source) VALUES (?, ?)",
                     [chunk["content"], chunk["source"]]
                 )
+            
+            # V15 #39 : Small-to-Big — stocker la hiérarchie des sections
+            prev_section_id = {}
+            for chunk in chunks:
+                level = chunk.get("level", "section")
+                source = chunk["source"]
+                section_title = chunk.get("title", "")
+                cur_hi = conn.execute(
+                    """INSERT INTO chunk_hierarchy 
+                       (source, parent_id, doc_summary, section_title, level, content) 
+                       VALUES (?, ?, NULL, ?, ?, ?)""",
+                    [source, prev_section_id.get(source),
+                     section_title, level, chunk["content"]]
+                )
+                if level in ("document", "section"):
+                    prev_section_id[source] = cur_hi.lastrowid
+            
             conn.commit()
         except Exception:
             logger.exception(f"Erreur insertion chunks pour {source_name}")
@@ -1125,34 +1154,29 @@ class RAGEngine:
         logger.info(f"{len(chunks)} chunks (avec hiérarchie) ajoutés à l'index.")
 
     def _fetch_parent_context(self, source: str, chunk_text: str) -> str:
-        """V6 : Remonte au parent d'un chunk pour enrichir le contexte.
+        """V6 + V15 #39 : Remonte au parent d'un chunk pour enrichir le contexte.
         
-        Si le chunk actuel est trop court ou trop spécifique, on fetch
-        la section parente complète pour donner plus de contexte au LLM.
+        Si le chunk actuel est trop court (< 2000 chars), on fetch
+        la section parente (ou le résumé document) pour donner
+        plus de contexte au LLM (Small-to-Big).
         """
         if len(chunk_text) > 2000:
             return chunk_text  # Déjà assez long
         
-        conn = self._get_conn()
         try:
-            # Chercher un parent : une section plus longue de la même source
-            parent = conn.execute(
-                """SELECT content FROM chunk_hierarchy 
-                   WHERE source = ? AND level IN ('document', 'section')
-                   AND LENGTH(content) > 1000
-                   ORDER BY LENGTH(content) DESC LIMIT 1""",
-                (source,)
-            ).fetchone()
-            conn.close()
-            
+            # V15 #39 : chercher un parent via la hiérarchie stockée
+            with self._conn_ctx() as conn:
+                parent = conn.execute(
+                    """SELECT content FROM chunk_hierarchy 
+                       WHERE source = ? AND level IN ('document', 'section')
+                       AND LENGTH(content) > 1000
+                       ORDER BY LENGTH(content) DESC LIMIT 1""",
+                    (source,)
+                ).fetchone()
             if parent and parent[0] != chunk_text:
                 return parent[0]
         except Exception as e:
             logger.debug(f"⚠️ _fetch_parent_context: {e}")
-            try:
-                conn.close()
-            except Exception:
-                pass
 
         return chunk_text
     

@@ -105,7 +105,7 @@ Les propositions sont numérotées de façon **unique et séquentielle** sur l'e
 | 36 | **Harnais de benchmark RAG** — 30-50 paires question/document connu, Recall@5/10, MRR, NDCG. | #1, #2 | 8 h |
 | 37 | **Activer le reranker systématiquement** (pas conditionnel). | #2 | 4 h | ✅ |
 | 38 | **Nettoyer `nuru_core.py`** — archiver le pipeline V4 legacy (`process_query()`). | #1 | 2-3 j |
-| 39 | **Small-to-Big Retrieval** — récupérer petits chunks pertinents, puis document parent complet. | #3 | 8 h |
+| 39 | **Small-to-Big Retrieval** — récupérer petits chunks pertinents, puis document parent complet. ✅ **DONE** (`retrieve()` → `_fetch_parent_context()`) | #3 | 8 h |
 | 40 | **Sandbox pour outils** — liste blanche de répertoires, protection injection PDF. | #3 | 8 h |
 | 41 | **Unifier les 4 modules mémoire en MemoryManager 6 couches** — `memory_store`, `memory/`, `long_term_memory`, `memory_bridge` fusionnés. | #4 | 1 sem |
 | 42 | **Tokenizer réel de Phi-4** — remplacer `len(text)//4` par le tokenizer HuggingFace/MLX. | #4 | 4 h |
