@@ -18,7 +18,7 @@ Trois modes : chat (défaut) | voice | action
 import logging
 
 from PySide6.QtCore import Qt, QTimer, QPointF, Signal
-from PySide6.QtGui import QColor, QPainter, QIcon, QPixmap, QLinearGradient, QRadialGradient
+from PySide6.QtGui import QColor, QPainter, QIcon, QPixmap, QLinearGradient, QRadialGradient, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QApplication, QMenu,
@@ -28,6 +28,7 @@ from src.ui.tokens import Color, Typography, Radius, Spacing, OrbSizes, AnimDura
 from src.ui.presence_orb import NuruPresenceOrb, OrbState
 from src.ui.conversation_surface import ConversationSurface
 from src.ui.preferences_dialog import PreferencesDialog
+from src.ui.components.command_palette import CommandPalette, CommandItem
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +327,13 @@ class NuruWindow(QMainWindow):
         self._input_bar.mic_button.clicked.connect(self._on_mic_click)
         layout.addWidget(self._input_bar)
 
+        # ── Command Palette (Ctrl+K / ⌘K) ──
+        self._palette = CommandPalette(self._central)
+        self._palette.register_commands(self._build_palette_commands())
+        # Shortcut Ctrl+K — ⌘K sur macOS (auto-mapped par Qt)
+        self._sc_palette = QShortcut(QKeySequence("Ctrl+K"), self)
+        self._sc_palette.activated.connect(self._palette.toggle)
+
     # ── Actions ──
 
     def _on_send(self):
@@ -386,6 +394,35 @@ class NuruWindow(QMainWindow):
         """Reçoit les métadonnées de réponse et les affiche dans le bandeau."""
         self._conversation.set_metadata(metadata)
 
+    def _build_palette_commands(self) -> list[CommandItem]:
+        """Construit la liste des commandes pour la palette Ctrl+K."""
+        def _new_chat():
+            self._conversation.clear()
+            self._input_bar.input.setFocus()
+        def _toggle_theme_cmd():
+            new_theme = "light" if self._current_theme == "dark" else "dark"
+            self.theme_change_requested.emit(new_theme)
+        def _open_prefs():
+            dlg = PreferencesDialog(self)
+            dlg.exec()
+        def _quit():
+            QApplication.instance().quit()
+        def _clear_chat():
+            self._conversation.clear()
+            self._input_bar.input.clear()
+        return [
+            CommandItem("new_chat", "Nouvelle conversation", icon="💬", shortcut="⌘N",
+                        category="Navigation", action=_new_chat),
+            CommandItem("clear_chat", "Effacer le chat", icon="🗑", shortcut="",
+                        category="Navigation", action=_clear_chat),
+            CommandItem("toggle_theme", "Basculer le thème", icon="🌓", shortcut="",
+                        category="Affichage", action=_toggle_theme_cmd),
+            CommandItem("preferences", "Préférences…", icon="⚙", shortcut="",
+                        category="Affichage", action=_open_prefs),
+            CommandItem("quit", "Quitter NURU", icon="⎔", shortcut="⌘Q",
+                        category="Système", action=_quit),
+        ]
+
     def _add_response(self, text: str):
         self._conversation.add_message(text, is_user=False)
         self._orb.set_state(OrbState.IDLE)
@@ -445,3 +482,9 @@ class NuruWindow(QMainWindow):
             self.setWindowOpacity(0.3)
         else:
             self.setWindowOpacity(1.0)
+
+    def resizeEvent(self, event):
+        """Met à jour la géométrie de la palette lors du redimensionnement."""
+        super().resizeEvent(event)
+        if hasattr(self, '_palette') and self._palette.is_visible:
+            self._palette.setGeometry(self._central.rect())
