@@ -349,6 +349,9 @@ class NuruWindow(QMainWindow):
             self._engine.strategy_changed.connect(
                 self._on_strategy, Qt.ConnectionType.UniqueConnection
             )
+            self._engine.response_metadata.connect(
+                self._on_engine_metadata, Qt.ConnectionType.UniqueConnection
+            )
             self._conversation.start_stream()
             self._engine.send_message(text)
         else:
@@ -378,6 +381,10 @@ class NuruWindow(QMainWindow):
             self._conversation.hide_strategy()
         else:
             self._conversation.set_strategy(key)
+
+    def _on_engine_metadata(self, metadata: dict) -> None:
+        """Reçoit les métadonnées de réponse et les affiche dans le bandeau."""
+        self._conversation.set_metadata(metadata)
 
     def _add_response(self, text: str):
         self._conversation.add_message(text, is_user=False)

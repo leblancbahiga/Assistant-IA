@@ -51,6 +51,8 @@ class ConversationEngine(QObject):
     state_changed = Signal(object)  # OrbState
     # Stratégie pipeline (routing / rag / generation / completed)
     strategy_changed = Signal(str)
+    # Métadonnées de réponse (confidence, sources, durée, etc.)
+    response_metadata = Signal(object)  # dict
     # Transcription vocale temps réel
     voice_transcript = Signal(str)
     # Session vocale terminée avec le texte final
@@ -249,14 +251,23 @@ class ConversationEngine(QObject):
         """
         full_response = ""
         first_token = True
+        # Stockage des métadonnées reçues via EventBus
+        _metadata: dict = {}
 
         # S'abonner aux étapes du pipeline EventBus
         def _on_pipeline_step(data):
             step = data.get("step", "thinking") if isinstance(data, dict) else "thinking"
             self._safe_emit(self.strategy_changed, step)
 
+        # S'abonner aux métadonnées de fin de génération
+        def _on_generation_complete(data):
+            nonlocal _metadata
+            if isinstance(data, dict):
+                _metadata = data
+
         bus = EventBus()
         bus.subscribe("pipeline.step", _on_pipeline_step)
+        bus.subscribe("generation_complete", _on_generation_complete)
 
         # Émettre l'état initial "routing"
         self._safe_emit(self.strategy_changed, "routing")
@@ -274,6 +285,7 @@ class ConversationEngine(QObject):
 
             # Finalisation
             self._safe_emit(self.strategy_changed, "completed")
+            self._safe_emit(self.response_metadata, _metadata)
             self._safe_emit(self.response_complete, full_response)
             self._safe_emit(self.state_changed, OrbState.IDLE)
 
@@ -288,6 +300,7 @@ class ConversationEngine(QObject):
 
         finally:
             bus.unsubscribe("pipeline.step", _on_pipeline_step)
+            bus.unsubscribe("generation_complete", _on_generation_complete)
             self._processing = False
 
     # ── Helpers ──

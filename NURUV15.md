@@ -299,15 +299,17 @@ COUCHE 1 — FONDATIONS (V12 existant — à consolider)
 
 | # | Proposition | Source audit | Effort | Priorité | Statut |
 |---|-------------|--------------|--------|----------|--------|
-| 47 | **Navigation simplifiée** (sidebar 15→8 items, fusion V5/V9, hiérarchie claire) | #5 | 1 j | **P1** | ⏳ |
-| 48 | **Contrastes + tailles police** (accessibilité, lisibilité SF Pro, échelle cohérente) | #5, #3 | 4 h | **P1** | ⏳ |
-| 49 | **Indicateur « Analyse…→ Génération… »** dans les bulles chat pendant RAG | #2 | 2 h | **P1** | ⏳ |
-| 50 | **Sidebar repliable** (220 px ↔ 60 px icônes, gain d'espace) | #5 | 2 j | **P1** | ⏳ |
-| 51 | **Bandeau de Confiance** (sources/faits/inférences/score % sous chaque réponse) | #6 | 2 j | **P2** | ⏳ |
+| 47 | **Navigation simplifiée** (sidebar 15→8 items, fusion V5/V9, hiérarchie claire) | #5 | 1 j | **P1** | Obsolète* |
+| 48 | **Contrastes + tailles police** (accessibilité, lisibilité SF Pro, échelle cohérente) | #5, #3 | 4 h | **P1** | ✅ |
+| 49 | **Indicateur « Analyse…→ Génération… »** dans les bulles chat pendant RAG | #2 | 2 h | **P1** | ✅ |
+| 50 | **Sidebar repliable** (220 px ↔ 60 px icônes, gain d'espace) | #5 | 2 j | **P1** | Obsolète* |
+| 51 | **Bandeau de Confiance** (sources/score % sous chaque réponse) | #6 | 4 h | **P1** | ✅ |
 | 52 | **Command Palette Ctrl+K** (recherche globale, actions rapides, navigation) | #5 | 3 j | **P2** | ⏳ |
-| 53 | **Thème clair/sombre** (toggle utilisateur, persisté dans config) | #5 | 2 j | **P2** | ⏳ |
+| 53 | **Thème clair/sombre** (toggle utilisateur, persisté dans config) | #5 | 2 j | **P2** | ✅ |
 | 54 | **Animations fluides + micro-interactions** (transitions, glassmorphism, hover, loading) | #1, #3, #6 | 3 j | **P3** | ⏳ |
 | 55 | **Widget flottant Raycast/Spotlight** (barre de commande ⌘+Espace légère, overlay) | #2, #3 | 1 sem | **P3** | ⏳ |
+
+> *Obsolète — le redesign DM-1 de V12 a déjà supprimé la sidebar, rendant la simplification sans objet.
 
 ---
 

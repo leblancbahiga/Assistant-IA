@@ -83,6 +83,95 @@ class BubbleWidget(QFrame):
             doc.setTextWidth(self._browser.viewport().width() - 4)
             layout.addWidget(self._browser)
 
+        # ── Bandeau de confiance (caché par défaut, réservé assistant) ──
+        self._bandeau = QFrame()
+        self._bandeau.setObjectName("ConfidenceBandeau")
+        self._bandeau.setVisible(False)
+        layout.addWidget(self._bandeau)
+
+    def set_metadata(self, metadata: dict) -> None:
+        """Affiche le bandeau de confiance avec les métadonnées de la réponse."""
+        if self._is_user:
+            return
+
+        # Extraire les données depuis event_data ou ragg_data
+        rag = metadata.get("rag_result", {})
+        if not rag or not isinstance(rag, dict):
+            rag = metadata.get("rag_data", {})
+
+        score = rag.get("top_score", metadata.get("rag_score", 0.0))
+        sources = rag.get("sources", metadata.get("sources", []))
+        documents_found = rag.get("documents_found", len(sources))
+        chunks_retrieved = rag.get("chunks_retrieved", 0)
+        retrieval_ms = rag.get("retrieval_time_ms", 0.0)
+        confidence = metadata.get("confidence", 0.0)
+
+        # Mode de routage
+        intent = metadata.get("intent", "")
+        mode_emoji = {"rag": "🔍", "local": "🧠", "cloud": "☁️", "hybrid": "🔄", "conversation": "💬", "chat": "💬"}
+
+        # Construire le contenu
+        parts = []
+
+        # Barre de confiance
+        if score > 0:
+            pct = min(int(score * 100), 100)
+            bar_chars = "█" * (pct // 10) + "░" * (10 - pct // 10)
+            if pct >= 70:
+                bar_color = "#00D4FF"
+            elif pct >= 40:
+                bar_color = "#F59E0B"
+            else:
+                bar_color = "#EF4444"
+            parts.append(f'<span style="color:{bar_color};font-weight:600;">{bar_chars} {pct}%</span>')
+
+        # Sources
+        if documents_found > 0:
+            parts.append(f'<span style="color:#9BA5B5;">📄 {documents_found} source{"s" if documents_found > 1 else ""}</span>')
+
+        # Mode
+        if intent:
+            emoji = mode_emoji.get(intent, "🔧")
+            parts.append(f'<span style="color:#9BA5B5;">{emoji} {intent.title()}</span>')
+
+        # Temps de retrieval
+        if retrieval_ms > 0:
+            parts.append(f'<span style="color:#6B7280;">⚡ {retrieval_ms:.0f}ms</span>')
+
+        if not parts:
+            self._bandeau.setVisible(False)
+            return
+
+        html = "  ·  ".join(parts)
+
+        # Style du bandeau
+        self._bandeau.setStyleSheet(f"""
+            #ConfidenceBandeau {{
+                background: transparent;
+                border: none;
+                border-top: 1px solid rgba(128, 128, 128, 0.15);
+                padding: 4px 0 0 0;
+                margin: 6px 0 0 0;
+            }}
+        """)
+        layout = self._bandeau.layout() or QVBoxLayout(self._bandeau)
+        layout.setContentsMargins(0, 4, 0, 0)
+
+        # Nettoyer les anciens labels
+        while layout.count():
+            item = layout.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+
+        label = QLabel(html)
+        label.setTextFormat(Qt.RichText)
+        label.setStyleSheet(
+            "background: transparent; color: #9BA5B5; font-size: 10px;"
+            " font-family: 'SF Mono', 'JetBrains Mono', monospace; letter-spacing: 0.03em;"
+        )
+        layout.addWidget(label)
+        self._bandeau.setVisible(True)
+
     def append_html(self, html_fragment: str):
         """Ajoute du HTML à la bulle existante (streaming)."""
         cursor = self._browser.textCursor()
@@ -177,6 +266,7 @@ class ConversationSurface(QWidget):
 
         # État de streaming
         self._streaming_bubble: BubbleWidget | None = None
+        self._last_assistant_bubble: BubbleWidget | None = None
         self._stream_buffer: list[str] = []
         self._stream_timer: QTimer | None = None
         # Glue spaces entre tokens pour providers qui strippent
@@ -198,6 +288,7 @@ class ConversationSurface(QWidget):
         else:
             row.addWidget(bubble)
             row.addStretch()
+            self._last_assistant_bubble = bubble
 
         container = QWidget()
         container.setStyleSheet("background: transparent;")
@@ -224,6 +315,7 @@ class ConversationSurface(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
 
         self._streaming_bubble = BubbleWidget("", is_user=False)
+        self._last_assistant_bubble = self._streaming_bubble
         row.addWidget(self._streaming_bubble)
         row.addStretch()
 
@@ -318,6 +410,12 @@ class ConversationSurface(QWidget):
             item = self._inner_layout.takeAt(0)
             if item and item.widget():
                 item.widget().deleteLater()
+        self._last_assistant_bubble = None
+
+    def set_metadata(self, metadata: dict) -> None:
+        """Affiche le bandeau de confiance sur la dernière bulle assistant."""
+        if self._last_assistant_bubble:
+            self._last_assistant_bubble.set_metadata(metadata)
 
     # ── Indicateur de stratégie pipeline ──
 
