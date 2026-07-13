@@ -124,6 +124,8 @@ class RAGEngine:
     def __init__(self):
         self.db_path = config.index_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        # V15 : détection sqlite-vec (indisponible sur Python 3.13+)
+        self._has_vec0 = self._check_vec0()
         self.embedder = Embedder()
         self.cloud = CloudLLM()  # Cloud LLM pour l'expansion de requête
         self.rewriter = CloudQueryRewriter(cloud_llm=self.cloud)
@@ -142,6 +144,19 @@ class RAGEngine:
         self._multi_search = None
         # V12 — Intégration mémoire V9 (initialisé paresseusement)
         self._memory = None
+
+    def _check_vec0(self) -> bool:
+        """V15 : Vérifie si sqlite-vec est disponible (échoue sur Python 3.13+)."""
+        try:
+            conn = sqlite3.connect(":memory:")
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+            conn.close()
+            logger.info("✅ sqlite-vec disponible (recherche vectorielle active)")
+            return True
+        except (AttributeError, Exception) as e:
+            logger.warning(f"⚠️ sqlite-vec indisponible ({e}) — recherche FTS5+BM25 uniquement")
+            return False
 
     def _ensure_multi_search(self):
         """V8+ Sprint 4.8 : Initialise paresseusement le MultiSearchOrchestrator."""
@@ -261,6 +276,8 @@ class RAGEngine:
 
         Signature : fn(qvec, top_k=N) -> [(content, source, score)]
         """
+        if not self._has_vec0:
+            return []
         import sqlite_vec
         conn = self._get_conn()
         try:
@@ -322,14 +339,15 @@ class RAGEngine:
     def _init_db(self):
         """Initialise la base de données SQLite avec l'extension vec0."""
         with self._conn_ctx() as conn:
-            conn.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING vec0(
-                    embedding FLOAT[768],
-                    content TEXT,
-                    source TEXT,
-                    chunk_date TEXT
-                )
-            """)
+            if self._has_vec0:
+                conn.execute("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING vec0(
+                        embedding FLOAT[768],
+                        content TEXT,
+                        source TEXT,
+                        chunk_date TEXT
+                    )
+                """)
             # FTS5 pour BM25 (recherche par mots-clés)
             conn.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
@@ -1047,8 +1065,9 @@ class RAGEngine:
                 ).fetchall()
                 old_count = len(old_rows)
                 if old_count > 0:
-                    for (rowid,) in old_rows:
-                        conn.execute("DELETE FROM chunks WHERE rowid = ?", (rowid,))
+                    if self._has_vec0:
+                        for (rowid,) in old_rows:
+                            conn.execute("DELETE FROM chunks WHERE rowid = ?", (rowid,))
                     conn.execute("DELETE FROM chunk_rowids WHERE source = ?", (source_name,))
                     conn.execute("DELETE FROM chunks_fts WHERE source = ?", (source_name,))
                     logger.info(f"🔄 V10 Déduplication : {old_count} anciens chunks de '{source_name}' remplacés")
@@ -1056,17 +1075,18 @@ class RAGEngine:
             for chunk in chunks:
                 # V6.1 : date par défaut = aujourd'hui
                 chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
-                # Insertion Vectorielle — récupérer le rowid pour le mapping
-                cur = conn.execute(
-                    "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
-                    [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
-                )
-                # V10 : Stocker la correspondance source → rowid
-                chunk_rowid = cur.lastrowid
-                conn.execute(
-                    "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
-                    [chunk["source"], chunk_rowid]
-                )
+                if self._has_vec0:
+                    # Insertion Vectorielle — récupérer le rowid pour le mapping
+                    cur = conn.execute(
+                        "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
+                        [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
+                    )
+                    # V10 : Stocker la correspondance source → rowid
+                    chunk_rowid = cur.lastrowid
+                    conn.execute(
+                        "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
+                        [chunk["source"], chunk_rowid]
+                    )
                 # Insertion FTS
                 conn.execute(
                     "INSERT INTO chunks_fts(content, source) VALUES (?, ?)",
@@ -1135,17 +1155,18 @@ class RAGEngine:
                 
                 # V6.1 : date par défaut = aujourd'hui
                 chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
-                # Insertion Vectorielle — récupérer le rowid pour le mapping
-                cur_vec = conn.execute(
-                    "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
-                    [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
-                )
-                # V10 : Stocker la correspondance source → rowid
-                chunk_rowid = cur_vec.lastrowid
-                conn.execute(
-                    "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
-                    [chunk["source"], chunk_rowid]
-                )
+                if self._has_vec0:
+                    # Insertion Vectorielle — récupérer le rowid pour le mapping
+                    cur_vec = conn.execute(
+                        "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
+                        [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
+                    )
+                    # V10 : Stocker la correspondance source → rowid
+                    chunk_rowid = cur_vec.lastrowid
+                    conn.execute(
+                        "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
+                        [chunk["source"], chunk_rowid]
+                    )
                 # Insertion FTS
                 conn.execute(
                     "INSERT INTO chunks_fts(content, source) VALUES (?, ?)",
