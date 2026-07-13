@@ -33,11 +33,11 @@ class BubbleWidget(QFrame):
         if is_user:
             bg = "rgba(0, 212, 255, 0.10)"
             text_color = Color.TEXT_PRIMARY
-            radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.SMALL}px {Radius.LARGE}px"
+            radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.SM}px {Radius.LARGE}px"
         else:
             bg = Color.BG_SURFACE1
             text_color = Color.TEXT_PRIMARY
-            radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.LARGE}px {Radius.SMALL}px"
+            radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.LARGE}px {Radius.SM}px"
 
         self.setStyleSheet(f"""
             BubbleWidget {{

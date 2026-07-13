@@ -217,7 +217,7 @@ class VoiceOverlay(QWidget):
                 font-family: {Typography.FAMILY_CODE};
                 background: {Color.CYAN_GLOW};
                 border: 1px solid {Color.BORDER};
-                border-radius: {Radius.SMALL}px;
+                border-radius: {Radius.SM}px;
                 padding: 6px 16px;
             }}
         """)
