@@ -59,14 +59,17 @@ class MultiSearchDiagnostic:
     results_per_strategy: dict[str, int] = field(default_factory=dict)
     early_stopped: bool = False
     early_stop_reason: str = ""
-    ram_ok: bool = True
+    grep_called: bool = False
+    hyde_called: bool = False
+    ram_ok: bool = False
     ram_free_mb: int = 0
     total_results_before_dedup: int = 0
     total_results_after_dedup: int = 0
-    total_time_ms: float = 0.0
     rrf_top_k_actual: int = 0
-    hyde_called: bool = False
-    grep_called: bool = False
+    total_time_ms: float = 0.0
+    # V15 #18 : Ambiguity detection
+    _ambiguity_gap: float = 0.0
+    _ambiguous: bool = False
 
 
 # ──────────────────────────────────────────
@@ -235,6 +238,8 @@ class MultiSearchOrchestrator:
         grep_fn: Optional[Callable] = None,
         embedder_fn: Optional[Callable] = None,
         vector_search_vec_fn: Optional[Callable] = None,
+        model_size_below_7b: bool = True,
+        ambiguity_threshold: float = 0.30,
     ):
         self._vector_search = vector_search_fn
         self._cloud = cloud_llm
@@ -242,6 +247,10 @@ class MultiSearchOrchestrator:
         self._grep = grep_fn
         self._embedder = embedder_fn
         self._vector_search_vec = vector_search_vec_fn
+
+        # V15 #18 : Détection modèle <7B + seuil d'ambiguïté
+        self._small_model = model_size_below_7b
+        self._ambiguity_threshold = ambiguity_threshold
 
     async def search(
         self,
@@ -315,16 +324,28 @@ class MultiSearchOrchestrator:
             diag.strategies_tried.append(label)
             diag.results_per_strategy[label] = len(result)
 
-        # Early stopping : si vectoriel ou FTS a un score > EARLY_STOP_SCORE,
-        # on NE LANCE PAS grep/HyDE
+        # Early stopping V15 #18 : détection d'ambiguïté + modèle <7B
         max_fast_score = 0.0
+        min_fast_score = 1.0  # V15 #18 : pour calculer l'écart top-1/top-5
+        fast_scores: list[float] = []
         for idx, label in enumerate(fast_labels):
             if label in ("vectoriel", "fts") and idx < len(all_results):
                 if all_results[idx]:
-                    s = max(r.score for r in all_results[idx])
+                    scores = [r.score for r in all_results[idx]]
+                    s = max(scores)
                     max_fast_score = max(max_fast_score, s)
+                    fast_scores.extend(scores)
 
-        if max_fast_score >= EARLY_STOP_SCORE:
+        # V15 #18 : Ambiguity detection — si écart top-1/top-5 > seuil
+        ambiguous = False
+        if len(fast_scores) >= 2:
+            fast_scores.sort(reverse=True)
+            gap = fast_scores[0] - fast_scores[-1]
+            ambiguous = gap >= self._ambiguity_threshold
+            diag._ambiguity_gap = round(gap, 3)
+            diag._ambiguous = ambiguous
+
+        if max_fast_score >= EARLY_STOP_SCORE and not ambiguous:
             early_stop = True
             diag.early_stopped = True
             diag.early_stop_reason = (
@@ -536,36 +557,50 @@ class MultiSearchOrchestrator:
             return []
 
     # ──────────────────────────────────────
-    # V15 Phase 0B : activation conditionnelle HyDE
+    # V15 #18 : Activation conditionnelle HyDE
 
     _SIMPLE_QUERY_WORDS: Final = frozenset({
         "bonjour", "salut", "hello", "hi", "merci", "bye", "oui", "non",
     })
 
     @staticmethod
-    def _should_use_hyde(query: str) -> bool:
-        """Active HyDE seulement pour les requêtes complexes.
+    def _is_small_model_query(query: str) -> bool:
+        """Skip HyDE quand la requête ne justifie pas son coût.
 
-        Skip HyDE quand :
-        - Query ≤ 1 mot (entité simple, personne, lieu)
-        - Query est une salutation/bruit social
-        - Query est un nom propre sans verbe
+        Modèle <7B : HyDE ajoute latence sans gain significatif.
+        Requêtes simples (≤1 mot, salutations, entités) : pas d'ambiguïté.
         """
         q = query.strip()
         if not q or len(q) < 10:
-            return False
+            return True
         words = q.split()
         if len(words) <= 1:
-            return False
+            return True
         if q.lower() in MultiSearchOrchestrator._SIMPLE_QUERY_WORDS:
-            return False
-        # Entité nommée seule (pas de verbe) — pattern basique
+            return True
+        # Entité nommée seule (pas de verbe)
         if len(words) <= 3 and not any(
             c in q for c in ("?", "comment", "pourquoi", "qu'est-ce", "est-ce",
                              "explique", "décrit", "compare", "différence")
         ):
-            # 2-3 mots sans verbe → probablement une entité
             import re
             if not re.search(r'\b(est|sont|fait|a\b|ont|peut|veut|dit|donne|trouve)\b', q, re.I):
-                return False
+                return True
+        return False
+
+    def _should_use_hyde(self, query: str) -> bool:
+        """Active HyDE seulement pour les requêtes complexes ET modèle ≥7B."""
+        q = query.strip()
+        if not q:
+            return False
+
+        # Modèle <7B → HyDE désactivé (coût > bénéfice sur M1 8 Go)
+        if self._small_model:
+            logger.debug("⏭️ HyDE désactivé : modèle <7B")
+            return False
+
+        # Requête simple → pas besoin de HyDE
+        if self._is_small_model_query(query):
+            return False
+
         return True

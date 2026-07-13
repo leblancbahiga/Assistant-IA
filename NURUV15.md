@@ -77,9 +77,9 @@ Les propositions sont numérotées de façon **unique et séquentielle** sur l'e
 | 13 | **Ajouter un test d'intégrité anti-collision de noms de classes.** | #1 | 2-3 h | ✅ |
 | 14 | **Indicateur UI d'état interne** — cercle animé "Analyse..." → "Génération..." pendant le RAG. | #3 | 4 h |
 | **#15** | **Sécuriser RAG Injection & Path Traversal** (sanitize_path, FileGuard, regex PromptGuard étendues) | [#8] | 4h | **P0** | ✅ |
-| 16 | **Rendre HyDE asynchrone** — wrapper dans `asyncio.to_thread`. | #4 | 2 h |
-| 17 | **Réduire la taille max des chunks à 1000 car.** — les chunks 4000 car. noient les petits modèles 4-bit (Lost-in-the-Middle). | #5 | 1 h |
-| 18 | **Désactiver HyDE sur les modèles <7B** + **activation dynamique** : si écart top-1/top-5 > 0.3, la requête est ambiguë → activer HyDE ; sinon BM25/vectoriel direct. | #5, Expert #6 | 2 h |
+| 16 | **Rendre HyDE asynchrone** — wrapper dans `asyncio.to_thread`. | #4 | 2 h | **P0** | ✅ |
+| 17 | **Réduire la taille max des chunks à 1000 car.** — les chunks 4000 car. noient les petits modèles 4-bit (Lost-in-the-Middle). | #5 | 1 h | **P0** | ✅ |
+| **#18** | **Désactiver HyDE sur les modèles <7B** + **activation dynamique** : si écart top-1/top-5 > 0.3, la requête est ambiguë → activer HyDE ; sinon BM25/vectoriel direct. | #5, Expert #6 | 2 h | **P0** | ✅ |
 | 19 | **Dynamic VRAM Paging** — déchargement agressif de TOUS les modèles dés qu'inactifs. | #5 | 4 h |
 | 20 | **Limiter l'Agent Loop à 3 itérations max** — éviter les boucles infinies d'erreur. | #5 | 1 h |
 | 21 | **Corriger `confidence_label`** — **NUANCÉ** (Expert #7) : le gating calibre déjà HAUTE/MOYENNE/FAIBLE selon le score RRF avec ABSENT sur recherche vide. Reste un HAUTE par défaut (l.671) commenté "non utilisé pour le gating". Action : supprimer la valeur par défaut. | #6 | 15 min |
