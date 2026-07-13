@@ -43,6 +43,8 @@ from src.ui.floating_widget import NuruFloatingWidget
 from src.ui.nuru_window import NuruWindow
 from src.ui.tray_icon import NURUTrayIcon
 from src.core.conversation_engine import ConversationEngine
+from src.ui.components.floating_search import FloatingSearchWidget
+from src.ui.components.command_palette import CommandItem
 
 logger = logging.getLogger(__name__)
 
@@ -254,6 +256,10 @@ class AmbientApp:
         # 4. ChatOverlay (⌘N)
         self._chat_overlay = ChatOverlay()
 
+        # 5. FloatingSearch (⌘⇧Space) — Spotlight/Raycast léger
+        self._floating_search = FloatingSearchWidget()
+        self._register_floating_commands()
+
         # 5. Tray icon — DM-1: diamant cyan lumineux (module dédié)
         self._tray = NURUTrayIcon(app)
         self._connect_tray_actions()
@@ -351,6 +357,9 @@ class AmbientApp:
         self._sc_chat = QShortcut(QKeySequence("Ctrl+N"), self._shortcut_host)
         self._sc_chat.activated.connect(self._new_chat)
 
+        self._sc_floating = QShortcut(QKeySequence("Ctrl+Shift+Space"), self._shortcut_host)
+        self._sc_floating.activated.connect(self._toggle_floating_search)
+
         self._shortcut_host.show()
 
     # ── Voice ──
@@ -402,6 +411,40 @@ class AmbientApp:
         from src.ui.preferences_dialog import PreferencesDialog
         dlg = PreferencesDialog(self._window)
         dlg.exec()
+
+    # ── FloatingSearch (⌘⇧Space) ─────────────────────────────────────────
+
+    def _register_floating_commands(self):
+        """Enregistre les commandes disponibles dans le FloatingSearch."""
+        from src.ui.components.command_palette import CommandItem
+
+        commands = [
+            CommandItem("new_chat", "Nouvelle conversation", "💬", "⌘N",
+                        action=lambda: self._new_chat()),
+            CommandItem("clear_context", "Effacer le contexte", "🗑️",
+                        action=lambda: (
+                            self._window._conversation.clear(),
+                            self._window._input_bar.input.clear()
+                        )),
+            CommandItem("toggle_theme", "Changer de thème", "🎨",
+                        action=lambda: self._on_theme_change_requested(
+                            "light" if self._current_theme == "dark" else "dark"
+                        )),
+            CommandItem("preferences", "Préférences", "⚙️",
+                        action=self._open_preferences),
+            CommandItem("toggle_widget", "Afficher/Cacher le widget", "🪟",
+                        action=self._toggle_floating),
+            CommandItem("quit", "Quitter NURU", "🚪",
+                        action=self._app.quit),
+        ]
+        self._floating_search.register_commands(commands)
+
+    def _toggle_floating_search(self):
+        """Bascule l'affichage du widget flottant Spotlight/Raycast."""
+        if self._floating_search.is_visible:
+            self._floating_search.hide_search()
+        else:
+            self._floating_search.show_search()
 
     # ── Sync Orb → Tray ──
 
