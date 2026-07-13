@@ -228,7 +228,7 @@ class MultiSearchOrchestrator:
             vector_search=rag_engine._search_db,
             cloud_llm=cloud_llm_instance,
         )
-        results, diag = await orchestrator.search(query, rewritten_query, confidence_label)
+        results, diag = await orchestrator.search(query, rewritten_query, top_k=5)
     """
 
     def __init__(
@@ -257,7 +257,6 @@ class MultiSearchOrchestrator:
         self,
         query: str,
         rewritten_query: str = "",
-        confidence_label: str = "MOYENNE",  # V15 Phase 0B : défaut neutre
         top_k: int = 5,
     ) -> tuple[list[SearchResult], MultiSearchDiagnostic]:
         """Point d'entrée principal — exécute les stratégies appropriées.
@@ -265,7 +264,6 @@ class MultiSearchOrchestrator:
         Args:
             query: Requête utilisateur originale
             rewritten_query: Requête réécrite (par QueryRewriter)
-            confidence_label: Niveau de confiance (HAUTE/MOYENNE/FAIBLE/ABSENT)
             top_k: Nombre de résultats souhaité
 
         Returns:

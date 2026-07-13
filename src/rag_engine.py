@@ -1,8 +1,8 @@
-# NURU V5 : pysqlite3 avec support d'extensions (nécessaire pour sqlite-vec sur macOS)
+# NURU V15 #25 : sqlite3 standard (pysqlite3-binary déprécié)
 try:
-    import pysqlite3 as sqlite3
+    import sqlite3
 except ImportError:
-    import sqlite3  # fallback standard (sans support extensions)
+    import sqlite3  # devrait toujours fonctionner (stdlib)
     import logging
     logging.getLogger(__name__).warning("pysqlite3-binary non trouvé, utilisation sqlite3 standard (extensions désactivées)")
 import sqlite_vec
@@ -417,19 +417,17 @@ class RAGEngine:
         l'entrée existante au lieu d'en créer une nouvelle.
         Supprime aussi les entrées obsolètes pour le même filepath.
         """
-        conn = self._get_conn()
-        if file_hash:
-            # V6.2 : Nettoyer les anciennes entrées pour ce hash (même contenu à d'autres chemins)
+        with self._conn_ctx() as conn:
+            if file_hash:
+                # V6.2 : Nettoyer les anciennes entrées pour ce hash (même contenu à d'autres chemins)
+                conn.execute(
+                    "DELETE FROM indexed_files WHERE hash = ? AND filepath != ?",
+                    (file_hash, filepath)
+                )
             conn.execute(
-                "DELETE FROM indexed_files WHERE hash = ? AND filepath != ?",
-                (file_hash, filepath)
+                "INSERT OR REPLACE INTO indexed_files (filepath, mtime, hash) VALUES (?, ?, ?)",
+                (filepath, mtime, file_hash)
             )
-        conn.execute(
-            "INSERT OR REPLACE INTO indexed_files (filepath, mtime, hash) VALUES (?, ?, ?)",
-            (filepath, mtime, file_hash)
-        )
-        conn.commit()
-        conn.close()
 
     def dedup_indexed_files_by_hash(self):
         """V6.2 : Nettoie les doublons dans indexed_files (même hash, chemins différents).
@@ -515,58 +513,51 @@ class RAGEngine:
     # ════════════════════════════════════════════
     # V6 : CV Structuré (extraction LLM directe)
     # ════════════════════════════════════════════
-
     def save_cv(self, source: str, file_hash: str, json_data: str):
         """Enregistre un CV structuré dans la table dédiée."""
         from datetime import datetime
-        conn = self._get_conn()
-        conn.execute(
-            "INSERT OR REPLACE INTO cv_structured (source, file_hash, json_data, extracted_at) VALUES (?, ?, ?, ?)",
-            (source, file_hash, json_data, datetime.now().isoformat())
-        )
-        conn.commit()
-        conn.close()
+        with self._conn_ctx() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO cv_structured (source, file_hash, json_data, extracted_at) VALUES (?, ?, ?, ?)",
+                (source, file_hash, json_data, datetime.now().isoformat())
+            )
         logger.info(f"✅ CV structuré sauvegardé : {source}")
 
     def get_cv(self, source: str) -> Optional[str]:
         """Retourne le JSON d'un CV structuré par nom de source."""
-        conn = self._get_conn()
-        row = conn.execute(
-            "SELECT json_data FROM cv_structured WHERE source = ?", (source,)
-        ).fetchone()
-        conn.close()
+        with self._conn_ctx() as conn:
+            row = conn.execute(
+                "SELECT json_data FROM cv_structured WHERE source = ?", (source,)
+            ).fetchone()
         return row[0] if row else None
 
     def is_cv_indexed(self, source: str, file_hash: str = "") -> bool:
         """Vérifie si un CV est déjà indexé avec le même hash."""
-        conn = self._get_conn()
-        if file_hash:
-            row = conn.execute(
-                "SELECT 1 FROM cv_structured WHERE source = ? AND file_hash = ?",
-                (source, file_hash)
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT 1 FROM cv_structured WHERE source = ?", (source,)
-            ).fetchone()
-        conn.close()
+        with self._conn_ctx() as conn:
+            if file_hash:
+                row = conn.execute(
+                    "SELECT 1 FROM cv_structured WHERE source = ? AND file_hash = ?",
+                    (source, file_hash)
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT 1 FROM cv_structured WHERE source = ?",
+                    (source,)
+                ).fetchone()
         return row is not None
 
     def remove_cv(self, source: str):
         """Supprime un CV structuré de la table dédiée."""
-        conn = self._get_conn()
-        conn.execute("DELETE FROM cv_structured WHERE source = ?", (source,))
-        conn.commit()
-        conn.close()
+        with self._conn_ctx() as conn:
+            conn.execute("DELETE FROM cv_structured WHERE source = ?", (source,))
         logger.info(f"🗑️ CV supprimé : {source}")
 
     def get_all_cv_data(self) -> list[dict]:
         """Retourne tous les CVs structurés (source + json_data)."""
-        conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT source, json_data FROM cv_structured ORDER BY source"
-        ).fetchall()
-        conn.close()
+        with self._conn_ctx() as conn:
+            rows = conn.execute(
+                "SELECT source, json_data FROM cv_structured ORDER BY source"
+            ).fetchall()
         return [{"source": r[0], "json_data": r[1]} for r in rows]
 
     # ════════════════════════════════════════════
@@ -576,72 +567,64 @@ class RAGEngine:
     def save_doc_meta(self, source: str, file_hash: str, doc_type: str, json_data: str):
         """Enregistre les métadonnées structurées d'un document."""
         from datetime import datetime
-        conn = self._get_conn()
-        conn.execute(
-            "INSERT OR REPLACE INTO doc_structured (source, file_hash, doc_type, json_data, extracted_at) VALUES (?, ?, ?, ?, ?)",
-            (source, file_hash, doc_type, json_data, datetime.now().isoformat())
-        )
-        conn.commit()
-        conn.close()
+        with self._conn_ctx() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO doc_structured (source, file_hash, doc_type, json_data, extracted_at) VALUES (?, ?, ?, ?, ?)",
+                (source, file_hash, doc_type, json_data, datetime.now().isoformat())
+            )
         logger.info(f"📄 Métadonnées sauvegardées : {source} ({doc_type})")
 
     def get_doc_meta(self, source: str) -> Optional[str]:
         """Retourne le JSON des métadonnées d'un document."""
-        conn = self._get_conn()
-        row = conn.execute(
-            "SELECT json_data FROM doc_structured WHERE source = ?", (source,)
-        ).fetchone()
-        conn.close()
+        with self._conn_ctx() as conn:
+            row = conn.execute(
+                "SELECT json_data FROM doc_structured WHERE source = ?", (source,)
+            ).fetchone()
         return row[0] if row else None
 
     def is_doc_indexed(self, source: str, file_hash: str = "") -> bool:
         """Vérifie si un document a déjà ses métadonnées structurées."""
-        conn = self._get_conn()
-        if file_hash:
-            row = conn.execute(
-                "SELECT 1 FROM doc_structured WHERE source = ? AND file_hash = ?",
-                (source, file_hash)
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT 1 FROM doc_structured WHERE source = ?", (source,)
-            ).fetchone()
-        conn.close()
+        with self._conn_ctx() as conn:
+            if file_hash:
+                row = conn.execute(
+                    "SELECT 1 FROM doc_structured WHERE source = ? AND file_hash = ?",
+                    (source, file_hash)
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT 1 FROM doc_structured WHERE source = ?", (source,)
+                ).fetchone()
         return row is not None
 
     def get_all_doc_meta(self, doc_type: str = "") -> list[dict]:
         """Retourne toutes les métadonnées structurées, filtrées par type si demandé."""
-        conn = self._get_conn()
-        if doc_type:
-            rows = conn.execute(
-                "SELECT source, doc_type, json_data FROM doc_structured WHERE doc_type = ? ORDER BY source",
-                (doc_type,)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT source, doc_type, json_data FROM doc_structured ORDER BY source"
-            ).fetchall()
-        conn.close()
+        with self._conn_ctx() as conn:
+            if doc_type:
+                rows = conn.execute(
+                    "SELECT source, doc_type, json_data FROM doc_structured WHERE doc_type = ? ORDER BY source",
+                    (doc_type,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT source, doc_type, json_data FROM doc_structured ORDER BY source"
+                ).fetchall()
         return [{"source": r[0], "doc_type": r[1], "json_data": r[2]} for r in rows]
 
     def search_doc_meta(self, keyword: str) -> list[dict]:
         """Recherche textuelle dans les métadonnées structurées (FTS-like simple)."""
-        conn = self._get_conn()
-        like = f"%{keyword}%"
-        rows = conn.execute(
-            "SELECT source, doc_type, json_data FROM doc_structured "
-            "WHERE source LIKE ? OR json_data LIKE ? ORDER BY source",
-            (like, like)
-        ).fetchall()
-        conn.close()
+        with self._conn_ctx() as conn:
+            like = f"%{keyword}%"
+            rows = conn.execute(
+                "SELECT source, doc_type, json_data FROM doc_structured "
+                "WHERE source LIKE ? OR json_data LIKE ? ORDER BY source",
+                (like, like)
+            ).fetchall()
         return [{"source": r[0], "doc_type": r[1], "json_data": r[2]} for r in rows]
 
     def remove_doc_meta(self, source: str):
         """Supprime les métadonnées structurées d'un document."""
-        conn = self._get_conn()
-        conn.execute("DELETE FROM doc_structured WHERE source = ?", (source,))
-        conn.commit()
-        conn.close()
+        with self._conn_ctx() as conn:
+            conn.execute("DELETE FROM doc_structured WHERE source = ?", (source,))
         logger.info(f"🗑️ Métadonnées supprimées : {source}")
 
     async def retrieve(self, query: str, k: int = None) -> Tuple[str, RAGResult]:
@@ -674,7 +657,6 @@ class RAGEngine:
         ms_results, ms_diag = await self._multi_search.search(
             query=query,
             rewritten_query=optimized_query,
-            confidence_label="HAUTE",  # V12.1 : non utilisé pour le gating — le early_stopping interne (score ≥ 0.75) décide seul du lancement de HyDE+grep
             top_k=k * 2,               # surplus pour que le reranker ait de la matière
         )
 
@@ -942,32 +924,34 @@ class RAGEngine:
 
     def _search_db(self, qvec: bytes, fts_query: str) -> Tuple:
         """Exécute les recherches vectorielle et FTS dans un thread séparé."""
-        conn = self._get_conn()
-        
-        # Phase 0 : top_k réduit de 30 à 15 (moins de bruit, plus rapide)
-        # V6.1 : on récupère aussi chunk_date pour le freshness bonus
-        vec_results = conn.execute("""
-            SELECT content, source, distance, chunk_date
-            FROM chunks
-            WHERE embedding MATCH ?
-            ORDER BY distance
-            LIMIT 15
-        """, [qvec]).fetchall()
-        
-        fts_results = []
-        if fts_query:
-            try:
-                fts_results = conn.execute("""
-                    SELECT content, source, 1.0 as distance, '' as chunk_date
-                    FROM chunks_fts
-                    WHERE content MATCH ?
-                    LIMIT 15
-                """, [fts_query]).fetchall()
-            except sqlite3.OperationalError:
-                pass
-        
-        conn.close()
-        return vec_results, fts_results
+        try:
+            conn = self._get_conn()
+            
+            # Phase 0 : top_k réduit de 30 à 15 (moins de bruit, plus rapide)
+            # V6.1 : on récupère aussi chunk_date pour le freshness bonus
+            vec_results = conn.execute("""\
+                SELECT content, source, distance, chunk_date
+                FROM chunks
+                WHERE embedding MATCH ?
+                ORDER BY distance
+                LIMIT 15
+            """, [qvec]).fetchall()
+            
+            fts_results = []
+            if fts_query:
+                try:
+                    fts_results = conn.execute("""\
+                        SELECT content, source, 1.0 as distance, '' as chunk_date
+                        FROM chunks_fts
+                        WHERE content MATCH ?
+                        LIMIT 15
+                    """, [fts_query]).fetchall()
+                except sqlite3.OperationalError:
+                    pass
+            
+            return vec_results, fts_results
+        finally:
+            conn.close()
 
     def bm25_rerank(self, query: str, results: List[Tuple], top_k: int = 5) -> List[Tuple]:
         """BM25 simplifié — Zéro dépendance externe, avec filtrage de stop words et bonus source."""
@@ -1033,43 +1017,48 @@ class RAGEngine:
         if not chunks:
             return
             
-        conn = self._get_conn()
         source_name = chunks[0].get("source", "")
-        
-        # V10 : Supprimer les anciens chunks via la table de mapping rowid
-        if dedup_source and source_name:
-            old_rows = conn.execute(
-                "SELECT rowid FROM chunk_rowids WHERE source = ?", (source_name,)
-            ).fetchall()
-            old_count = len(old_rows)
-            if old_count > 0:
-                for (rowid,) in old_rows:
-                    conn.execute("DELETE FROM chunks WHERE rowid = ?", (rowid,))
-                conn.execute("DELETE FROM chunk_rowids WHERE source = ?", (source_name,))
-                conn.execute("DELETE FROM chunks_fts WHERE source = ?", (source_name,))
-                logger.info(f"🔄 V10 Déduplication : {old_count} anciens chunks de '{source_name}' remplacés")
-        
-        for chunk in chunks:
-            # V6.1 : date par défaut = aujourd'hui
-            chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
-            # Insertion Vectorielle — récupérer le rowid pour le mapping
-            cur = conn.execute(
-                "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
-                [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
-            )
-            # V10 : Stocker la correspondance source → rowid
-            chunk_rowid = cur.lastrowid
-            conn.execute(
-                "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
-                [chunk["source"], chunk_rowid]
-            )
-            # Insertion FTS
-            conn.execute(
-                "INSERT INTO chunks_fts(content, source) VALUES (?, ?)",
-                [chunk["content"], chunk["source"]]
-            )
-        conn.commit()
-        conn.close()
+        try:
+            conn = self._get_conn()
+            
+            # V10 : Supprimer les anciens chunks via la table de mapping rowid
+            if dedup_source and source_name:
+                old_rows = conn.execute(
+                    "SELECT rowid FROM chunk_rowids WHERE source = ?", (source_name,)
+                ).fetchall()
+                old_count = len(old_rows)
+                if old_count > 0:
+                    for (rowid,) in old_rows:
+                        conn.execute("DELETE FROM chunks WHERE rowid = ?", (rowid,))
+                    conn.execute("DELETE FROM chunk_rowids WHERE source = ?", (source_name,))
+                    conn.execute("DELETE FROM chunks_fts WHERE source = ?", (source_name,))
+                    logger.info(f"🔄 V10 Déduplication : {old_count} anciens chunks de '{source_name}' remplacés")
+            
+            for chunk in chunks:
+                # V6.1 : date par défaut = aujourd'hui
+                chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
+                # Insertion Vectorielle — récupérer le rowid pour le mapping
+                cur = conn.execute(
+                    "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
+                    [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
+                )
+                # V10 : Stocker la correspondance source → rowid
+                chunk_rowid = cur.lastrowid
+                conn.execute(
+                    "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
+                    [chunk["source"], chunk_rowid]
+                )
+                # Insertion FTS
+                conn.execute(
+                    "INSERT INTO chunks_fts(content, source) VALUES (?, ?)",
+                    [chunk["content"], chunk["source"]]
+                )
+            conn.commit()
+        except Exception:
+            logger.exception(f"Erreur insertion chunks pour {source_name}")
+            raise
+        finally:
+            conn.close()
         logger.info(f"{len(chunks)} chunks ajoutés à l'index (source: {source_name}).")
 
     def add_chunks_with_parents(self, chunks: List[dict], doc_summary: str = ""):
@@ -1080,52 +1069,59 @@ class RAGEngine:
 
         V10 : Stocke les rowid vec0 dans chunk_rowids pour permettre les suppressions.
         """
-        conn = self._get_conn()
-        
-        for chunk in chunks:
-            level = chunk.get("level", "section")
+        if not chunks:
+            return
+        try:
+            conn = self._get_conn()
             
-            # Insérer dans la table hiérarchique
-            cur = conn.execute(
-                """INSERT INTO chunk_hierarchy 
-                   (source, parent_id, doc_summary, section_title, level, content) 
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                [
-                    chunk["source"],
-                    chunk.get("parent_id"),
-                    doc_summary,
-                    chunk.get("title", ""),
-                    level,
-                    chunk["content"],
-                ]
-            )
-            chunk_id = cur.lastrowid
+            for chunk in chunks:
+                level = chunk.get("level", "section")
+                
+                # Insérer dans la table hiérarchique
+                cur = conn.execute(
+                    """INSERT INTO chunk_hierarchy 
+                       (source, parent_id, doc_summary, section_title, level, content) 
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    [
+                        chunk["source"],
+                        chunk.get("parent_id"),
+                        doc_summary,
+                        chunk.get("title", ""),
+                        level,
+                        chunk["content"],
+                    ]
+                )
+                chunk_id = cur.lastrowid
+                
+                # Si c'est un document/résumé (pas de parent), c'est le parent de référence
+                if level in ("document", "section") and not chunk.get("parent_id"):
+                    chunk["chunk_hierarchy_id"] = chunk_id
+                
+                # V6.1 : date par défaut = aujourd'hui
+                chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
+                # Insertion Vectorielle — récupérer le rowid pour le mapping
+                cur_vec = conn.execute(
+                    "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
+                    [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
+                )
+                # V10 : Stocker la correspondance source → rowid
+                chunk_rowid = cur_vec.lastrowid
+                conn.execute(
+                    "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
+                    [chunk["source"], chunk_rowid]
+                )
+                # Insertion FTS
+                conn.execute(
+                    "INSERT INTO chunks_fts(content, source) VALUES (?, ?)",
+                    [chunk["content"], chunk["source"]]
+                )
             
-            # Si c'est un document/résumé (pas de parent), c'est le parent de référence
-            if level in ("document", "section") and not chunk.get("parent_id"):
-                chunk["chunk_hierarchy_id"] = chunk_id
-            
-            # V6.1 : date par défaut = aujourd'hui
-            chunk_date = chunk.get("date", "") or datetime.now().strftime("%Y-%m-%d")
-            # Insertion Vectorielle — récupérer le rowid pour le mapping
-            cur_vec = conn.execute(
-                "INSERT INTO chunks(embedding, content, source, chunk_date) VALUES (?, ?, ?, ?)",
-                [sqlite_vec.serialize_float32(chunk["embedding"]), chunk["content"], chunk["source"], chunk_date]
-            )
-            # V10 : Stocker la correspondance source → rowid
-            chunk_rowid = cur_vec.lastrowid
-            conn.execute(
-                "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
-                [chunk["source"], chunk_rowid]
-            )
-            # Insertion FTS
-            conn.execute(
-                "INSERT INTO chunks_fts(content, source) VALUES (?, ?)",
-                [chunk["content"], chunk["source"]]
-            )
-        
-        conn.commit()
-        conn.close()
+            conn.commit()
+        except Exception:
+            logger.exception("Erreur insertion chunks avec hiérarchie")
+            raise
+        finally:
+            conn.close()
         logger.info(f"{len(chunks)} chunks (avec hiérarchie) ajoutés à l'index.")
 
     def _fetch_parent_context(self, source: str, chunk_text: str) -> str:
