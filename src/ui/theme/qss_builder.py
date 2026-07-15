@@ -153,6 +153,54 @@ def build_qss(dark: bool = True) -> str:
         background-color: {pal["bg"]};
     }}
 
+    #ChatInputBar {{
+        background: rgba(10, 15, 30, 0.75);
+        border-top: 1px solid rgba(0, 240, 255, 0.08);
+    }}
+
+    #ChatInput {{
+        background-color: rgba(15, 22, 38, 0.85);
+        color: {pal["text"]};
+        border: 1px solid rgba(0, 240, 255, 0.12);
+        border-radius: {Radius.MEDIUM}px;
+        padding: 0 14px;
+        font-size: {Typography.SIZE_BODY}pt;
+        font-family: {Typography.FAMILY_BODY};
+    }}
+
+    #ChatInput:focus {{
+        border: 1px solid rgba(0, 240, 255, 0.35);
+        background-color: rgba(18, 26, 44, 0.9);
+    }}
+
+    #ChatInput::placeholder {{
+        color: {pal["text_muted"] if "text_muted" in pal else pal["text_secondary"]};
+    }}
+
+    QPushButton#InputAttach,
+    QPushButton#InputMic,
+    QPushButton#InputSend {{
+        background-color: transparent;
+        color: {pal["text_secondary"]};
+        border: 1px solid rgba(0, 240, 255, 0.08);
+        border-radius: {Radius.MEDIUM}px;
+        font-size: 16px;
+    }}
+
+    QPushButton#InputAttach:hover,
+    QPushButton#InputMic:hover,
+    QPushButton#InputSend:hover {{
+        background-color: {Color.CYAN_FAINT};
+        color: {Color.CYAN};
+        border-color: rgba(0, 240, 255, 0.25);
+    }}
+
+    QPushButton#InputAttach:pressed,
+    QPushButton#InputMic:pressed,
+    QPushButton#InputSend:pressed {{
+        background-color: {Color.CYAN_GLOW};
+    }}
+
     /* ── Dashboard Cards ── */
     #MiniStatCard {{
         background-color: {pal["card"]};

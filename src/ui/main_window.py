@@ -141,11 +141,11 @@ class MainWindow(QMainWindow):
             try:
                 from src.ui.conversation_surface import ConversationSurface
 
-                surface = ConversationSurface(self._engine)
-                chat = ChatPage(conversation_surface=surface)
+                surface = ConversationSurface()
+                chat = ChatPage(conversation_surface=surface, engine=self._engine)
             except Exception as e:
                 logger.warning(f"Impossible de charger ConversationSurface: {e}")
-                chat = ChatPage()
+                chat = ChatPage(engine=self._engine)
         else:
             chat = ChatPage()
 
