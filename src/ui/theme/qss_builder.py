@@ -1,0 +1,181 @@
+"""
+NURU V16 — QSS Builder.
+Génère les feuilles de style depuis tokens.py.
+Un seul point de vérité : un changement dans tokens.py → tout l'UI reflète.
+"""
+
+from __future__ import annotations
+
+from src.ui.tokens import Color, Spacing, Radius, Typography
+
+
+def build_qss(dark: bool = True) -> str:
+    """Génère le QSS global pour le thème dark (ou light)."""
+    pal = Color.DARK if dark else Color.LIGHT
+
+    return f"""
+    /* ── NURU V16 — QSS généré depuis tokens.py ── */
+
+    QMainWindow {{
+        background-color: {pal["bg"]};
+        color: {pal["text"]};
+        font-family: {Typography.FAMILY_BODY};
+        font-size: {Typography.SIZE_BODY}pt;
+    }}
+
+    QWidget {{
+        background-color: transparent;
+        color: {pal["text"]};
+        font-family: {Typography.FAMILY_BODY};
+    }}
+
+    /* ── Sidebar ── */
+    #Sidebar {{
+        background-color: rgba(8, 12, 22, 0.85);
+        border-right: 1px solid {pal["border"]};
+    }}
+
+    #SidebarItem {{
+        background-color: transparent;
+        color: {pal["text_secondary"]};
+        border: none;
+        border-radius: {Radius.MEDIUM}px;
+        padding: 0 {Spacing.MD}px;
+        text-align: left;
+        font-size: {Typography.SIZE_BODY}pt;
+        font-family: {Typography.FAMILY_BODY};
+    }}
+
+    #SidebarItem:hover {{
+        background-color: {Color.CYAN_FAINT};
+        color: {pal["text"]};
+    }}
+
+    #SidebarItem:checked {{
+        background-color: {Color.CYAN_GLOW};
+        color: {Color.CYAN};
+        border-left: 2px solid {Color.CYAN};
+    }}
+
+    /* ── StatusBar ── */
+    QStatusBar {{
+        background-color: {pal["bg"]};
+        border-top: 1px solid {pal["border"]};
+        color: {pal["text_muted"] if "text_muted" in pal else pal["text_secondary"]};
+        font-size: {Typography.SIZE_CAPTION}pt;
+        padding: 0 {Spacing.SM}px;
+    }}
+
+    /* ── Right Inspector ── */
+    #RightInspectorPanel {{
+        background-color: rgba(10, 16, 30, 0.80);
+        border-left: 1px solid {pal["border"]};
+    }}
+
+    /* ── Panels generics ── */
+    #InspectorSection {{
+        background-color: {pal["card"]};
+        border: 1px solid {pal["border"]};
+        border-radius: {Radius.MEDIUM}px;
+        padding: {Spacing.SM}px;
+    }}
+
+    #InspectorLabel {{
+        color: {pal["text_secondary"]};
+        font-size: {Typography.SIZE_CAPTION}pt;
+        font-family: {Typography.FAMILY_BODY};
+        font-weight: {Typography.WEIGHT_SEMIBOLD};
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }}
+
+    #InspectorValue {{
+        color: {pal["text"]};
+        font-size: {Typography.SIZE_BODY}pt;
+        font-family: {Typography.FAMILY_BODY};
+    }}
+
+    /* ── Command Palette ── */
+    #CommandPaletteOverlay {{
+        background-color: {Color.BG_OVERLAY};
+    }}
+
+    #CommandPaletteInput {{
+        background-color: {pal["card"]};
+        color: {pal["text"]};
+        border: 1px solid {Color.CYAN};
+        border-radius: {Radius.LARGE}px;
+        padding: {Spacing.MD}px {Spacing.LG}px;
+        font-size: {Typography.SIZE_HEADING_1}pt;
+        font-family: {Typography.FAMILY_BODY};
+    }}
+
+    #CommandItem {{
+        background-color: transparent;
+        color: {pal["text_secondary"]};
+        border: none;
+        border-radius: {Radius.SM}px;
+        padding: {Spacing.SM}px {Spacing.MD}px;
+        font-size: {Typography.SIZE_BODY}pt;
+    }}
+
+    #CommandItem:hover,
+    #CommandItem:selected {{
+        background-color: {Color.CYAN_FAINT};
+        color: {pal["text"]};
+    }}
+
+    /* ── Chat ── */
+    #ChatPage {{
+        background-color: {pal["bg"]};
+    }}
+
+    /* ── Dashboard Cards ── */
+    #MiniStatCard {{
+        background-color: {pal["card"]};
+        border: 1px solid {pal["border"]};
+        border-radius: {Radius.LARGE}px;
+        padding: {Spacing.LG}px;
+    }}
+
+    #MiniStatCard:hover {{
+        border-color: {Color.CYAN_GLOW};
+    }}
+
+    /* ── Generic ── */
+    QSplitter::handle {{
+        background-color: {pal["border"]};
+        width: 1px;
+    }}
+
+    QScrollBar:vertical {{
+        background-color: transparent;
+        width: 6px;
+        margin: 0;
+    }}
+
+    QScrollBar::handle:vertical {{
+        background-color: {pal["text_muted"] if "text_muted" in pal else pal["border"]};
+        border-radius: 3px;
+        min-height: 20px;
+    }}
+
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {{
+        height: 0;
+    }}
+
+    QToolTip {{
+        background-color: {pal["card"]};
+        color: {pal["text"]};
+        border: 1px solid {Color.CYAN};
+        border-radius: {Radius.SM}px;
+        padding: {Spacing.XS}px {Spacing.SM}px;
+        font-size: {Typography.SIZE_CAPTION}pt;
+    }}
+    """
+
+
+def build_sidebar_qss(dark: bool = True) -> str:
+    """QSS spécifique à la sidebar (peut être mergé dans build_qss)."""
+    return ""  # Tout est déjà dans build_qss pour l'instant
