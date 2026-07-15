@@ -172,6 +172,7 @@ class NuruOrchestrator:
             policy_engine=self.policy_engine,
             runtime=self.runtime,
             event_bus=self.event_bus,
+            session_store=self.session_store,
         )
 
     async def process_query(
@@ -362,18 +363,81 @@ class NuruOrchestrator:
             )
 
             if use_tot:
-                # V16: Tree of Thoughts (exploration arborescente)
+                # V16: Tree of Thoughts Agentic (exploration + validation outils)
                 from src.learning.tree_of_thoughts import TreeOfThoughtsEngine
 
                 async def tot_generate_fn(prompt: str, temp: float) -> str:
                     return await self._generate_sc_response(prompt, intent, temp)
 
+                async def tot_validate_fn(candidate: str, query: str, context: str) -> tuple[float, str]:
+                    """Valide une branche ToT en executant des outils reels."""
+                    from src.learning.tree_of_thoughts import TOOL_PATTERNS
+                    # Detecter [OUTIL: nom(arg)] dans le candidat
+                    action = None
+                    for tool_name, pattern in TOOL_PATTERNS.items():
+                        m = pattern.search(candidate)
+                        if m:
+                            action = (tool_name, m.group(2))
+                            break
+                    if not action:
+                        return (0.0, "")
+
+                    tool_name, arg = action
+                    try:
+                        if tool_name == "read_file" and arg:
+                            import os
+                            path = os.path.expanduser(arg)
+                            if os.path.isfile(path):
+                                with open(path, "r", errors="replace") as f:
+                                    content = f.read(2000)
+                                return (0.2, f"Fichier lu ({len(content)} chars): {content[:300]}")
+                            return (-0.3, f"Fichier introuvable: {arg}")
+
+                        elif tool_name == "search_memory" and arg:
+                            if hasattr(self, 'memory_store') and self.memory_store:
+                                results = await self.memory_store.search(arg)
+                                if results:
+                                    text = str(results)[:300]
+                                    return (0.2, f"Memoire: {text}")
+                            return (0.0, "Memoire non disponible")
+
+                        elif tool_name == "rag_query" and arg:
+                            if hasattr(self, 'rag_pipeline') and self.rag_pipeline:
+                                docs = await self.rag_pipeline.search(arg)
+                                if docs:
+                                    text = str(docs)[:300]
+                                    return (0.2, f"RAG: {text}")
+                            return (0.0, "RAG non disponible")
+
+                        elif tool_name == "search_files" and arg:
+                            import glob, os
+                            matches = glob.glob(f"**/*{arg}*", recursive=True)[:5]
+                            if matches:
+                                return (0.15, f"Fichiers trouves: {', '.join(matches[:5])}")
+                            return (-0.1, "Aucun fichier trouve")
+
+                        elif tool_name == "run_command" and arg:
+                            # Limite aux commandes non-destructives
+                            if any(kw in arg.lower() for kw in ["ls", "cat", "head", "tail", "wc", "find"]):
+                                import subprocess
+                                r = subprocess.run(arg.split()[:5], capture_output=True, text=True, timeout=5)
+                                out = r.stdout[:200]
+                                return (0.1, f"Shell: {out}" if out else (0.0, "Pas de sortie"))
+                            return (-0.2, "Commande interdite (securite)")
+
+                    except Exception as e:
+                        logger.debug(f"🌳 ToT: erreur outil '{tool_name}': {e}")
+                        return (-0.1, f"Erreur: {e}")
+
+                    return (0.0, "")
+
                 engine = TreeOfThoughtsEngine(max_depth=3, branch_factor=2)
-                logger.info(f"🌳 ToT: BFS (profondeur 3, 2 branches)...")
+                logger.info(f"🌳 ToT Agentic: BFS (profondeur 3, 2 branches, outils actifs)...")
                 tot_result = await engine.solve(
                     query=query,
                     context=rag_context or "",
                     generate_fn=tot_generate_fn,
+                    validate_fn=tot_validate_fn,
                     temperature=0.7,
                 )
                 response_content = tot_result.solution
@@ -419,6 +483,7 @@ class NuruOrchestrator:
                     web_context=web_context, rag_context=rag_context,
                     original_query=original_query,
                     stream_session=stream_session,
+                    session_id=session_id,
                 ):
                     response_content += token
                     yield token
@@ -462,6 +527,7 @@ class NuruOrchestrator:
                 system_prompt, full_prompt + strict_instr, query, intent, ctx,
                 web_context=web_context, rag_context=rag_context,
                 original_query=original_query,
+                session_id=session_id,
             ):
                 new_response += token
                 yield token
