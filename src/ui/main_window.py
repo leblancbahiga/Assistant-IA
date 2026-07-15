@@ -111,12 +111,11 @@ class MainWindow(QMainWindow):
     def _register_default_pages(self) -> None:
         """Enregistre les pages dans le NavigationController.
 
-        Phase 1 : ChatPage uniquement.
-        Phase 2+ : Documents, Mémoire, Dashboard, etc. reconnectés.
+        Phase 2a : Chat, Documents, Mémoire, Dashboard reconnectés.
+        Phase 2b+ : Agents, Paramètres, Outils, Plugins, Modèles.
         """
         # ChatPage — page par défaut
         if self._engine is not None:
-            # Si engine disponible, on réutilise ConversationSurface
             try:
                 from src.ui.conversation_surface import ConversationSurface
 
@@ -130,6 +129,34 @@ class MainWindow(QMainWindow):
 
         self.nav.register_page("chat", chat, make_default=True)
         self.nav.navigate_to("chat")
+
+        # Documents Page
+        try:
+            from src.ui.pages.documents_page import DocumentsPage
+            self.nav.register_page("documents", DocumentsPage(self._engine))
+        except Exception as e:
+            logger.warning(f"Impossible de charger DocumentsPage: {e}")
+
+        # Memory Page
+        try:
+            from src.ui.pages.memory_page import MemoryPage
+            self.nav.register_page("memory", MemoryPage())
+        except Exception as e:
+            logger.warning(f"Impossible de charger MemoryPage: {e}")
+
+        # Dashboard Page
+        try:
+            from src.ui.pages.dashboard_page import DashboardPage
+            self.nav.register_page("dashboard", DashboardPage())
+        except Exception as e:
+            logger.warning(f"Impossible de charger DashboardPage: {e}")
+
+        # Home Page (placeholder)
+        try:
+            from src.ui.pages.home_page import HomePage
+            self.nav.register_page("home", HomePage())
+        except Exception as e:
+            logger.debug(f"HomePage non disponible: {e}")
 
     def _setup_shortcuts(self) -> None:
         """Configure les raccourcis globaux."""
