@@ -28,8 +28,9 @@ if HAS_WATCHDOG:
     class _DocHandler(FileSystemEventHandler):
         """Handler watchdog qui déclenche l'indexation différée."""
 
-        def __init__(self, index_callback: Callable, debounce_seconds: float = 3.0):
+        def __init__(self, index_callback: Callable, loop: asyncio.AbstractEventLoop, debounce_seconds: float = 3.0):
             self.index_callback = index_callback
+            self._loop = loop
             self.debounce = debounce_seconds
             self._pending: set[str] = set()
 
@@ -46,8 +47,8 @@ if HAS_WATCHDOG:
 
         def _schedule(self, path: str):
             self._pending.add(path)
-            asyncio.create_task(self._debounced_index(path)).add_done_callback(
-                lambda t: t.exception() if not t.cancelled() else None
+            asyncio.run_coroutine_threadsafe(
+                self._debounced_index(path), self._loop
             )
 
         async def _debounced_index(self, path: str):
@@ -90,7 +91,7 @@ class DocumentWatcher:
             logger.info("[DocWatcher] Déjà en cours d'exécution")
             return
 
-        self._handler = _DocHandler(self.index_callback)
+        self._handler = _DocHandler(self.index_callback, loop=asyncio.get_running_loop())
         self._observer = Observer()
 
         for d in self.watch_dirs:
