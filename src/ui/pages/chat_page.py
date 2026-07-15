@@ -76,14 +76,13 @@ class ChatPage(QWidget):
             return
         if self._surface is not None:
             self._surface.add_message(text, is_user=True)
+            self._surface.start_stream()  # bulle vide pour la réponse NURU
         self._engine.send_message(text)
 
     def _on_response_complete(self, full_text: str) -> None:
         """Finalise la réponse NURU dans la surface."""
         if self._surface is not None:
-            # Fin du stream — la surface finalise
-            self._surface._flush_stream_buffer()
-            self._surface._streaming_bubble = None
+            self._surface.end_stream()
 
     def _on_error(self, code: str, message: str) -> None:
         """Affiche une erreur dans la surface."""

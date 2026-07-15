@@ -56,6 +56,8 @@ class Config(BaseSettings):
     rag_min_usable_score: float = 0.20  # V10.2: seuil vidage contexte (ex-hardcodé RAG_MIN_USABLE)
     rag_router_min_score: float = 0.15  # V10.2: seuil routeur pour considérer RAG trouvé
     rag_max_context_tokens: int = 1500
+    local_max_tokens: int = 2048      # V16: sortie locale (séparé du budget entrée RAG)
+    cloud_max_tokens: int = 4096      # V16: sortie cloud (2000→4096 pour réponses RAG détaillées)
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     # ── Seuils RAM (audit V10.3k — Option C) ───────────────────────────

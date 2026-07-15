@@ -83,9 +83,9 @@ class RAMBudgetManager:
 
     def __init__(
         self,
-        hard_limit_gb: float = 6.0,
-        soft_limit_gb: float = 5.0,
-        swap_warning_pct: float = 50.0,
+        hard_limit_gb: float = 7.5,      # V16: 6→7.5 Go (M1 8Go utilise déjà ~7Go)
+        soft_limit_gb: float = 6.0,
+        swap_warning_pct: float = 95.0,   # V16: 50→95% (swap inévitable sur M1 8Go)
     ):
         self.hard_limit_gb = hard_limit_gb
         self.soft_limit_gb = soft_limit_gb

@@ -157,6 +157,65 @@ class ConversationEngine(QObject):
     def session_id(self) -> str:
         return self._current_session
 
+    @property
+    def nuru(self) -> NuruCore | None:
+        """Accès au backend NuruCore (services mémoire, RAG, etc.)."""
+        return self._nuru
+
+    @property
+    def memory_store(self):
+        """MemoryStore du backend."""
+        return self._nuru.memory if self._nuru else None
+
+    @property
+    def rag_engine(self):
+        """RAGEngine du backend."""
+        return self._nuru.rag if self._nuru else None
+
+    @property
+    def orchestrator(self):
+        """NuruOrchestrator du backend."""
+        return self._nuru.orchestrator if self._nuru else None
+
+    @property
+    def model_router(self):
+        """ModelRouter du backend."""
+        return self._nuru.model_router if hasattr(self._nuru, 'model_router') and self._nuru else None
+
+    @property
+    def mcp_client(self):
+        """MCPClient pour outils externes."""
+        return self._nuru.mcp_client if hasattr(self._nuru, 'mcp_client') and self._nuru else None
+
+    @property
+    def mcp_server(self):
+        """MCPServer exposant les outils internes."""
+        return self._nuru.mcp_server if hasattr(self._nuru, 'mcp_server') and self._nuru else None
+
+    @property
+    def proactive_engine(self):
+        """ProactiveEngine pour agents et routines."""
+        return self._nuru.proactive if hasattr(self._nuru, 'proactive') and self._nuru else None
+
+    @property
+    def routine_scheduler(self):
+        """RoutineScheduler pour tâches planifiées."""
+        return self._nuru.routines if hasattr(self._nuru, 'routines') and self._nuru else None
+
+    @property
+    def current_model_name(self) -> str:
+        """Nom du modèle actif."""
+        if self._nuru and hasattr(self._nuru, 'config'):
+            return getattr(self._nuru.config, 'model', getattr(self._nuru.config, 'local_model', 'qwen2.5:3b'))
+        return "qwen2.5:3b"
+
+    @property
+    def current_provider(self) -> str:
+        """Fournisseur actif."""
+        if self._nuru and hasattr(self._nuru, 'config'):
+            return getattr(self._nuru.config, 'provider', getattr(self._nuru.config, 'mode', 'local'))
+        return "local"
+
     def new_session(self, session_id: str | None = None) -> str:
         """Crée ou bascule vers une nouvelle session."""
         sid = session_id or f"session_{int(time.time())}"

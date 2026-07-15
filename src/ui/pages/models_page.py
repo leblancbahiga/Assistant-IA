@@ -23,9 +23,10 @@ _PAL = Color.DARK
 class ModelsPage(QWidget):
     """Page Modèles V16 — sélection et gestion des LLM."""
 
-    def __init__(self, parent=None):
+    def __init__(self, engine=None, parent=None):
         super().__init__(parent)
         self.setObjectName("ModelsPageV16")
+        self._engine = engine
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.XXL, Spacing.XXL, Spacing.XXL, Spacing.XXL)
@@ -53,7 +54,9 @@ class ModelsPage(QWidget):
         name = QLabel("Modèle actif")
         name.setStyleSheet(f"color: {Color.TEXT_SECONDARY}; font-size: 9pt;")
         info.addWidget(name)
-        model_name = QLabel("deepseek-v4-flash-free")
+        model_name = QLabel(
+            self._engine.current_model_name if self._engine else "deepseek-v4-flash-free"
+        )
         model_name.setStyleSheet(
             f"color: {_PAL['text']}; font-size: 13pt; "
             f"font-family: {Typography.FAMILY_DISPLAY}; font-weight: {Typography.WEIGHT_BOLD};"
@@ -62,7 +65,9 @@ class ModelsPage(QWidget):
         card_layout.addLayout(info)
         card_layout.addStretch()
 
-        provider = QLabel("OpenCode Zen")
+        provider = QLabel(
+            self._engine.current_provider.capitalize() if self._engine else "OpenCode Zen"
+        )
         provider.setStyleSheet(f"color: {Color.CYAN}; font-size: 10pt;")
         card_layout.addWidget(provider)
 

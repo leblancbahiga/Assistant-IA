@@ -67,10 +67,10 @@ class DashboardPage(QWidget):
         ("version", "Version"),
     ]
 
-    def __init__(self, metrics_service=None, parent=None):
+    def __init__(self, engine=None, parent=None):
         super().__init__(parent)
         self.setObjectName("DashboardPageV16")
-        self._metrics = metrics_service
+        self._engine = engine
         self._advanced = False
 
         root = QVBoxLayout(self)
@@ -104,8 +104,8 @@ class DashboardPage(QWidget):
         self._build_essential_cards()
         self._refresh()
 
-        # Refresh timer (si metrics_service disponible)
-        if self._metrics is not None:
+        # Refresh timer (si engine disponible)
+        if self._engine is not None:
             self._timer = QTimer(self)
             self._timer.setInterval(5000)
             self._timer.timeout.connect(self._refresh)
@@ -120,10 +120,39 @@ class DashboardPage(QWidget):
             self.grid.addWidget(card, i // 4, i % 4)
 
     def _refresh(self):
-        if self._metrics is not None and hasattr(self._metrics, "snapshot"):
-            snap = self._metrics.snapshot()
-            for key, card in self._cards.items():
-                card.set_value(str(snap.get(key, "—")))
+        """Rafraîchit les cartes avec les données réelles du backend."""
+        import psutil
+        data = {}
+        try:
+            # Contexte système
+            cpu = psutil.cpu_percent(interval=0)
+            mem = psutil.virtual_memory()
+            data["cpu"] = f"{cpu:.0f}%"
+            data["ram"] = f"{mem.percent:.0f}% ({mem.used/1e9:.1f}/{mem.total/1e9:.0f} GiB)"
+
+            # Contexte backend
+            if self._engine:
+                data["model"] = self._engine.current_model_name
+                rag = self._engine.rag_engine
+                if rag:
+                    try:
+                        docs = len(rag.get_all_doc_meta()) if hasattr(rag, 'get_all_doc_meta') else 0
+                        data["docs"] = f"{docs} docs"
+                    except Exception:
+                        data["docs"] = "—"
+                mem_store = self._engine.memory_store
+                if mem_store:
+                    try:
+                        facts = mem_store.get_total_facts_count()
+                        data["memory"] = f"{facts} faits"
+                    except Exception:
+                        data["memory"] = "—"
+                data["state"] = "Prêt ✓" if self._engine.is_ready else "Initialisation…"
+        except Exception:
+            pass
+
+        for key, card in self._cards.items():
+            card.set_value(str(data.get(key, "—")))
 
     def _toggle_advanced(self):
         self._advanced = not self._advanced

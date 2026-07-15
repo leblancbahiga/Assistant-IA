@@ -34,11 +34,15 @@ class IngestionEngine:
         
         try:
             if ext == ".pdf":
-                with fitz.open(str(path)) as doc:
+                doc = fitz.open(str(path))
+                try:
+                    page_count = len(doc)
                     for page in doc:
                         text += page.get_text()
+                finally:
+                    doc.close()
                 # V6.1 : Si PyMuPDF n'a rien extrait → PDF scanné → OCR
-                if not text.strip() and len(doc) > 0:
+                if not text.strip() and page_count > 0:
                     from src.ocr import ocr_fallback
                     ocr_text = ocr_fallback(str(path), "")
                     if ocr_text:

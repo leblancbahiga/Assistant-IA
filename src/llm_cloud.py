@@ -218,7 +218,7 @@ class CloudLLM:
             headers["HTTP-Referer"] = "https://github.com/nuru-assistant"
             headers["X-Title"] = "NURU V3"
             
-        max_tokens = 2000  # V10: augmenté de 1000 à 2000 pour éviter troncatures RAG
+        max_tokens = config.cloud_max_tokens  # V16: augmenté pour réponses RAG détaillées
 
         messages = []
         if system_prompt:

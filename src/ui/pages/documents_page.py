@@ -20,9 +20,15 @@ _PAL = Color.DARK
 class DocumentsPage(QWidget):
     """Page Documents V16 — importe le composant existant et applique le thème."""
 
-    def __init__(self, rag_engine=None, ingestion_engine=None, parent=None):
+    def __init__(self, engine=None, parent=None):
         super().__init__(parent)
         self.setObjectName("DocumentsPageV16")
+
+        # Extraire les services du backend
+        rag_engine = engine.rag_engine if engine and hasattr(engine, 'rag_engine') else None
+        ingestion_engine = None
+        if rag_engine and hasattr(rag_engine, '_ingestion'):
+            ingestion_engine = rag_engine._ingestion
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.XXL, Spacing.XXL, Spacing.XXL, Spacing.XXL)

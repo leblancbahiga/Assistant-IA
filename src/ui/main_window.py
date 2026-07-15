@@ -176,8 +176,15 @@ class MainWindow(QMainWindow):
                     import importlib
                     mod = importlib.import_module(module)
                     klass = getattr(mod, cls_name)
-                    if module == "src.ui.pages.documents_page":
-                        return klass(engine)
+                    if engine:
+                        # Passe l'engine aux pages qui l'acceptent
+                        try:
+                            import inspect
+                            sig = inspect.signature(klass.__init__)
+                            if 'engine' in sig.parameters:
+                                return klass(engine=engine)
+                        except (ValueError, TypeError):
+                            pass
                     return klass()
                 except Exception as e:
                     logger.warning(f"Impossible de charger {module}.{cls_name}: {e}")

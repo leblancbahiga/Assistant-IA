@@ -49,12 +49,13 @@ def _extract_user_facts(system_prompt: str) -> str:
 class LLMGenerator:
     """Sous-orchestrateur de génération LLM : cloud/local streaming + fallback."""
 
-    def __init__(self, local_llm, cloud_llm, policy_engine, runtime, event_bus):
+    def __init__(self, local_llm, cloud_llm, policy_engine, runtime, event_bus, session_store=None):
         self.local_llm = local_llm
         self.cloud_llm = cloud_llm
         self.policy_engine = policy_engine
         self.runtime = runtime
         self.event_bus = event_bus
+        self.session_store = session_store
 
     # ══════════════════════════════════════════
     # 1. Connectivité
@@ -93,6 +94,7 @@ class LLMGenerator:
         rag_context: str = "",
         original_query: str = "",
         stream_session=None,  # V15 P2 #26 : StreamSession optionnel
+        session_id: str = "", # V16.1 : injection historique conversation cloud
     ) -> AsyncGenerator[str, None]:
         """Section 7 : Génération avec fallback cloud/local.
 
@@ -127,6 +129,11 @@ class LLMGenerator:
             )
             if user_facts_section:
                 cloud_system += f"\n\n{user_facts_section}"
+            # V16.1 : Injection historique conversation dans la branche cloud
+            if session_id and self.session_store:
+                session_ctx = self.session_store.build_context(session_id, max_messages=8)
+                if session_ctx:
+                    cloud_system += f"\n\n{session_ctx}"
             logger.info(f"☁️ Archon cloud call — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
             async for token in self.cloud_llm.generate_stream(
                 user_message, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
@@ -138,8 +145,12 @@ class LLMGenerator:
                 yield token
             return
 
-        # ── Cloud-first ──
-        use_cloud_first = ctx.is_online or self.policy_engine.should_use_cloud(ctx)
+        # ── Cloud-first : respecte hybrid_strategy + politique RAM/confiance ──
+        use_cloud_first = (
+            hybrid not in ("local_only", "rag")      # rag = Archon (traité ci-dessus)
+            and ctx.is_online
+            and self.policy_engine.should_use_cloud(ctx)
+        )
 
         if use_cloud_first or hybrid == "verify":
             if not ctx.is_online:
@@ -165,6 +176,11 @@ class LLMGenerator:
                     cloud_system += f"## CONTEXTE DE RECHERCHE WEB\n{web_context}\n\n"
                 if user_facts_section:
                     cloud_system += f"\n{user_facts_section}\n"
+                # V16.1 : Injection historique conversation dans la branche cloud
+                if session_id and self.session_store:
+                    session_ctx = self.session_store.build_context(session_id, max_messages=8)
+                    if session_ctx:
+                        cloud_system += f"\n{session_ctx}\n"
                 anchored_prompt = (
                     f"En te basant sur le contexte ci-dessus, "
                     f"réponds à la question suivante : {user_message}"

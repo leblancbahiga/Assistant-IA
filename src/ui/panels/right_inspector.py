@@ -308,7 +308,7 @@ class RightInspectorPanel(QWidget):
         self.update_value("model", "provider", provider)
 
     def _refresh_system(self) -> None:
-        """Timer CPU/RAM toutes les 3s."""
+        """Timer CPU/RAM toutes les 3s, plus infos backend si disponible."""
         try:
             cpu = psutil.cpu_percent(interval=0)
             cores = psutil.cpu_count()
@@ -338,6 +338,39 @@ class RightInspectorPanel(QWidget):
                         f"color: {Color.AMBER}; font-size: {Typography.SIZE_SMALL}pt; "
                         f"font-family: 'SF Mono', 'Menlo', monospace;"
                     )
+
+            # ── Modèle ──
+            if self._engine:
+                self.update_value("model", "name", self._engine.current_model_name)
+                self.update_value("model", "provider", self._engine.current_provider)
+                self.update_value("model", "temp",
+                    f"{getattr(self._engine, '_temperature', 0.7):.1f}")
+
+                # ── RAG ──
+                rag = self._engine.rag_engine
+                if rag:
+                    try:
+                        docs = getattr(rag, '_indexed_count', None)
+                        if docs is None and hasattr(rag, 'get_all_doc_meta'):
+                            docs = len(rag.get_all_doc_meta())
+                        chunks = getattr(rag, '_chunks_count', None)
+                        self.update_value("rag", "documents", str(docs or "—"))
+                        self.update_value("rag", "chunks", str(chunks or "—"))
+                    except Exception:
+                        pass
+
+                # ── Mémoire ──
+                mem_store = self._engine.memory_store
+                if mem_store:
+                    try:
+                        if hasattr(mem_store, 'get_total_facts_count'):
+                            facts = mem_store.get_total_facts_count()
+                            sessions = mem_store.get_total_history_count()
+                            self.update_value("memory", "episodic", f"{sessions} sessions")
+                            self.update_value("memory", "semantic", f"{facts} faits")
+                    except Exception:
+                        pass
+
         except Exception:
             pass
 

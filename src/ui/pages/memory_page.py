@@ -23,9 +23,12 @@ _PAL = Color.DARK
 class MemoryPage(QWidget):
     """Page Mémoire V16 — onglets Épisodique / Sémantique / Utilisateur / Erreurs."""
 
-    def __init__(self, memory_store=None, parent=None):
+    def __init__(self, engine=None, parent=None):
         super().__init__(parent)
         self.setObjectName("MemoryPageV16")
+
+        # Extraire le service MemoryStore du backend
+        memory_store = engine.memory_store if engine and hasattr(engine, 'memory_store') else None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.XXL, Spacing.XXL, Spacing.XXL, Spacing.XXL)
