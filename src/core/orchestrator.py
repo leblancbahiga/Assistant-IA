@@ -321,11 +321,24 @@ class NuruOrchestrator:
             if len(full_prompt) > max_safe_chars:
                 full_prompt = full_prompt[:max_safe_chars - 100] + "\n[... tronqué ...]"
 
-        # ── 6.5 Activation CoT (Chain of Thought) ──
-        # V16: Injecte instruction de raisonnement etape par etape
-        # pour les requetes complexes (COMPLEX ou RAG multi-saut)
+        # ── 6.5 Activation ToT (Tree of Thoughts) ──
+        # V16: Exploration arborescente pour les goals P0 critiques.
+        # MUTUELLEMENT EXCLUSIF avec CoT et Self-Consistency.
+        use_tot = False
+        tot_keywords = [
+            "arbre de decision", "explore toutes les possibilites",
+            "analyse en profondeur", "raisonnement approfondi",
+            "toi activer", "tot:",
+        ]
+        tot_pattern = "|".join(tot_keywords)
+        if re.search(tot_pattern, query.lower()) or (intent == "COMPLEX" and len(query.split()) >= 15):
+            use_tot = True
+            logger.info(f"🌳 ToT activee pour: {query[:50]}...")
+
+        # ── 6.6 Activation CoT (Chain of Thought) ──
+        # V16: Désactivé si ToT est déjà actif (redondant)
         use_cot = False
-        if intent in ("COMPLEX", "RAG", "GENERAL"):
+        if not use_tot and intent in ("COMPLEX", "RAG", "GENERAL"):
             from src.learning.chain_of_thought import should_use_cot, format_cot_prompt, extract_reasoning_and_answer
             use_cot = should_use_cot(query, intent)
             if use_cot:
@@ -338,31 +351,53 @@ class NuruOrchestrator:
         start_gen = time.time()
 
         try:
-            # V16: Self-Consistency pour requêtes RAG avec confiance suffisante
-            # Génère 3 réponses et vote par similarité (réduit hallucinations ~40%)
+            # ── Generation : ToT / Self-Consistency / Streaming ──
             use_self_consistency = (
-                intent == "RAG"
+                not use_tot
+                and intent == "RAG"
                 and rag_context
                 and rag_result
                 and getattr(rag_result, 'confidence_label', 'FAIBLE') in ("HAUTE", "MOYENNE")
                 and len(rag_context) > 100
             )
-            
-            if use_self_consistency:
-                # Initialiser SelfConsistencyEngine si pas déjà fait
+
+            if use_tot:
+                # V16: Tree of Thoughts (exploration arborescente)
+                from src.learning.tree_of_thoughts import TreeOfThoughtsEngine
+
+                async def tot_generate_fn(prompt: str, temp: float) -> str:
+                    return await self._generate_sc_response(prompt, intent, temp)
+
+                engine = TreeOfThoughtsEngine(max_depth=3, branch_factor=2)
+                logger.info(f"🌳 ToT: BFS (profondeur 3, 2 branches)...")
+                tot_result = await engine.solve(
+                    query=query,
+                    context=rag_context or "",
+                    generate_fn=tot_generate_fn,
+                    temperature=0.7,
+                )
+                response_content = tot_result.solution
+                logger.info(f"✅ ToT: {tot_result.nodes_explored} noeuds, "
+                           f"{tot_result.total_llm_calls} appels, "
+                           f"{tot_result.duration_ms:.0f}ms")
+                chunk_size = 50
+                for i in range(0, len(response_content), chunk_size):
+                    yield response_content[i:i+chunk_size]
+                    await asyncio.sleep(0.01)
+
+            elif use_self_consistency:
+                # V16: Self-Consistency (3 votes TF-IDF)
                 if not hasattr(self, '_self_consistency'):
                     from src.learning.self_consistency import SelfConsistencyEngine
                     self._self_consistency = SelfConsistencyEngine(n_samples=3, temperature=0.7)
-                
-                # Construire le prompt de base pour Self-Consistency
+
                 sc_prompt = self._build_self_consistency_prompt(
                     system_prompt, full_prompt, query, rag_context, intent
                 )
-                
+
                 async def sc_generate_fn(prompt: str, temp: float) -> str:
-                    """Wrapper pour génération Self-Consistency (non-streaming)."""
                     return await self._generate_sc_response(prompt, intent, temp)
-                
+
                 logger.info(f"🗳️ Self-Consistency activée pour: {query[:50]}...")
                 sc_result = await self._self_consistency.generate_consistent(
                     query=query,
@@ -370,23 +405,20 @@ class NuruOrchestrator:
                     generate_fn=sc_generate_fn,
                     system_prompt=system_prompt,
                 )
-                
-                # Stream la réponse consensuelle
                 response_content = sc_result.final_response
                 logger.info(f"✅ Self-Consistency: consensus {sc_result.consensus_score:.0%}")
-                
-                # Yield par chunks pour compatibilité UI streaming
                 chunk_size = 50
                 for i in range(0, len(response_content), chunk_size):
                     yield response_content[i:i+chunk_size]
                     await asyncio.sleep(0.01)
+
             else:
                 # Génération normale (streaming)
                 async for token in self.llm_gen.generate(
                     system_prompt, full_prompt, query, intent, ctx,
                     web_context=web_context, rag_context=rag_context,
                     original_query=original_query,
-                    stream_session=stream_session,  # V15 P2 #26
+                    stream_session=stream_session,
                 ):
                     response_content += token
                     yield token
