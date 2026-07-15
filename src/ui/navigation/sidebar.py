@@ -5,7 +5,7 @@ Navigation verticale avec icônes + texte, repliable 200px / 52px.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QVariantAnimation
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QButtonGroup
 
 from src.ui.tokens import Color, Spacing, WindowSizes
@@ -68,7 +68,14 @@ class Sidebar(QWidget):
 
     def set_collapsed(self, collapsed: bool) -> None:
         self._collapsed = collapsed
-        width = WindowSizes.SIDEBAR_COLLAPSED if collapsed else WindowSizes.SIDEBAR_WIDTH
-        self.setFixedWidth(width)
+        target = WindowSizes.SIDEBAR_COLLAPSED if collapsed else WindowSizes.SIDEBAR_WIDTH
+        # Animation de la largeur
+        start_w = self.width()
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(180)
+        self._anim.setStartValue(float(start_w))
+        self._anim.setEndValue(float(target))
+        self._anim.valueChanged.connect(lambda v: self.setFixedWidth(int(v)))
+        self._anim.start()
         for key, icon, label in NAV_ITEMS:
             self._buttons[key].setText(f"  {icon}" if collapsed else f"  {icon}   {label}")

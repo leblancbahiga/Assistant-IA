@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStackedWidget,
     QWidget,
+    QVBoxLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -25,6 +26,7 @@ from src.ui.navigation.status_bar import StatusBar
 from src.ui.panels.right_inspector import RightInspectorPanel
 from src.ui.panels.notification_manager import NotificationManager
 from src.ui.panels.command_palette import CommandPalette
+from src.ui.panels.title_bar import CustomTitleBar
 from src.ui.pages.chat_page import ChatPage
 from src.ui.theme.theme_manager import ThemeManager
 from src.ui.tokens import Color, Typography, WindowSizes, Spacing
@@ -50,8 +52,13 @@ class MainWindow(QMainWindow):
         self.resize(1100, 720)
         self.setMinimumSize(900, 600)
 
+        # ── Frameless (custom title bar) ──
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+
         # ── TitleBar custom ──
-        self._setup_title_bar()
+        self.title_bar = CustomTitleBar(self)
+        self.title_bar.set_subtitle("")
 
         # ── Sidebar ──
         self.sidebar = Sidebar(self)
@@ -74,11 +81,13 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(2, 0)  # right panel ne s'étire pas
         splitter.setSizes([WindowSizes.SIDEBAR_WIDTH, 700, 280])
 
-        # ── Conteneur central ──
+        # ── Conteneur central (title bar + splitter) ──
         central = QWidget()
-        central_layout = QHBoxLayout(central)
+        central_layout = QVBoxLayout(central)
         central_layout.setContentsMargins(0, 0, 0, 0)
-        central_layout.addWidget(splitter)
+        central_layout.setSpacing(0)
+        central_layout.addWidget(self.title_bar)
+        central_layout.addWidget(splitter, 1)  # stretch = 1
         self.setCentralWidget(central)
 
         # ── StatusBar ──
@@ -273,6 +282,7 @@ class MainWindow(QMainWindow):
         self.sidebar.setVisible(False)
         self.right_panel.setVisible(False)
         self.status_bar.show_focus_indicator(True)
+        self.title_bar.set_subtitle("focus")
         logger.debug("🔍 Focus mode activé")
 
     def exit_focus_mode(self) -> None:
@@ -280,6 +290,7 @@ class MainWindow(QMainWindow):
         self.sidebar.setVisible(True)
         self.right_panel.setVisible(True)
         self.status_bar.show_focus_indicator(False)
+        self.title_bar.set_subtitle("")
         logger.debug("↩ Focus mode désactivé")
 
     def _new_conversation(self) -> None:
