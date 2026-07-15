@@ -32,6 +32,8 @@ from src.learning.trace_collector import TraceCollector
 from src.cache.llm_cache import LLMCache
 from src.orchestration import RAGOrchestrator, LLMGenerator
 from src.routing.prompt_builder import DynamicPromptBuilder
+# V16 FIX: SessionMemory unifié (remplace MemoryStore fragmenté)
+from src.core.session_memory import SessionMemory, get_session_memory
 
 logger = logging.getLogger(__name__)
 
@@ -128,10 +130,14 @@ class NuruOrchestrator:
         # On l'aliase sur rag_engine car ce dernier est déjà DI-é depuis NuruCore.
         self.rag_pipeline = rag_engine
 
-        # V10.3f : Sessions conversationnelles persistantes
+        # V16 FIX: SessionMemory unifié (remplace MemoryStore + SessionStore fragmentés)
+        from src.core.session_memory import get_session_memory
+        self.session_memory = get_session_memory(max_messages=6)
+        self._session_max_context = getattr(config, 'session_max_messages', 10)
+        
+        # V10.3f : Sessions conversationnelles persistantes (gardé pour compat)
         from src.session.store import SessionStore
         self.session_store = SessionStore()
-        self._session_max_context = getattr(config, 'session_max_messages', 10)
 
         # V10.3h : ArchonRefiner — auto‑correction post‑génération
         from src.ai.archon_refiner import ArchonRefiner
@@ -424,7 +430,10 @@ class NuruOrchestrator:
         # ── 10. Mémoire ──
         if intent != "COMPLEX":
             await self.llm_cache.set(query, response_content)
-        self.memory_store.add_message("user", query)
+        # V16 FIX: SessionMemory unifié (FIFO 6 messages) — remplace MemoryStore fragmenté
+        self.session_memory.add_interaction(original_query, response_content)
+        # Aussi sauvegarder dans MemoryStore pour compatibilité dashboard/observabilité
+        self.memory_store.add_message("user", original_query)
         self.memory_store.add_message("assistant", response_content)
 
         # NURU V6 : Learning Loop — enregistrement de la trace
@@ -521,16 +530,15 @@ class NuruOrchestrator:
             system_prompt = f"Tu es NURU, assistant personnel de Leblanc."
 
         # V10.3f : Injection contexte conversationnel de session
-        if session_id:
-            try:
-                session_ctx = self.session_store.build_context(
-                    session_id, max_messages=self._session_max_context)
-                if session_ctx:
-                    # AUDIT V10.3c — sanitiser le contexte de session aussi (historique user)
-                    sanitized_session = sanitize_for_prompt_injection(session_ctx, max_chars=2000)
-                    system_prompt += f"\n\n{sanitized_session}"
-            except Exception:
-                logger.debug("SessionStore: erreur injection contexte", exc_info=True)
+        # V16 FIX: Utilise SessionMemory unifié au lieu de SessionStore fragmenté
+        try:
+            session_ctx = self.session_memory.get_recent_context(max_chars=2000)
+            if session_ctx:
+                # AUDIT V10.3c — sanitiser le contexte de session aussi (historique user)
+                sanitized_session = sanitize_for_prompt_injection(session_ctx, max_chars=2000)
+                system_prompt += f"\n\n{sanitized_session}"
+        except Exception:
+            logger.debug("SessionMemory: erreur injection contexte", exc_info=True)
 
         # AUDIT V10.3 — wrap user_facts_str dans un bloc sécurisé
         # Avant : `f"... {user_facts_str}"` injectait les faits tels quels.
@@ -548,11 +556,13 @@ class NuruOrchestrator:
         if self.context_budget:
             # Formater user_facts en liste pour le budget
             user_facts_lines = user_facts_str.split("\n") if user_facts_str else []
+            # V16 FIX: Utiliser SessionMemory pour l'historique récent
+            recent_history = self.session_memory.get_formatted_history()[-8:]
             full_prompt = self.context_budget.allocate(
                 system=system_prompt,
                 rag=full_rag,
                 facts=self.memory_store.get_recent_facts(limit=20),
-                history=self.memory_store.get_recent_history(limit=8),
+                history=recent_history,
                 user_facts=user_facts_lines,
                 include_system=(intent != "COMPLEX"),
             )

@@ -187,8 +187,15 @@ class RAGOrchestrator:
     def clear_low_confidence_context(
         self, query: str, rag_context: str, rag_result, has_spotlight: bool
     ) -> str:
-        """Section 4.6 : Vider le contexte si FAIBLE et aucun mot-clé trouvé."""
-        if (
+        """Section 4.6 : Vider le contexte si FAIBLE et aucun mot-clé trouvé.
+        
+        V16 FIX: Désactivé par défaut car trop agressif - vide le contexte RAG
+        même quand des documents pertinents existent. Le reranker cross-encoder
+        fait déjà le tri de pertinence.
+        """
+        ENABLE_LOW_CONFIDENCE_CLEAR = False  # Mettre True pour réactiver
+        
+        if ENABLE_LOW_CONFIDENCE_CLEAR and (
             rag_result
             and getattr(rag_result, 'confidence_label', 'HAUTE') == 'FAIBLE'
             and not has_spotlight

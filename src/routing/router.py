@@ -368,10 +368,25 @@ class Router:
             return result
 
         # Escalade cloud si RAM trop basse (sauf si c'est du Spotlight)
+        # V16 FIX: Pour les requêtes RAG documentaires, ON FORCE le local.
+        # Le fallback Cloud ne doit se déclencher QUE si le serveur local est 
+        # physiquement arrêté (ConnectionError), pas si la RAM est basse.
+        # Sur M1 8Go, le swap est lent mais FONCTIONNE - ne pas basculer sur cloud.
         if result.decision == "LOCAL_RAG" and not is_spotlight and self.policy_engine.should_use_cloud(ctx):
-            logger.info(f"↩️ Router: RAM {ctx.ram_free_mb} MB → escalation Cloud forcée")
-            result.decision = "CLOUD_GROQ"
-            result.reasoning += " | RAM trop basse pour local"
+            # V16 FIX: Vérifier si la requête a des mots-clés documentaires forts
+            query_lower = ctx.query.lower()
+            has_strong_doc_keywords = any(kw in query_lower for kw in RAG_KEYWORDS)
+            
+            if has_strong_doc_keywords:
+                logger.info(
+                    f"🔒 Router: Requête documentaire détectée ({ctx.ram_free_mb} MB RAM) → "
+                    f"MAINTIEN LOCAL forcé (pas d'escalade Cloud). Le swap M1 fonctionne."
+                )
+                # Forcer LOCAL_RAG même si RAM basse
+            else:
+                logger.info(f"↩️ Router: RAM {ctx.ram_free_mb} MB → escalation Cloud forcée")
+                result.decision = "CLOUD_GROQ"
+                result.reasoning += " | RAM trop basse pour local"
         elif is_spotlight:
             logger.info(f"🔍 Router: Spotlight actif → pas d'escalade RAM")
 

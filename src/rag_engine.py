@@ -155,7 +155,7 @@ class RAGEngine:
             logger.info("✅ sqlite-vec disponible (recherche vectorielle active)")
             return True
         except (AttributeError, Exception) as e:
-            logger.warning(f"⚠️ sqlite-vec indisponible ({e}) — recherche FTS5+BM25 uniquement")
+            logger.info(f"sqlite-vec indisponible ({e}) — FTS5+BM25 actif")
             return False
 
     def _ensure_multi_search(self):
@@ -265,7 +265,7 @@ class RAGEngine:
                     results.append((r[0], r[1], score))
             return results
         except Exception as e:
-            logger.warning(f"⚠️ _ms_vector_search({search_type}) a échoué: {e}")
+            logger.debug(f"_ms_vector_search({search_type}) échoué: {e}")
             return []
         finally:
             conn.close()
@@ -289,7 +289,7 @@ class RAGEngine:
             ).fetchall()
             return [(r[0], r[1], float(r[2])) for r in rows if r[0] and r[2] > 0]
         except Exception as e:
-            logger.warning(f"⚠️ _ms_vector_search_vec a échoué (top_k={top_k}): {e}")
+            logger.debug(f"_ms_vector_search_vec échoué (top_k={top_k}): {e}")
             return []
         finally:
             conn.close()
@@ -700,15 +700,17 @@ class RAGEngine:
             result.retrieval_time_ms = (time.time() - t_start) * 1000
             return "", result
 
-        # === V8+ : SCORE GATE DYNAMIQUE (3 niveaux) ===
+        # ── V8+ : SCORE GATE DYNAMIQUE (3 niveaux) ===
         top1_score = ms_results[0].score
         self.last_top_score = top1_score
         result.top_score = top1_score
         result.all_scores = [r.score for r in ms_results]
 
-        MIN_ABSOLUTE_SCORE = config.rag_score_threshold   # V10.2: 0.30
-        FALLBACK_THRESHOLD = config.rag_score_fallback     # V10.2: 0.25
-        RAG_MIN_USABLE_SCORE = config.rag_min_usable_score # V10.2: 0.20 (ex hardcodé)
+        # V16 FIX: Seuils abaissés pour M1 8Go + embeddings locaux (bge-small, etc.)
+        # Les scores cosinus sur petits modèles sont plus bas mais pertinents
+        MIN_ABSOLUTE_SCORE = 0.22   # Était 0.30 - abaissé pour ne pas jeter le pertinent
+        FALLBACK_THRESHOLD = 0.18   # Était 0.25
+        RAG_MIN_USABLE_SCORE = 0.12 # Était 0.20 - seuil plancher absolue
 
         if top1_score >= MIN_ABSOLUTE_SCORE:
             confidence_label = "HAUTE"
@@ -747,7 +749,11 @@ class RAGEngine:
 
         # ── V10 Audit: Rejeter les résultats non pertinents ──
         # Vérifie si le top résultat contient des mots-clés de la requête.
-        if combined_results:
+        # V16 FIX: Désactivé par défaut car trop agressif - rejette des résultats
+        # pertinents sur embeddings locaux. Le reranker cross-encoder fait le tri.
+        ENABLE_KEYWORD_REJECTION = False  # Mettre True pour réactiver
+        
+        if ENABLE_KEYWORD_REJECTION and combined_results:
             query_keywords = set(
                 w.lower() for w in re.findall(r'\w+', query)
                 if len(w) > 2 and w.lower() not in {
@@ -930,7 +936,7 @@ class RAGEngine:
                         meta_sections.append(format_doc_for_context(meta))
                         injected += 1
                     except Exception as e:
-                        logger.warning(f"⚠️ Formatage métadonnées ignoré: {e}")
+                        logger.debug(f"Formatage métadonnées ignoré: {e}")
                         pass
 
                 if meta_sections:

@@ -16,6 +16,10 @@ from src.cache.kv_cache import KVPersistentCache
 
 logger = logging.getLogger(__name__)
 
+# V16 FIX: Timeout étendu pour chargement modèle M1 8Go (swap RAM unifiée)
+# 180s = 3 min max pour charger poids 4-bit via MLX + swap
+MODEL_LOAD_TIMEOUT_SECONDS = 180.0
+
 class LocalLLM:
     """Gestionnaire de LLM locaux (MLX) avec Warmup et RAM Guard.
 
@@ -93,7 +97,7 @@ class LocalLLM:
             return config.local_model_fallback
         return config.local_model
 
-    def _load_model(self, model_id: str):
+    async def _load_model(self, model_id: str):
         """Charge ou swappe le modèle en mémoire."""
         if self._current_model_id == model_id and self._model is not None:
             return
@@ -117,7 +121,28 @@ class LocalLLM:
             resolved_path = config.get_model_path(model_id)
             logger.info(f"Chargement du modèle MLX depuis : {resolved_path}")
 
-            self._model, self._tokenizer = load(resolved_path)
+            # V16 FIX: Chargement avec timeout étendu (180s) pour M1 8Go + swap
+            # Exécute le chargement synchrone MLX dans un executor pour ne pas bloquer
+            # l'event loop principal (PySide6 UI) pendant les 2-3 minutes de swap
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            def _sync_load():
+                from mlx_lm import load
+                return load(resolved_path)
+            
+            try:
+                self._model, self._tokenizer = await asyncio.wait_for(
+                    loop.run_in_executor(None, _sync_load),
+                    timeout=MODEL_LOAD_TIMEOUT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                raise RuntimeError(
+                    f"Timeout critique : Le chargement des poids MLX a pris plus de "
+                    f"{MODEL_LOAD_TIMEOUT_SECONDS}s. Swap RAM saturé sur M1 8Go. "
+                    f"Fermez d'autres applications et réessayez."
+                )
+            
             self._current_model_id = model_id
 
             # V15 Phase 5 (Item 38) : Chargement adaptateur LoRA RAG si existant
@@ -228,7 +253,7 @@ class LocalLLM:
             # Chargement synchrone sur l'event loop thread
             # (MLX Metal GPU = thread-local, load et generate doivent cohabiter)
             try:
-                self._load_model(model_id)
+                await self._load_model(model_id)
             except Exception as e:
                 logger.error(f"Impossible de charger le modèle {model_id} : {e}")
                 raise
@@ -299,7 +324,7 @@ class LocalLLM:
                     self._model,
                     self._tokenizer,
                     formatted_prompt,
-                    max_tokens=config.rag_max_context_tokens,
+                    max_tokens=config.local_max_tokens,
                     sampler=sampler,
                     logits_processors=logits_processors,
                     # V15 P0 #31 : KV cache 8-bit réduit la pression mémoire
