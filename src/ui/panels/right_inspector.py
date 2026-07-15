@@ -1,102 +1,181 @@
 """
 NURU V16 — RightInspectorPanel.
-Panneau latéral droit : LLM, CPU, RAM, GPU, RAG, Mémoire, Logs.
-Masquable, redimensionnable.
+Panneau latéral droit : sections repliables, données temps réel.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+import logging
+from typing import Optional
+
+import psutil
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, Property
 from PySide6.QtWidgets import (
-    QVBoxLayout,
-    QWidget,
-    QLabel,
-    QScrollArea,
-    QPushButton,
-    QFrame,
+    QVBoxLayout, QHBoxLayout, QWidget, QLabel, QScrollArea,
+    QPushButton, QFrame,
 )
 
-from src.ui.tokens import Color, Spacing, Typography, Radius
+from src.ui.tokens import Color, Typography, Spacing, Radius
+from src.ui.presence_orb import OrbState
+
+logger = logging.getLogger(__name__)
 
 
-def _section(title: str) -> QWidget:
-    """Crée une section du panneau droit."""
-    frame = QFrame()
-    frame.setObjectName("InspectorSection")
-    layout = QVBoxLayout(frame)
-    layout.setContentsMargins(Spacing.MD, Spacing.SM, Spacing.MD, Spacing.SM)
-    layout.setSpacing(4)
+# ── Section repliable ──────────────────────────────────────────
 
-    label = QLabel(title)
-    label.setObjectName("InspectorLabel")
-    layout.addWidget(label)
+class CollapsibleSection(QFrame):
+    """Section avec header cliquable et contenu masquable."""
 
-    value = QLabel("—")
-    value.setObjectName("InspectorValue")
+    def __init__(self, title: str, icon: str = "", expanded: bool = True, parent=None):
+        super().__init__(parent)
+        self.setObjectName("CollapsibleSection")
+        self.setStyleSheet(
+            f"#CollapsibleSection {{"
+            f"  background-color: {Color.BG_SURFACE2};"
+            f"  border-radius: {Radius.SM}px;"
+            f"  border: 1px solid {Color.BORDER};"
+            f"}}"
+        )
 
-    @property  # noqa: B021
-    def set_text(t):
-        value.setText(t)
+        self._expanded = expanded
 
-    value.set_text = lambda t: value.setText(t)
-    layout.addWidget(value)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(Spacing.SM, Spacing.XS, Spacing.SM, Spacing.XS)
+        layout.setSpacing(2)
 
-    return frame
+        # Header cliquable
+        self._header = QPushButton(f"{icon} {title}")
+        self._header.setObjectName("SectionHeader")
+        self._header.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._header.setFlat(True)
+        self._header.setStyleSheet(
+            f"#SectionHeader {{"
+            f"  color: {Color.TEXT_PRIMARY};"
+            f"  font-size: {Typography.SIZE_CAPTION}pt;"
+            f"  font-weight: {Typography.WEIGHT_SEMIBOLD};"
+            f"  text-align: left; padding: 4px; border: none; background: transparent;"
+            f"}}"
+            f"#SectionHeader:hover {{ color: {Color.CYAN}; }}"
+        )
+        self._header.clicked.connect(self._toggle)
+        layout.addWidget(self._header)
 
+        # Contenu
+        self._content = QWidget()
+        self._content.setObjectName("SectionContent")
+        self._content_layout = QVBoxLayout(self._content)
+        self._content_layout.setContentsMargins(4, 0, 4, 2)
+        self._content_layout.setSpacing(2)
+        layout.addWidget(self._content)
+
+        self._update_arrow()
+
+    @property
+    def content_layout(self) -> QVBoxLayout:
+        return self._content_layout
+
+    def _toggle(self) -> None:
+        self._expanded = not self._expanded
+        self._content.setVisible(self._expanded)
+        self._update_arrow()
+
+    def _update_arrow(self) -> None:
+        arrow = "▼" if self._expanded else "▶"
+        self._header.setText(
+            self._header.text().replace("▶", "▼").replace("▼", "▶")
+            if "▶" in self._header.text() or "▼" in self._header.text()
+            else f"{self._header.text()}  {arrow}"
+        )
+
+    def add_row(self, key: str, label: str, value: str = "—") -> QLabel:
+        """Ajoute une ligne clé: valeur."""
+        row = QFrame()
+        row.setStyleSheet("background: transparent;")
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(4, 1, 4, 1)
+        row_layout.setSpacing(8)
+
+        lbl = QLabel(label)
+        lbl.setFixedWidth(60)
+        lbl.setStyleSheet(
+            f"color: {Color.TEXT_MUTED}; font-size: {Typography.SIZE_SMALL}pt;"
+        )
+        row_layout.addWidget(lbl)
+
+        val = QLabel(value)
+        val.setObjectName(f"InspVal_{key}")
+        val.setStyleSheet(
+            f"color: {Color.TEXT_SECONDARY}; font-size: {Typography.SIZE_SMALL}pt;"
+            f"font-family: 'SF Mono', 'Menlo', monospace;"
+        )
+        val.setWordWrap(True)
+        row_layout.addWidget(val, stretch=1)
+
+        self._content_layout.addWidget(row)
+        return val
+
+    def set_value(self, key: str, value: str) -> None:
+        """Met à jour la valeur d'une ligne."""
+        val = self.findChild(QLabel, f"InspVal_{key}")
+        if val:
+            val.setText(value)
+
+
+# ── Panneau principal ──────────────────────────────────────────
 
 class RightInspectorPanel(QWidget):
-    """Panneau d'inspection droite — état NURU en temps réel."""
+    """Panneau d'inspection droite — métriques NURU temps réel."""
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("RightInspectorPanel")
         self.setFixedWidth(280)
+        self._engine = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.SM, Spacing.LG, Spacing.SM, Spacing.LG)
         layout.setSpacing(Spacing.MD)
 
         # Titre
-        title = QLabel("Inspecteur")
+        title = QLabel("INSPECTEUR")
         title.setStyleSheet(
             f"color: {Color.CYAN}; font-size: {Typography.SIZE_CAPTION}pt; "
             f"font-family: {Typography.FAMILY_DISPLAY}; font-weight: {Typography.WEIGHT_BOLD}; "
-            "letter-spacing: 2px; text-transform: uppercase;"
+            "letter-spacing: 2px;"
         )
         layout.addWidget(title)
 
-        # Sections dans un scroll area
+        # Scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
 
         content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(Spacing.SM)
+        self._scroll_layout = QVBoxLayout(content)
+        self._scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self._scroll_layout.setSpacing(Spacing.SM)
 
-        sections = [
-            ("state", "État NURU"),
-            ("model", "Modèle actif"),
-            ("cpu", "CPU"),
-            ("ram", "RAM"),
-            ("gpu", "GPU"),
-            ("rag", "RAG"),
-            ("memory", "Mémoire"),
-            ("logs", "Logs"),
+        # Sections
+        self._sections: dict[str, CollapsibleSection] = {}
+        self._section_defs = [
+            ("state",    "État NURU",      "⚡", True),
+            ("model",    "Modèle",         "🧠", True),
+            ("cpu",      "CPU",            "💻", True),
+            ("ram",      "RAM",            "🧮", True),
+            ("gpu",      "GPU",            "🎮", False),
+            ("rag",      "RAG",            "📚", True),
+            ("memory",   "Mémoire",        "🧬", False),
+            ("logs",     "Logs",           "📋", False),
         ]
 
-        self._section_labels: dict[str, QLabel] = {}
-        for key, label_text in sections:
-            section = _section(label_text)
-            label = section.findChild(QLabel, "InspectorValue")
-            self._section_labels[key] = label
-            content_layout.addWidget(section)
+        for key, label, icon, expanded in self._section_defs:
+            section = CollapsibleSection(label, icon=icon, expanded=expanded)
+            self._sections[key] = section
+            self._scroll_layout.addWidget(section)
 
-        content_layout.addStretch()
+        self._scroll_layout.addStretch()
         scroll.setWidget(content)
-
         layout.addWidget(scroll, stretch=1)
 
         # Bouton masquer
@@ -107,20 +186,163 @@ class RightInspectorPanel(QWidget):
             f"color: {Color.TEXT_MUTED}; font-size: {Typography.SIZE_CAPTION}pt; "
             "border: none; padding: 4px;"
         )
-
         layout.addWidget(self._hide_btn)
 
-    def update_value(self, key: str, value: str) -> None:
-        """Met à jour une valeur affichée."""
-        label = self._section_labels.get(key)
-        if label:
-            label.setText(value)
+        # Timer système
+        self._sys_timer = QTimer(self)
+        self._sys_timer.timeout.connect(self._refresh_system)
+        self._sys_timer.setInterval(3000)
 
-    def update_snapshot(self, snap: dict[str, str]) -> None:
-        """Met à jour toutes les valeurs depuis un snapshot."""
-        for key, value in snap.items():
-            self.update_value(key, value)
+        # Initialisation des lignes
+        self._init_rows()
+
+    def _init_rows(self) -> None:
+        """Crée les lignes pour chaque section."""
+        rows = {
+            "state": [
+                ("status", "Statut"),
+                ("strategy", "Pipeline"),
+                ("uptime", "Uptime"),
+            ],
+            "model": [
+                ("name", "Nom"),
+                ("provider", "Provider"),
+                ("temp", "Température"),
+            ],
+            "cpu": [
+                ("pct", "Utilisation"),
+                ("cores", "Cœurs"),
+                ("freq", "Fréquence"),
+            ],
+            "ram": [
+                ("used", "Utilisée"),
+                ("total", "Totale"),
+                ("pct", "Occupation"),
+            ],
+            "gpu": [
+                ("gpu_model", "Modèle"),
+                ("gpu_used", "Utilisation"),
+            ],
+            "rag": [
+                ("documents", "Documents"),
+                ("chunks", "Chunks"),
+                ("last_search", "Dernière recherche"),
+            ],
+            "memory": [
+                ("episodic", "Épisodique"),
+                ("semantic", "Sémantique"),
+                ("errors", "Erreurs"),
+            ],
+            "logs": [
+                ("last_msg", "Dernier message"),
+                ("tokens", "Tokens"),
+                ("duration", "Durée"),
+            ],
+        }
+
+        for section_key, section_rows in rows.items():
+            section = self._sections.get(section_key)
+            if section:
+                for row_key, label in section_rows:
+                    section.add_row(row_key, label)
+
+        # Première mise à jour
+        self._refresh_system()
+
+    # ── API publique ──
+
+    def set_engine(self, engine) -> None:
+        """Connecte aux signaux du moteur."""
+        self._engine = engine
+        if engine is None:
+            return
+        try:
+            engine.state_changed.connect(self._on_state_changed)
+            engine.strategy_changed.connect(self._on_strategy)
+            engine.token_received.connect(self._on_token)
+            engine.response_complete.connect(self._on_response)
+            engine.error_occurred.connect(self._on_error)
+            self._sys_timer.start()
+        except Exception as e:
+            logger.warning(f"RightInspector: connexion engine: {e}")
 
     def set_hide_callback(self, callback) -> None:
-        """Associe le bouton masquer à la fonction de callback."""
         self._hide_btn.clicked.connect(callback)
+
+    # ── Mise à jour temps réel ──
+
+    def _on_state_changed(self, state: OrbState) -> None:
+        colors = {
+            OrbState.IDLE: Color.GREEN,
+            OrbState.THINKING: Color.AMBER,
+            OrbState.SPEAKING: Color.CYAN,
+            OrbState.ERROR: Color.ROSE,
+            OrbState.LISTENING: Color.CYAN,
+        }
+        c = colors.get(state, Color.TEXT_MUTED)
+        label = state.name.capitalize() if hasattr(state, 'name') else str(state)
+        self.update_value("state", "status", label)
+        # Coloration du statut
+        val = self.findChild(QLabel, "InspVal_status")
+        if val:
+            val.setStyleSheet(
+                f"color: {c}; font-size: {Typography.SIZE_SMALL}pt; "
+                f"font-family: 'SF Mono', 'Menlo', monospace; font-weight: bold;"
+            )
+
+    def _on_strategy(self, strategy: str) -> None:
+        self.update_value("state", "strategy", strategy)
+
+    def _on_token(self, token: str) -> None:
+        self.update_value("logs", "last_msg", token[:40] + ("…" if len(token) > 40 else ""))
+
+    def _on_response(self, text: str) -> None:
+        duration = getattr(self, "_last_duration", "—")
+        self.update_value("logs", "duration", f"{duration}s")
+
+    def _on_error(self, code: str, message: str) -> None:
+        self.update_value("state", "status", f"❌ {message[:30]}")
+
+    def _on_model_changed(self, name: str, provider: str) -> None:
+        self.update_value("model", "name", name)
+        self.update_value("model", "provider", provider)
+
+    def _refresh_system(self) -> None:
+        """Timer CPU/RAM toutes les 3s."""
+        try:
+            cpu = psutil.cpu_percent(interval=0)
+            cores = psutil.cpu_count()
+            freq = psutil.cpu_freq()
+            mem = psutil.virtual_memory()
+
+            self.update_value("cpu", "pct", f"{cpu:.1f}%")
+            self.update_value("cpu", "cores", str(cores))
+            self.update_value("cpu", "freq", f"{freq.current:.0f} MHz" if freq else "—")
+
+            used_gb = mem.used / 1e9
+            total_gb = mem.total / 1e9
+            self.update_value("ram", "used", f"{used_gb:.1f} GiB")
+            self.update_value("ram", "total", f"{total_gb:.0f} GiB")
+            self.update_value("ram", "pct", f"{mem.percent:.1f}%")
+
+            # Coloration RAM
+            ram_val = self.findChild(QLabel, "InspVal_pct")
+            if ram_val:
+                if mem.percent > 85:
+                    ram_val.setStyleSheet(
+                        f"color: {Color.ROSE}; font-size: {Typography.SIZE_SMALL}pt; "
+                        f"font-family: 'SF Mono', 'Menlo', monospace; font-weight: bold;"
+                    )
+                elif mem.percent > 70:
+                    ram_val.setStyleSheet(
+                        f"color: {Color.AMBER}; font-size: {Typography.SIZE_SMALL}pt; "
+                        f"font-family: 'SF Mono', 'Menlo', monospace;"
+                    )
+        except Exception:
+            pass
+
+    def update_value(self, section: str, key: str, value: str) -> None:
+        """Met à jour une valeur dans une section."""
+        sec = self._sections.get(section)
+        if sec:
+            sec.set_value(key, value)

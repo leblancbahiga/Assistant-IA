@@ -23,6 +23,7 @@ from src.ui.navigation.sidebar import Sidebar
 from src.ui.navigation.nav_controller import NavigationController
 from src.ui.navigation.status_bar import StatusBar
 from src.ui.panels.right_inspector import RightInspectorPanel
+from src.ui.panels.notification_manager import NotificationManager
 from src.ui.pages.chat_page import ChatPage
 from src.ui.theme.theme_manager import ThemeManager
 from src.ui.tokens import Color, Typography, WindowSizes, Spacing
@@ -97,6 +98,12 @@ class MainWindow(QMainWindow):
         # ── Thème ──
         if self._theme:
             self._theme.apply(self)
+
+        # ── Notifications ──
+        self.notif_mgr = NotificationManager(self)
+        self.status_bar.set_notification_manager(self.notif_mgr)
+        if self._engine:
+            self.set_engine(self._engine)
 
         logger.info("MainWindow prête — sidebar + stack + right panel")
 
@@ -280,4 +287,31 @@ class MainWindow(QMainWindow):
     def set_engine(self, engine) -> None:
         """Injecte ou remplace le moteur de conversation."""
         self._engine = engine
-        # Phase 2 : mettre à jour les pages qui en ont besoin
+        if engine is None:
+            return
+
+        # StatusBar ← engine signals
+        self.status_bar.set_engine(engine)
+
+        # RightInspector ← engine signals
+        self.right_panel.set_engine(engine)
+
+        # NotificationManager ← engine errors
+        try:
+            engine.error_occurred.connect(self._on_engine_error)
+        except Exception as e:
+            logger.warning(f"set_engine notification: {e}")
+
+        # Màj des pages qui dépendent de l'engine
+        # (Phase 2b : pages avec services backend)
+        logger.info("Engine connecté à StatusBar + RightInspector + Notifications")
+
+    def _on_engine_error(self, code: str, message: str) -> None:
+        """Notification d'erreur engine."""
+        from src.ui.panels.notification_manager import Severity
+        if hasattr(self, 'notif_mgr') and self.notif_mgr:
+            self.notif_mgr.notify(
+                f"[{code}] {message}",
+                severity=Severity.ERROR,
+                source="engine",
+            )
