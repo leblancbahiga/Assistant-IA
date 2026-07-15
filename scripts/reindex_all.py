@@ -223,16 +223,6 @@ def chunk_text(text: str, source: str, max_chars: int = CHUNK_MAX_CHARS, overlap
     return chunks
 
 
-def _reader_worker(fpath: Path, queue: "Queue"):
-    """Worker picklable pour multiprocessing : lit le fichier et met le contenu dans la queue."""
-    queue.put(_read_file_safe(fpath))
-
-
-def _read_file_safe(fpath: Path) -> str:
-    """Wrapper picklable pour multiprocessing."""
-    return read_file_content(fpath)
-
-
 # ══════════════════════════════════════════════════════════════════════════
 #  Main pipeline
 # ══════════════════════════════════════════════════════════════════════════
@@ -321,27 +311,26 @@ def main():
 
         # ── Étape A: Lire + Chunker le lot ──
         t_batch = time.time()
-        file_timeout = 30  # 30s max par fichier — timeout réel via process séparé
-        from multiprocessing import Process, Queue
+        file_timeout = 30  # 30s max par fichier — timeout via thread daemon
+        import threading
 
         for fpath in batch_files:
             try:
                 f_start = time.time()
-                # Lire le fichier dans un sous-processus (seul moyen fiable d'interrompre du C bloquant)
-                q = Queue()
-                p = Process(target=_reader_worker, args=(fpath, q))
-                p.start()
-                p.join(timeout=file_timeout)
-                if p.is_alive():
-                    p.terminate()
-                    p.join(timeout=5)
+                # Thread daemon : si le fichier bloque (pymupdf C), abandon du thread
+                content_list = []
+                thread = threading.Thread(
+                    target=lambda c, fp: c.append(read_file_content(fp)),
+                    args=(content_list, fpath),
+                    daemon=True,
+                )
+                thread.start()
+                thread.join(timeout=file_timeout)
+                if thread.is_alive():
                     logger.warning(f"⚠️ Timeout {fpath.name} ({file_timeout}s) → skip")
                     total_skipped += 1
                     continue
-                content = q.get() if not q.empty() else ""
-                p.join(timeout=5)
-                q.close()
-                q.join_thread()
+                content = content_list[0] if content_list else ""
                 f_elapsed = time.time() - f_start
                 if not content or len(content.strip()) < MIN_CONTENT_CHARS:
                     total_skipped += 1
