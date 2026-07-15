@@ -151,6 +151,41 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.warning(f"Impossible de charger DashboardPage: {e}")
 
+        # Agents Page
+        try:
+            from src.ui.pages.agents_page import AgentsPage
+            self.nav.register_page("agents", AgentsPage())
+        except Exception as e:
+            logger.warning(f"Impossible de charger AgentsPage: {e}")
+
+        # Tools Page
+        try:
+            from src.ui.pages.tools_page import ToolsPage
+            self.nav.register_page("tools", ToolsPage())
+        except Exception as e:
+            logger.warning(f"Impossible de charger ToolsPage: {e}")
+
+        # Settings Page
+        try:
+            from src.ui.pages.settings_page import SettingsPage
+            self.nav.register_page("settings", SettingsPage())
+        except Exception as e:
+            logger.warning(f"Impossible de charger SettingsPage: {e}")
+
+        # Plugins Page
+        try:
+            from src.ui.pages.plugins_page import PluginsPage
+            self.nav.register_page("plugins", PluginsPage())
+        except Exception as e:
+            logger.warning(f"Impossible de charger PluginsPage: {e}")
+
+        # Models Page
+        try:
+            from src.ui.pages.models_page import ModelsPage
+            self.nav.register_page("models", ModelsPage())
+        except Exception as e:
+            logger.warning(f"Impossible de charger ModelsPage: {e}")
+
         # Home Page (placeholder)
         try:
             from src.ui.pages.home_page import HomePage
