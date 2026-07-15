@@ -46,7 +46,7 @@ class SelfConsistencyEngine:
         self,
         n_samples: int = 3,
         temperature: float = 0.7,
-        similarity_threshold: float = 0.80,
+        similarity_threshold: float = 0.25,
         min_cluster_size: int = 1,
     ):
         """
