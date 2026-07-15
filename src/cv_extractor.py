@@ -258,12 +258,20 @@ async def extract_cv_local(text: str, filename: str = "") -> Optional[CVStructur
     """Extraction via LLM local (Phi-4-mini / Qwen 1.5B).
 
     Utilise mlx_lm.generate pour une extraction non-streaming.
+    Bascule MLX en CPU pour éviter GPU timeout sur M1 8 Go saturé.
     """
     try:
         import mlx.core as mx
         from mlx_lm import load, generate
 
         from src.config import config
+
+        # V15: RAM guard — skip local extraction si mémoire insuffisante
+        import psutil
+        available_gb = psutil.virtual_memory().available / (1024**3)
+        if available_gb < 1.0:
+            logger.warning(f"RAM insuffisante pour extraction CV ({available_gb:.1f} Go), skip local")
+            return None
 
         # Token tronqué si trop long pour le modèle local (1.5B/4B)
         max_chars = 12000  # ~3000 tokens pour le contexte local
@@ -277,13 +285,25 @@ async def extract_cv_local(text: str, filename: str = "") -> Optional[CVStructur
         resolved_path = config.get_model_path(model_id)
 
         logger.info(f"Extraction CV locale avec {model_id}...")
-        model, tokenizer = load(resolved_path)
 
-        response = generate(
-            model, tokenizer,
-            prompt=prompt,
-            max_tokens=1500,
-        )
+        # V15: basculer MLX en CPU pour éviter GPU timeout Metal
+        # (l'extraction de CV est un batch background, la lenteur CPU est acceptable)
+        original_device = mx.default_device()
+        mx.set_default_device(mx.cpu)
+        logger.info("MLX basculé en CPU pour l'extraction CV")
+
+        try:
+            model, tokenizer = load(resolved_path)
+
+            response = generate(
+                model, tokenizer,
+                prompt=prompt,
+                max_tokens=1500,
+            )
+        finally:
+            # Restaurer le device GPU après extraction
+            mx.set_default_device(original_device)
+            logger.info("MLX restauré en GPU")
 
         data = _extract_json_from_response(response)
         if data:
