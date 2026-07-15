@@ -45,17 +45,17 @@ class CollapsibleSection(QFrame):
 
         # Header cliquable
         self._header = QPushButton(f"{icon} {title}")
-        self._header.setObjectName("SectionHeader")
+        self._header.setObjectName("CollapsibleHeader")
         self._header.setCursor(Qt.CursorShape.PointingHandCursor)
         self._header.setFlat(True)
         self._header.setStyleSheet(
-            f"#SectionHeader {{"
+            f"#CollapsibleHeader {{"
             f"  color: {Color.TEXT_PRIMARY};"
             f"  font-size: {Typography.SIZE_CAPTION}pt;"
             f"  font-weight: {Typography.WEIGHT_SEMIBOLD};"
             f"  text-align: left; padding: 4px; border: none; background: transparent;"
             f"}}"
-            f"#SectionHeader:hover {{ color: {Color.CYAN}; }}"
+            f"#CollapsibleHeader:hover {{ color: {Color.CYAN}; }}"
         )
         self._header.clicked.connect(self._toggle)
         layout.addWidget(self._header)

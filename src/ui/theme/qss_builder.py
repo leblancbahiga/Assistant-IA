@@ -148,6 +148,87 @@ def build_qss(dark: bool = True) -> str:
         width: 1px;
     }}
 
+    /* ── CustomTitleBar ── */
+    #CustomTitleBar {{
+        background-color: {Color.BG_DEEP};
+        border-bottom: 1px solid {pal["border"]};
+    }}
+
+    /* ── Notification Popup ── */
+    #NotificationPopup {{
+        background-color: rgba(8, 12, 28, 0.92);
+        border: 1px solid {pal["border"]};
+        border-radius: {Radius.LARGE}px;
+    }}
+
+    #NotificationItem {{
+        color: {pal["text"]};
+        font-size: {Typography.SIZE_CAPTION}pt;
+        padding: {Spacing.SM}px {Spacing.MD}px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+    }}
+
+    #NotificationItem:hover {{
+        background-color: {Color.CYAN_FAINT};
+    }}
+
+    #NotificationBadge {{
+        background-color: {Color.CYAN};
+        color: #000;
+        border-radius: 8px;
+        font-size: {Typography.SIZE_SMALL}pt;
+        font-weight: {Typography.WEIGHT_BOLD};
+        min-width: 16px;
+        min-height: 16px;
+    }}
+
+    /* ── Collapsible Section ── */
+    #CollapsibleHeader {{
+        background-color: transparent;
+        color: {pal["text"]};
+        border: none;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding: {Spacing.SM}px 0;
+        font-size: {Typography.SIZE_CAPTION}pt;
+        font-weight: {Typography.WEIGHT_SEMIBOLD};
+        text-align: left;
+    }}
+
+    #CollapsibleHeader:hover {{
+        color: {Color.CYAN};
+    }}
+
+    /* ── Pages generics ── */
+    #PageSection {{
+        background-color: {pal["card"]};
+        border: 1px solid {pal["border"]};
+        border-radius: {Radius.LARGE}px;
+        padding: {Spacing.LG}px;
+    }}
+
+    #PageCard {{
+        background-color: {pal["card"]};
+        border: 1px solid {pal["border"]};
+        border-radius: {Radius.MEDIUM}px;
+        padding: {Spacing.MD}px;
+    }}
+
+    #PageCard:hover {{
+        border-color: {Color.CYAN_GLOW};
+    }}
+
+    #PageTitle {{
+        color: {pal["text"]};
+        font-size: {Typography.SIZE_HEADING_2}pt;
+        font-weight: {Typography.WEIGHT_BOLD};
+        font-family: {Typography.FAMILY_DISPLAY};
+    }}
+
+    #PageSubtitle {{
+        color: {pal["text_secondary"]};
+        font-size: {Typography.SIZE_BODY}pt;
+    }}
+
     QScrollBar:vertical {{
         background-color: transparent;
         width: 6px;
