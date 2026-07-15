@@ -213,6 +213,21 @@ class MainWindow(QMainWindow):
             self.toggle_right_panel
         )
 
+        # Ctrl+B — Basculer sidebar
+        QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(
+            self.toggle_sidebar
+        )
+
+        # Alt+← — Page précédente
+        QShortcut(QKeySequence("Alt+Left"), self).activated.connect(
+            self._go_back
+        )
+
+        # Alt+→ — Page suivante (non implémenté)
+        QShortcut(QKeySequence("Alt+Right"), self).activated.connect(
+            self._go_forward  # Placeholder
+        )
+
         # Escape — Quitter command palette / focus mode
         QShortcut(QKeySequence("Escape"), self).activated.connect(
             self._on_escape
@@ -250,6 +265,15 @@ class MainWindow(QMainWindow):
         """Touche Escape — retour au mode normal."""
         if not self.right_panel.isVisible() or not self.sidebar.isVisible():
             self.exit_focus_mode()
+
+    def _go_back(self) -> None:
+        """Navigation historique — page précédente."""
+        if self.nav.go_back():
+            logger.debug("↩ Navigation arrière")
+
+    def _go_forward(self) -> None:
+        """Navigation avant (placeholder Phase 4)."""
+        logger.debug("Navigation avant (pas encore implémentée)")
 
     # ── API Engine ───────────────────────────────────────
 

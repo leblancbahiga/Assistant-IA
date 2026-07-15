@@ -20,7 +20,7 @@ _PAL = Color.DARK
 class DocumentsPage(QWidget):
     """Page Documents V16 — importe le composant existant et applique le thème."""
 
-    def __init__(self, ingestion=None, parent=None):
+    def __init__(self, rag_engine=None, ingestion_engine=None, parent=None):
         super().__init__(parent)
         self.setObjectName("DocumentsPageV16")
 
@@ -40,7 +40,10 @@ class DocumentsPage(QWidget):
         try:
             from src.ui.components.documents_page import DocumentsPage as LegacyDocsPage
 
-            self._inner = LegacyDocsPage()
+            self._inner = LegacyDocsPage(
+                rag_engine=rag_engine,
+                ingestion_engine=ingestion_engine,
+            )
             layout.addWidget(self._inner, stretch=1)
         except Exception as e:
             logger.warning(f"Impossible de charger DocumentsPage existante: {e}")

@@ -30,8 +30,10 @@ USE_NEW_UI = True  # False → ancienne UI. True → nouvelle UI V16.
 
 def build_engine():
     """Construit le moteur de conversation partagé (backend)."""
-    from src.core.orchestrator import build_conversation_engine
-    return build_conversation_engine()
+    from src.core.conversation_engine import ConversationEngine
+    engine = ConversationEngine()
+    engine.start()
+    return engine
 
 
 def launch_legacy():

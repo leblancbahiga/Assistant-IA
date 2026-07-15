@@ -63,7 +63,7 @@ class ModelsPage(QWidget):
         card_layout.addStretch()
 
         provider = QLabel("OpenCode Zen")
-        provider.setStyleSheet(f"color: {Color.ACCENT}; font-size: 10pt;")
+        provider.setStyleSheet(f"color: {Color.CYAN}; font-size: 10pt;")
         card_layout.addWidget(provider)
 
         layout.addWidget(active_card)
@@ -85,7 +85,7 @@ class ModelsPage(QWidget):
             row_layout.setContentsMargins(Spacing.MD, 0, Spacing.MD, 0)
 
             status_icon = "●" if active else "○"
-            status_color = Color.ACCENT if active else Color.TEXT_MUTED
+            status_color = Color.CYAN if active else Color.TEXT_MUTED
             icon_lbl = QLabel(status_icon)
             icon_lbl.setStyleSheet(f"color: {status_color}; font-size: 12pt;")
             row_layout.addWidget(icon_lbl)
