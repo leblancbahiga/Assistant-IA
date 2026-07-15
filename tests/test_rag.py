@@ -302,7 +302,7 @@ def test_rag_result_dataclass():
     assert r.top_k_actual == 0
     assert r.tokens_injected == 0
     assert r.diagnostic is None
-    assert r.confidence_label == "HAUTE"
+    assert r.confidence_label == "MOYENNE"  # V15 Phase 0B : défaut neutre
 
     # Remplissage partiel
     r2 = RAGResult(top_score=0.85, chunks_retrieved=3, sources=[{"preview": "doc1"}])

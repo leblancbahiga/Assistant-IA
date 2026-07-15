@@ -190,9 +190,9 @@ def test_context_budget_32k():
 
 
 def test_ragresult_default_haute():
-    """RAGResult créé sans confiance → HAUTE par défaut"""
+    """RAGResult créé sans confiance → MOYENNE par défaut (V15)"""
     result = RAGResult()
-    assert result.confidence_label == "HAUTE"
+    assert result.confidence_label == "MOYENNE"
 
 
 def test_ragresult_top_score_initial():
