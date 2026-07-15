@@ -321,6 +321,17 @@ class NuruOrchestrator:
             if len(full_prompt) > max_safe_chars:
                 full_prompt = full_prompt[:max_safe_chars - 100] + "\n[... tronqué ...]"
 
+        # ── 6.5 Activation CoT (Chain of Thought) ──
+        # V16: Injecte instruction de raisonnement etape par etape
+        # pour les requetes complexes (COMPLEX ou RAG multi-saut)
+        use_cot = False
+        if intent in ("COMPLEX", "RAG", "GENERAL"):
+            from src.learning.chain_of_thought import should_use_cot, format_cot_prompt, extract_reasoning_and_answer
+            use_cot = should_use_cot(query, intent)
+            if use_cot:
+                logger.info(f"💭 CoT activee pour: {query[:50]}...")
+                full_prompt = format_cot_prompt(system_prompt, query, rag_context)
+
         # ── 7. Génération (streaming) ──
         await self.event_bus.emit("pipeline.step", {"step": "generation"})
         response_content = ""
@@ -426,6 +437,19 @@ class NuruOrchestrator:
                 response_content = new_response
         elif warning_msg:
             yield "\n\n---\n" + warning_msg + "\n---\n"
+
+        # V16: Post-traitement CoT — extraire uniquement la reponse finale
+        if use_cot and response_content:
+            from src.learning.chain_of_thought import extract_reasoning_and_answer, strip_reasoning_if_needed
+            reasoning, answer = extract_reasoning_and_answer(response_content)
+            if answer:
+                # Remplacer le yield de la reponse brute si on avait deja yield
+                logger.info(f"💭 CoT: raisonnement extrait ({len(reasoning)} chars), reponse {len(answer)} chars")
+                response_content = answer
+            else:
+                # Fallback: si le parsing echoue, utiliser la reponse brute
+                logger.debug("💭 CoT: parsing non structure, utilisation reponse brute")
+                response_content = strip_reasoning_if_needed(response_content)
 
         # V10.3h : ArchonRefiner — auto‑correction post‑génération
         refined = await self.archon_refiner.refine(
