@@ -38,8 +38,8 @@ class ChatPage(QWidget):
         self._surface = conversation_surface
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(8, 8, 8, 0)
+        layout.setSpacing(8)
 
         # Zone de messages
         if self._surface is not None:

@@ -31,11 +31,11 @@ class BubbleWidget(QFrame):
 
         # DM-1 couleurs
         if is_user:
-            bg = "rgba(0, 212, 255, 0.10)"
+            bg = "rgba(0, 212, 255, 0.15)"
             text_color = Color.TEXT_PRIMARY
             radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.SM}px {Radius.LARGE}px"
         else:
-            bg = Color.BG_SURFACE1
+            bg = "rgba(18, 30, 55, 0.80)"
             text_color = Color.TEXT_PRIMARY
             radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.LARGE}px {Radius.SM}px"
 
@@ -218,7 +218,14 @@ class ConversationSurface(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet("background: transparent;")
+        self.setObjectName("ConversationSurface")
+        self.setStyleSheet(f"""
+            #ConversationSurface {{
+                background-color: rgba(8, 14, 28, 0.55);
+                border: 1px solid rgba(0, 240, 255, 0.06);
+                border-radius: {Radius.LARGE}px;
+            }}
+        """)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.MD, Spacing.MD, Spacing.MD, Spacing.MD)

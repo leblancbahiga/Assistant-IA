@@ -83,6 +83,12 @@ class MainWindow(QMainWindow):
 
         # ── Conteneur central (title bar + splitter) ──
         central = QWidget()
+        central.setObjectName("CentralContainer")
+        central.setStyleSheet(f"""
+            #CentralContainer {{
+                background-color: {Color.BG_DEEP};
+            }}
+        """)
         central_layout = QVBoxLayout(central)
         central_layout.setContentsMargins(0, 0, 0, 0)
         central_layout.setSpacing(0)
