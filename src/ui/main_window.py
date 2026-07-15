@@ -24,6 +24,7 @@ from src.ui.navigation.nav_controller import NavigationController
 from src.ui.navigation.status_bar import StatusBar
 from src.ui.panels.right_inspector import RightInspectorPanel
 from src.ui.panels.notification_manager import NotificationManager
+from src.ui.panels.command_palette import CommandPalette
 from src.ui.pages.chat_page import ChatPage
 from src.ui.theme.theme_manager import ThemeManager
 from src.ui.tokens import Color, Typography, WindowSizes, Spacing
@@ -102,6 +103,11 @@ class MainWindow(QMainWindow):
         # ── Notifications ──
         self.notif_mgr = NotificationManager(self)
         self.status_bar.set_notification_manager(self.notif_mgr)
+
+        # ── Command Palette ──
+        self._palette = CommandPalette(self)
+        self._palette.set_main_window(self)
+
         if self._engine:
             self.set_engine(self._engine)
 
@@ -235,6 +241,11 @@ class MainWindow(QMainWindow):
             self._go_forward  # Placeholder
         )
 
+        # Ctrl+Shift+F — Focus mode
+        QShortcut(QKeySequence("Ctrl+Shift+F"), self).activated.connect(
+            self.toggle_focus_mode
+        )
+
         # Escape — Quitter command palette / focus mode
         QShortcut(QKeySequence("Escape"), self).activated.connect(
             self._on_escape
@@ -249,14 +260,27 @@ class MainWindow(QMainWindow):
     def toggle_sidebar(self) -> None:
         self.sidebar.set_collapsed(not self.sidebar.collapsed)
 
+    def toggle_focus_mode(self) -> None:
+        """Bascule entre mode focus et mode normal."""
+        if getattr(self, '_focus_active', False):
+            self.exit_focus_mode()
+        else:
+            self.enter_focus_mode()
+
     def enter_focus_mode(self) -> None:
         """Masque sidebar et panneau droit — focus sur le chat."""
+        self._focus_active = True
         self.sidebar.setVisible(False)
         self.right_panel.setVisible(False)
+        self.status_bar.show_focus_indicator(True)
+        logger.debug("🔍 Focus mode activé")
 
     def exit_focus_mode(self) -> None:
+        self._focus_active = False
         self.sidebar.setVisible(True)
         self.right_panel.setVisible(True)
+        self.status_bar.show_focus_indicator(False)
+        logger.debug("↩ Focus mode désactivé")
 
     def _new_conversation(self) -> None:
         """Nouvelle conversation — vide le chat actuel."""
@@ -264,12 +288,23 @@ class MainWindow(QMainWindow):
         # Phase 2 : vider le modèle de messages
 
     def _toggle_command_palette(self) -> None:
-        """Placeholder — Phase 4 : vraie Command Palette."""
-        logger.debug("Ctrl+K — Command Palette (Phase 4)")
-        # Phase 4 : overlay CommandPalette
+        """Ctrl+K — Ouvre/ferme la Command Palette."""
+        if self._palette.isVisible():
+            self._palette.close()
+        else:
+            self._palette.show_centered()
 
     def _on_escape(self) -> None:
-        """Touche Escape — retour au mode normal."""
+        """Touche Escape — priorité : fermer palette > quitter focus > rien."""
+        # Priorité 1 : palette ouverte
+        if self._palette.isVisible():
+            self._palette.close()
+            return
+        # Priorité 2 : focus mode
+        if getattr(self, '_focus_active', False):
+            self.exit_focus_mode()
+            return
+        # Priorité 3 : masquage latéraux
         if not self.right_panel.isVisible() or not self.sidebar.isVisible():
             self.exit_focus_mode()
 
@@ -281,6 +316,31 @@ class MainWindow(QMainWindow):
     def _go_forward(self) -> None:
         """Navigation avant (placeholder Phase 4)."""
         logger.debug("Navigation avant (pas encore implémentée)")
+
+    # ── Responsive ────────────────────────────────────────
+
+    def resizeEvent(self, event) -> None:
+        """Réagit au redimensionnement de la fenêtre."""
+        super().resizeEvent(event)
+        w = event.size().width()
+        # < 800px → sidebar repliée, right panel caché
+        if w < 800:
+            if not self.sidebar.collapsed:
+                self.sidebar.set_collapsed(True)
+            if self.right_panel.isVisible():
+                self.right_panel.hide()
+        # 800-1000 → sidebar repliée, right panel visible
+        elif w < 1000:
+            if not self.sidebar.collapsed:
+                self.sidebar.set_collapsed(True)
+            if not self.right_panel.isVisible():
+                self.right_panel.show()
+        # > 1000 → tout visible
+        else:
+            if self.sidebar.collapsed:
+                self.sidebar.set_collapsed(False)
+            if not self.right_panel.isVisible():
+                self.right_panel.show()
 
     # ── API Engine ───────────────────────────────────────
 

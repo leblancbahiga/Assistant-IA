@@ -186,3 +186,14 @@ class StatusBar(QStatusBar):
         elif self._notif_popup:
             self._notif_popup.close()
             self._notif_popup = None
+
+    def show_focus_indicator(self, active: bool) -> None:
+        """Affiche ou cache l'indicateur de mode focus."""
+        if active:
+            self._state_label.setText("🎯 focus")
+            self._state_label.setStyleSheet(
+                f"color: {Color.CYAN}; font-size: {Typography.SIZE_CAPTION}pt; "
+                f"font-family: 'SF Mono', 'Menlo', monospace; font-weight: bold;"
+            )
+        # Le retour à l'état normal est géré par _on_state_changed
+        # quand l'engine envoie un nouvel état
