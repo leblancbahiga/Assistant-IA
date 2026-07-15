@@ -57,6 +57,29 @@ def build_qss(dark: bool = True) -> str:
         border-left: 2px solid {Color.CYAN};
     }}
 
+    /* QToolButton dans la sidebar */
+    QToolButton#SidebarItem {{
+        background-color: transparent;
+        color: {pal["text_secondary"]};
+        border: none;
+        border-radius: {Radius.MEDIUM}px;
+        padding: 0 {Spacing.MD}px;
+        text-align: left;
+        font-size: {Typography.SIZE_BODY}pt;
+        font-family: {Typography.FAMILY_BODY};
+    }}
+
+    QToolButton#SidebarItem:hover {{
+        background-color: {Color.CYAN_FAINT};
+        color: {pal["text"]};
+    }}
+
+    QToolButton#SidebarItem:checked {{
+        background-color: {Color.CYAN_GLOW};
+        color: {Color.CYAN};
+        border-left: 2px solid {Color.CYAN};
+    }}
+
     /* ── StatusBar ── */
     QStatusBar {{
         background-color: {pal["bg"]};

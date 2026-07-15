@@ -5,14 +5,23 @@ Gère le QStackedWidget, la sidebar, les raccourcis et l'historique.
 
 from __future__ import annotations
 
+from typing import Callable
+
 from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QStackedWidget
+from PySide6.QtWidgets import QStackedWidget, QWidget
 
 from src.ui.navigation.sidebar import Sidebar
 
+# Une page peut être soit un widget déjà créé, soit une factory qui le crée au 1er appel
+LazyFactory = Callable[[], "QWidget"]
+
 
 class NavigationController(QObject):
-    """Orchestre la navigation entre pages du QStackedWidget."""
+    """Orchestre la navigation entre pages du QStackedWidget.
+
+    Supporte le chargement paresseux : register_lazy() crée la page
+    seulement lors de la première navigation.
+    """
 
     def __init__(
         self,
@@ -24,19 +33,31 @@ class NavigationController(QObject):
         self._sidebar = sidebar
         self._stack = stack
         self._pages: dict[str, int] = {}  # key → index dans le stack
+        self._factories: dict[str, LazyFactory] = {}  # key → factory (lazy)
         self._history: list[str] = []
 
         sidebar.page_selected.connect(self._on_sidebar_select)
 
     def register_page(self, key: str, widget, make_default: bool = False) -> None:
-        """Enregistre une page dans le stack."""
+        """Enregistre une page déjà instanciée dans le stack."""
         index = self._stack.addWidget(widget)
         self._pages[key] = index
         if make_default:
             self._default_key = key
 
+    def register_lazy(self, key: str, factory: LazyFactory, make_default: bool = False) -> None:
+        """Enregistre une page qui sera créée au premier appel."""
+        self._factories[key] = factory
+        if make_default:
+            self._default_key = key
+
     def navigate_to(self, key: str) -> None:
-        """Navigue vers une page enregistrée."""
+        """Navigue vers une page enregistrée (crée si lazy non encore chargée)."""
+        # Si page lazy non encore chargée, la créer maintenant
+        if key not in self._pages and key in self._factories:
+            widget = self._factories.pop(key)()
+            self.register_page(key, widget)
+
         if key not in self._pages:
             return
         if self._stack.currentWidget():

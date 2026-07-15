@@ -133,10 +133,10 @@ class MainWindow(QMainWindow):
     def _register_default_pages(self) -> None:
         """Enregistre les pages dans le NavigationController.
 
-        Phase 2a : Chat, Documents, Mémoire, Dashboard reconnectés.
-        Phase 2b+ : Agents, Paramètres, Outils, Plugins, Modèles.
+        ChatPage est chargée immédiatement (page par défaut).
+        Les autres pages sont chargées paresseusement (lazy) à la première navigation.
         """
-        # ChatPage — page par défaut
+        # ── ChatPage — page par défaut, chargée tout de suite ──
         if self._engine is not None:
             try:
                 from src.ui.conversation_surface import ConversationSurface
@@ -152,61 +152,38 @@ class MainWindow(QMainWindow):
         self.nav.register_page("chat", chat, make_default=True)
         self.nav.navigate_to("chat")
 
-        # Documents Page
-        try:
-            from src.ui.pages.documents_page import DocumentsPage
-            self.nav.register_page("documents", DocumentsPage(self._engine))
-        except Exception as e:
-            logger.warning(f"Impossible de charger DocumentsPage: {e}")
+        # ── Pages lazy — importées seulement à la 1ʳᵉ navigation ──
+        lazy_pages: list[tuple[str, str, str]] = [
+            ("documents", "src.ui.pages.documents_page", "DocumentsPage"),
+            ("memory", "src.ui.pages.memory_page", "MemoryPage"),
+            ("dashboard", "src.ui.pages.dashboard_page", "DashboardPage"),
+            ("agents", "src.ui.pages.agents_page", "AgentsPage"),
+            ("tools", "src.ui.pages.tools_page", "ToolsPage"),
+            ("settings", "src.ui.pages.settings_page", "SettingsPage"),
+            ("plugins", "src.ui.pages.plugins_page", "PluginsPage"),
+            ("models", "src.ui.pages.models_page", "ModelsPage"),
+        ]
 
-        # Memory Page
-        try:
-            from src.ui.pages.memory_page import MemoryPage
-            self.nav.register_page("memory", MemoryPage())
-        except Exception as e:
-            logger.warning(f"Impossible de charger MemoryPage: {e}")
+        def _factory(key: str, module: str, cls_name: str, engine=None):
+            def _create():
+                try:
+                    import importlib
+                    mod = importlib.import_module(module)
+                    klass = getattr(mod, cls_name)
+                    if module == "src.ui.pages.documents_page":
+                        return klass(engine)
+                    return klass()
+                except Exception as e:
+                    logger.warning(f"Impossible de charger {module}.{cls_name}: {e}")
+                    # Fallback : une QWidget vide
+                    from PySide6.QtWidgets import QWidget
+                    w = QWidget()
+                    w.setObjectName("PageFallback")
+                    return w
+            return _create
 
-        # Dashboard Page
-        try:
-            from src.ui.pages.dashboard_page import DashboardPage
-            self.nav.register_page("dashboard", DashboardPage())
-        except Exception as e:
-            logger.warning(f"Impossible de charger DashboardPage: {e}")
-
-        # Agents Page
-        try:
-            from src.ui.pages.agents_page import AgentsPage
-            self.nav.register_page("agents", AgentsPage())
-        except Exception as e:
-            logger.warning(f"Impossible de charger AgentsPage: {e}")
-
-        # Tools Page
-        try:
-            from src.ui.pages.tools_page import ToolsPage
-            self.nav.register_page("tools", ToolsPage())
-        except Exception as e:
-            logger.warning(f"Impossible de charger ToolsPage: {e}")
-
-        # Settings Page
-        try:
-            from src.ui.pages.settings_page import SettingsPage
-            self.nav.register_page("settings", SettingsPage())
-        except Exception as e:
-            logger.warning(f"Impossible de charger SettingsPage: {e}")
-
-        # Plugins Page
-        try:
-            from src.ui.pages.plugins_page import PluginsPage
-            self.nav.register_page("plugins", PluginsPage())
-        except Exception as e:
-            logger.warning(f"Impossible de charger PluginsPage: {e}")
-
-        # Models Page
-        try:
-            from src.ui.pages.models_page import ModelsPage
-            self.nav.register_page("models", ModelsPage())
-        except Exception as e:
-            logger.warning(f"Impossible de charger ModelsPage: {e}")
+        for key, module, cls_name in lazy_pages:
+            self.nav.register_lazy(key, _factory(key, module, cls_name, self._engine))
 
         # Home Page (placeholder)
         try:

@@ -164,13 +164,11 @@ class CommandPalette(QFrame):
         from src.ui.navigation.sidebar import NAV_ITEMS
         self._commands = []
 
-        # Navigation — pages
-        icon_map = {k: i for k, i, _ in NAV_ITEMS}
-        label_map = {k: l for k, _, l in NAV_ITEMS}
-        for key, icon, label in NAV_ITEMS:
+        label_map = {k: l for k, l in NAV_ITEMS}
+        for key, label in NAV_ITEMS:
             self._commands.append(CommandItem(
                 label=label,
-                icon=icon,
+                icon="",
                 category="Navigation",
                 shortcut_hint="",
                 page_key=key,
