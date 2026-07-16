@@ -16,7 +16,7 @@ Conçu pour tourner en local d'abord, sur un MacBook Pro M1 de 8 Go de RAM unifi
   <a href="NURUV15.md"><img src="https://img.shields.io/badge/V15%20Consolidation-NURUV15.md-a855f7?style=for-the-badge" alt="V15 Consolidation"/></a>
   <img src="https://img.shields.io/badge/Platform-macOS%20M1%208GB-39FF14?style=for-the-badge&logo=apple&logoColor=white" alt="macOS M1 8GB"/>
   <img src="https://img.shields.io/badge/LLM-Phi--4--mini%20(MLX)-FFB000?style=for-the-badge" alt="LLM Phi-4-mini"/>
-  <img src="https://img.shields.io/badge/Tests-151%20tests-success?style=for-the-badge" alt="151 tests"/>
+  <img src="https://img.shields.io/badge/Tests-157%20tests-success?style=for-the-badge" alt="157 tests"/>
   <img src="https://img.shields.io/badge/V15%20Phase%205-%E2%9C%85-success?style=for-the-badge" alt="Phase 5 done"/>
   <img src="https://img.shields.io/badge/Architecture-DeepSeek--like-8B5CF6?style=for-the-badge" alt="DeepSeek-like"/>
 </p>
@@ -92,7 +92,7 @@ PYTHONPATH="" python3 -m pytest tests/ --ignore=tests/test_memory.py -v
 | `python3 run_v12.py` | Interface ambiante V12 (tray icon + floating widget + orb animé) |
 | `python3 cli.py` | Mode terminal pour usage SSH / serveur headless |
 | `python3 reindex_all.py` | Indexe tous les documents du workspace |
-| `PYTHONPATH="" pytest tests/` | Suite complète — 151 tests (RAG, agent, mémoire, router, KV cache) |
+| `PYTHONPATH="" pytest tests/` | Suite complète — 157 tests (RAG, agent, mémoire, router, KV cache) |
 
 > **Note :** `PYTHONPATH=""` nécessaire à cause d'un conflit entre venv Python 3.13 et pydantic_core du système 3.11.
 
@@ -350,6 +350,10 @@ Branche: "Je soupçonne une erreur dans config.yml"
 │  Self-Consistency · Chain of Thought · ToT Agentic      │
 │  └─ Validation outil via [OUTIL: nom(args)]             │
 ╞═════════════════════════════════════════════════════════╡
+│              V16.4 — LORA RAG FINE-TUNING ✅           │
+│  Dataset 384 ex · 2000 iters · 4 layers M1            │
+│  Training 3h46 · Score éval 68% (20/29)                │
+╞═════════════════════════════════════════════════════════╡
 │              V15 — OPTIMISATIONS (terminée ✅)          │
 │  LoRA RAG · Speculative · KV Compression · RAM Budget   │
 │  CI/CD · ROADMAP                                        │
@@ -359,6 +363,65 @@ Branche: "Je soupçonne une erreur dans config.yml"
 │  ModelRouter · CostGuard · Pipeline vocal               │
 └─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## V16.4 — LoRA RAG Fine-Tuning ✅
+
+Entraînement LoRA comportemental pour renforcer la capacité du modèle à **répondre à partir du contexte RAG** et **citer ses sources**.
+
+### Pipeline
+
+```
+RAG chunks (3993) → build_large_dataset.py → train.jsonl (384 ex, 18% piège)
+                                                   └→ valid.jsonl (16 ex, 25% piège)
+                                                         ↓
+                                              lora_train.py V16.4
+                                        Phi-4-mini-instruct-4bit (MLX)
+                                            2000 iters, 4 layers, 1024 seq
+                                         cosine_decay + warmup 30 + dropout 0.05
+                                                         ↓
+                                          adapters.safetensors (1.44M params)
+```
+
+### Résultats du training
+
+| Iters | Train Loss | Val Loss | LR | RAM |
+|-------|-----------|---------|-----|-----|
+| 1 | — | 3.023 | 5.0e-05 | 3.78 GB |
+| 500 | 1.335 | 1.269 | 4.4e-05 | 4.18 GB |
+| 1000 | 1.134 | 1.228 | 3.5e-05 | 4.18 GB |
+| 1500 | 0.921 | 1.301 | 1.6e-07 | 4.18 GB |
+| **2000** | **0.897** | **1.155** | **3.2e-08** | **4.18 GB** |
+
+- Durée : **3h46** sur M1 8 Go (13567s)
+- Pas de crash GPU — `num_layers=4` + `grad_checkpoint` + `clear_cache_threshold`
+- Pics mémoire : 4.18 GB (stable)
+
+### Évaluation factuelle (29 questions)
+
+| Catégorie | Score | Détail |
+|-----------|-------|--------|
+| ✅ Positifs (réponse dans le contexte) | **19/24 (79%)** | Réponses correctes avec `[Source: ...]` |
+| ⚠️ Positifs (source sans réponse) | 2/24 | Source trouvée mais refus inattendu |
+| ❌ Positifs (pas de source) | 3/24 | Réponse sans format `[Source:]` |
+| ✅ Pièges (refus correct) | **1/5 (20%)** | « CA BEACCOM 2025 ? » refusé |
+| ⚠️ Pièges (réponse sans source) | 3/5 | Ni refus ni source |
+| ❌ Hallucination | 1/29 | Invention d'un chiffre |
+| **GLOBAL** | **20/29 (68%)** | |
+
+**Enseignements :**
+- ✅ Le modèle a bien appris à citer `[Source: nom]` dans 79% des cas
+- ⚠️ Détection des pièges insuffisante — besoin de ~30% d'exemples piège vs 18% actuel
+- ✅ Stable sur M1 8 Go — pas de crash, pas d'OOM, mémoire sous contrôle
+
+### Scripts associés
+
+| Script | Rôle |
+|--------|------|
+| `scripts/build_large_dataset.py` | Génération dataset 400 ex depuis RAG |
+| `scripts/lora_train.py` | Entraînement LoRA (config V16.4) |
+| `scripts/eval_factual.py` | Évaluation factuelle avec questions réelles |
 
 ---
 
@@ -373,7 +436,7 @@ Branche: "Je soupçonne une erreur dans config.yml"
 | Anti-collision | 2 | `PYTHONPATH="" pytest tests/test_naming_collisions.py -v` |
 | RAG Scoring | 26 | `PYTHONPATH="" pytest tests/test_rag_scoring.py -v` |
 | Memory (GPU réel) | 15 | `pytest tests/test_memory.py -v` *(3 échecs connus)* |
-| **Total** | **151+** | `PYTHONPATH="" pytest tests/ --ignore=tests/test_memory.py -v` |
+| **Total** | **157** | `PYTHONPATH="" pytest tests/ --ignore=tests/test_memory.py -v` |
 
 > `PYTHONPATH=""` évite un conflit pydantic_core entre l'environnement système (Python 3.11) et le venv (3.13).
 
@@ -419,4 +482,4 @@ MIT. Voir [`LICENSE`](LICENSE).
 
 ---
 
-*Document mis à jour le 15 juillet 2026 — NURU V16 Raisonnement ✅ — Self-Consistency · CoT · ToT Agentic — 130+ tests ✅*
+*Document mis à jour le 16 juillet 2026 — NURU V16.4 LoRA RAG ✅ — Fine-tuning Phi-4-mini + Évaluation factuelle 68% — 157 tests ✅*

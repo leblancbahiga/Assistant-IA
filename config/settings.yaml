@@ -10,7 +10,7 @@ hybrid_enabled: true
 hybrid_mode: cloud_first
 learning_enabled: true
 local_model: mlx-community/Phi-4-mini-instruct-4bit
-local_model_fallback: mlx-community/Qwen2.5-1.5B-Instruct-4bit
+local_model_fallback: mlx-community/Phi-4-mini-instruct-4bit
 nuru_brain_enabled: true
 nuru_brain_watch_enabled: false
 rag_k: 5
