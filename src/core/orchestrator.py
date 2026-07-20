@@ -733,10 +733,31 @@ class NuruOrchestrator:
         temperature: float,
     ) -> str:
         """Génère une réponse complète (non-streaming) pour Self-Consistency.
-        
-        Utilise le LocalLLM directement avec temperature variable.
+
+        V16 FIX : Vérifie d'abord le swap avant de charger le LLM local.
+        Si swap > 80%, utilise le cloud LLM pour éviter le freeze système.
         """
-        # Utiliser la méthode generate (non-streaming) du LocalLLM
+        # Swap guard : cloud LLM si pression mémoire critique
+        try:
+            from src.core.ram_budget import get_budget
+            probe = get_budget().probe()
+            if probe.swap_percent > 80:
+                logger.warning(
+                    f"⚠️ SC: swap {probe.swap_percent:.0f}% → cloud LLM "
+                    f"(temp={temperature})"
+                )
+                tokens = []
+                async for t in self.cloud_llm.generate_stream(
+                    prompt=prompt, intent=intent, temperature=temperature,
+                ):
+                    if isinstance(t, str):
+                        tokens.append(t)
+                return "".join(tokens)
+        except Exception:
+            logger.warning("⚠️ SC: swap guard cloud a échoué → fallback local")
+            pass
+
+        # Fallback local
         return await self.local_llm.generate(
             prompt=prompt,
             intent=intent,
