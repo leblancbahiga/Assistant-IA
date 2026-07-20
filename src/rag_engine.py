@@ -915,8 +915,15 @@ class RAGEngine:
         
         if should_rerank:
             budget = get_budget()
+            # V16 FIX : Skip reranker si swap > 50% (M1 8 Go — thrashing évité)
+            probe = budget.probe()
+            if probe.swap_percent > 50:
+                logger.info(
+                    f"⏭️ Reranker sauté : swap {probe.swap_percent:.0f}% > 50% → BM25 direct"
+                )
+                should_rerank = False
             # Vérifier si on peut charger le reranker dans le budget
-            if not budget.can_load("reranker"):
+            elif not budget.can_load("reranker"):
                 logger.warning(
                     "⏭️ Reranker sauté : budget RAM insuffisant "
                     f"(swap {budget.probe().swap_percent:.0f}%)"

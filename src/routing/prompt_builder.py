@@ -33,6 +33,7 @@ class DynamicPromptBuilder:
         context_budget: Optional[Any] = None,
         session_max_context: int = 8,
         model_family: str = "phi",
+        confidence_label: str | None = None,  # V16 FIX
     ):
         """Build le prompt complet — copie exacte de orchestrator._build_prompt() lignes 471-570.
 
@@ -84,6 +85,7 @@ class DynamicPromptBuilder:
                 intent=intent,
                 facts=memory_store.get_recent_facts(limit=20) if memory_store else [],
                 procedures=memory_store.get_procedures() if memory_store else [],
+                confidence_label=confidence_label,  # V16 FIX
             )
         else:
             from src.identity_manager import IdentityManager

@@ -345,6 +345,7 @@ class NuruOrchestrator:
             context_budget=self.context_budget,
             model_family=self._model_for_intent(intent),
             session_max_context=self._session_max_context,
+            confidence_label=getattr(rag_result, 'confidence_label', None) if rag_result else None,  # V16 FIX
         )
 
         # Action E : Budget token post-template — écrêtage final du prompt complet
@@ -392,14 +393,26 @@ class NuruOrchestrator:
 
         try:
             # ── Generation : ToT / Self-Consistency / Streaming ──
-            use_self_consistency = (
+            # V16 FIX : Skip Self-Consistency si swap > 50% (M1 8 Go)
+            use_sc = (
                 not use_tot
                 and intent == "RAG"
                 and rag_context
                 and rag_result
                 and getattr(rag_result, 'confidence_label', 'FAIBLE') in ("HAUTE", "MOYENNE")
-                and len(rag_context) > 100
             )
+            if use_sc:
+                try:
+                    from src.core.ram_budget import get_budget
+                    probe = get_budget().probe()
+                    if probe.swap_percent > 50:
+                        use_sc = False
+                        logger.info(
+                            f"⏭️ Self-Consistency désactivée (swap={probe.swap_percent:.0f}%)"
+                        )
+                except Exception:
+                    pass
+            use_self_consistency = use_sc
 
             if use_tot:
                 # V16: Tree of Thoughts Agentic (exploration + validation outils)

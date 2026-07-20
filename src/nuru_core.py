@@ -141,7 +141,8 @@ class NuruCore:
         )
         # Connecte le déchargement du reranker au RAMMonitor
         self.ram_monitor.register_callback(self.rag.clear_reranker)
-        self.ram_monitor.start()
+        # NOTE : ram_monitor.start() déplacé dans start_background_tasks()
+        # car il nécessite une boucle asyncio en cours d'exécution.
 
         # V4.5 : Orchestrateur pipeline (utilise les mêmes composants)
         self.orchestrator = NuruOrchestrator(
@@ -294,6 +295,9 @@ class NuruCore:
         L'indexation est maintenant manuelle via les Préférences.
         Le watcher temps réel continue pour les fichiers modifiés.
         """
+        # V16 FIX : RAMMonitor.start() ici (dans le thread asyncio) plutôt que dans __init__
+        self.ram_monitor.start()
+        
         # V17 : Auto-indexation startup retirée — saturation RAM sur M1 8 Go
         # asyncio.create_task(self._auto_index_with_ram_guard()).add_done_callback(...)
         
@@ -668,7 +672,9 @@ class NuruCore:
                 logger.debug(f"Proactive collect: {e}")
             await asyncio.sleep(120)  # Collecte toutes les 2 minutes
 
-    def build_system_prompt(self, intent: str, facts: list[str] = None, procedures: str = "") -> str:
+    def build_system_prompt(self, intent: str, facts: list[str] = None,
+                            procedures: str = "",
+                            confidence_label: str | None = None) -> str:  # V16 FIX
         from src.identity_manager import IdentityManager
         identity = IdentityManager.load()
         static_prompt = SYSTEM_PROMPT_TEMPLATE.format(
@@ -686,6 +692,26 @@ class NuruCore:
 # RAPPEL RAG
 Le CONTEXTE ci-dessous (entre === DÉBUT DU CONTEXTE === et === FIN DU CONTEXTE ===)
 est la source principale. Applique les règles du MODE RAG STRICT ci-dessus.""".strip())
+            # V16 FIX : Propager le niveau de confiance RAG au LLM
+            if confidence_label:
+                if confidence_label == "ABSENT":
+                    parts.append("""
+⚠️ CONFIANCE DOCUMENT : AUCUN DOCUMENT PERTINENT TROUVÉ
+Aucun document correspondant n'a été trouvé dans la base RAG pour cette requête.
+Ne tente PAS d'inventer des informations à partir de documents inexistants.
+Réponds honnêtement que tu ne trouves pas d'information pertinente dans les sources,
+et propose d'aider l'utilisateur à reformuler sa recherche.""".strip())
+                elif confidence_label == "FAIBLE":
+                    parts.append("""
+⚠️ CONFIANCE DOCUMENT : FAIBLE
+Les documents trouvés ont une faible pertinence par rapport à la requête.
+Vérifie attentivement chaque information avant de l'utiliser.
+Si les documents ne répondent pas correctement à la question, indique les limites.""".strip())
+                elif confidence_label == "MOYENNE":
+                    parts.append("""
+ℹ️ CONFIANCE DOCUMENT : MOYENNE
+Les documents trouvés sont modérément pertinents. Peux servir de base de réponse
+mais vérifie les affirmations importantes contre le contexte.""".strip())
         elif intent == "COMPLEX":
             parts.append("""
 # MODE RECHERCHE WEB
