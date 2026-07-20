@@ -76,24 +76,17 @@ class ConversationEngine(QObject):
     # ── Cycle de vie ──
 
     def start(self) -> None:
-        """Initialise NuruCore et démarre la boucle asyncio en arrière-plan."""
+        """Initialise NuruCore dans le thread asyncio (pas de blocage UI)."""
         if self._started:
             logger.warning("ConversationEngine déjà démarré")
             return
 
-        logger.info("🚀 ConversationEngine — initialisation...")
+        logger.info("🚀 ConversationEngine — démarrage thread asyncio...")
         self.state_changed.emit(OrbState.THINKING)
 
-        try:
-            self._nuru = NuruCore()
-            logger.info("✅ NuruCore initialisé")
-        except Exception as e:
-            logger.error(f"❌ Échec NuruCore: {e}")
-            self.error_occurred.emit("init", str(e))
-            self.state_changed.emit(OrbState.ERROR)
-            return
-
-        # Thread asyncio dédié
+        # V16 FIX : Créer le thread asyncio AVANT NuruCore pour éviter
+        # le blocage de l'UI (15-20s de freeze). NuruCore est construit
+        # dans _init_async sur le thread asyncio dédié.
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(
             target=self._run_async_loop,
@@ -102,7 +95,7 @@ class ConversationEngine(QObject):
         )
         self._thread.start()
 
-        # Lancer les tâches background dans le thread asyncio
+        # Construire NuruCore dans le thread asyncio
         future = asyncio.run_coroutine_threadsafe(
             self._init_async(),
             self._loop,
@@ -115,12 +108,15 @@ class ConversationEngine(QObject):
         self._loop.run_forever()
 
     async def _init_async(self) -> None:
-        """Initialisation asynchrone : démarrage des tâches background."""
+        """Construit NuruCore et démarre les tâches background (thread asyncio)."""
         try:
+            self._nuru = NuruCore()
+            logger.info("✅ NuruCore initialisé dans le thread asyncio")
             self._nuru.start_background_tasks()
             logger.info("✅ Tâches background NuruCore démarrées")
         except Exception as e:
-            logger.error(f"⚠️ start_background_tasks: {e}")
+            logger.error(f"⚠️ Échec NuruCore asynchrone: {e}")
+            raise
 
     def _on_init_done(self, future: asyncio.Future) -> None:
         """Callback quand l'init asynchrone est terminée."""
