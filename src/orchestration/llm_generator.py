@@ -152,6 +152,25 @@ class LLMGenerator:
             and self.policy_engine.should_use_cloud(ctx)
         )
 
+        # V16 FIX : même en mode local_only, forcer cloud si swap critique
+        # (swap > 80%) pour éviter la boucle hallucinatoire sous pression mémoire.
+        # NOTE : ctx.ram_free_mb (psutil.available) n'est pas fiable sur macOS car
+        # le cache système gonfle le chiffre même quand la RAM est saturée.
+        # swap_percent depuis RAMBudgetManager est le vrai indicateur de pression.
+        swap_too_high = False
+        try:
+            from src.core.ram_budget import get_budget
+            probe = get_budget().probe()
+            swap_too_high = probe.swap_percent > 80
+        except Exception:
+            pass  # Fallback silencieux si RAMBudgetManager indisponible
+        if not use_cloud_first and hybrid == "local_only" and ctx.is_online and swap_too_high:
+            use_cloud_first = True
+            logger.warning(
+                f"⚠️ Swap critique ({probe.swap_percent if 'probe' in dir() else '?'}%)"
+                f" — forçage cloud malgré hybrid={hybrid}"
+            )
+
         if use_cloud_first or hybrid == "verify":
             if not ctx.is_online:
                 logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")

@@ -6,12 +6,13 @@ BFS avec auto-evaluation + backtracking + outils MCP/locaux.
 V16 Agentic : chaque branche peut etre validee/invalidee par une action reelle
 (lecture fichier, recherche RAG, terminal) via validate_fn.
 """
-
+import asyncio
 import logging
 import re
 import time
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Awaitable
+from typing import Callable, Awaitable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -92,12 +93,34 @@ mais donne une reponse autonome (qui se tient sans le raisonnement)."""
 
 # ── Detection d'actions dans les branches ──
 
+# Optimisation Regex V16 : guillemets optionnels (simples, doubles, backticks ou nus)
+# Tolere les espaces apres les virgules, autorise la casse
 TOOL_PATTERNS: dict[str, re.Pattern] = {
-    "read_file": re.compile(r'\[OUTIL:\s*read_file\s*\([^)]*path\s*=\s*(["\'])([^"\']+)\1'),
-    "search_files": re.compile(r'\[OUTIL:\s*search_files?\s*\([^)]*query\s*=\s*(["\'])([^"\']+)\1'),
-    "search_memory": re.compile(r'\[OUTIL:\s*search_memory\s*\([^)]*query\s*=\s*(["\'])([^"\']+)\1'),
-    "rag_query": re.compile(r'\[OUTIL:\s*rag_query\s*\([^)]*query\s*=\s*(["\'])([^"\']+)\1'),
-    "run_command": re.compile(r'\[OUTIL:\s*run_command\s*\([^)]*command\s*=\s*(["\'])([^"\']+)\1'),
+    "read_file": re.compile(
+        r'\[OUTIL:\s*read_file\s*\([^)]*?path\s*=\s*'
+        r'(?:["\'`]?([^"\'`)\]]+)["\'`]?)\s*\)',
+        re.IGNORECASE
+    ),
+    "search_files": re.compile(
+        r'\[OUTIL:\s*search_files?\s*\([^)]*?query\s*=\s*'
+        r'(?:["\'`]?([^"\'`)\]]+)["\'`]?)\s*\)',
+        re.IGNORECASE
+    ),
+    "search_memory": re.compile(
+        r'\[OUTIL:\s*search_memory\s*\([^)]*?query\s*=\s*'
+        r'(?:["\'`]?([^"\'`)\]]+)["\'`]?)\s*\)',
+        re.IGNORECASE
+    ),
+    "rag_query": re.compile(
+        r'\[OUTIL:\s*rag_query\s*\([^)]*?query\s*=\s*'
+        r'(?:["\'`]?([^"\'`)\]]+)["\'`]?)\s*\)',
+        re.IGNORECASE
+    ),
+    "run_command": re.compile(
+        r'\[OUTIL:\s*run_command\s*\([^)]*?command\s*=\s*'
+        r'(?:["\'`]?([^"\'`)\]]+)["\'`]?)\s*\)',
+        re.IGNORECASE
+    ),
 }
 
 
@@ -118,7 +141,7 @@ class TreeOfThoughtsEngine:
 
     def __init__(
         self,
-        max_depth: int = 3,
+        max_depth: int = 2,
         branch_factor: int = 2,
         min_score_to_expand: float = 0.3,
         max_nodes_total: int = 20,
@@ -167,11 +190,11 @@ class TreeOfThoughtsEngine:
         # Decrire les outils disponibles pour le prompt
         tools_desc = self._describe_tools(validate_fn is not None)
 
-        # BFS : file de noeuds a expandre
-        frontier: list[ThoughtNode] = [root]
+        # BFS : file de noeuds a expandre (deque pour O(1) popleft)
+        frontier: deque[ThoughtNode] = deque([root])
 
         while frontier and result.nodes_explored < self.max_nodes_total:
-            node = frontier.pop(0)
+            node = frontier.popleft()
 
             if node.depth >= depth:
                 continue
@@ -363,7 +386,7 @@ class TreeOfThoughtsEngine:
         for tool_name, pattern in TOOL_PATTERNS.items():
             m = pattern.search(text)
             if m:
-                return (tool_name, m.group(2))
+                return (tool_name, m.group(1))
         return None
 
     def _describe_tools(self, has_validate_fn: bool) -> str:

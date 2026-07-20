@@ -3,7 +3,8 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import AsyncGenerator
+from threading import Lock
+from typing import Any, AsyncGenerator, Optional
 from src.config import config
 from src.rag_engine import RAGEngine
 from src.routing import Router
@@ -232,6 +233,14 @@ class NuruCore:
             ("api.groq.com", 443),
             ("openrouter.ai", 443),
             ("api.deepseek.com", 443),
+            ("opencode.ai", 443),
+            ("dashscope.aliyuncs.com", 443),
+            ("api.openai.com", 443),
+            ("generativelanguage.googleapis.com", 443),
+            ("api.together.xyz", 443),
+            ("api.mistral.ai", 443),
+            ("api.x.ai", 443),
+            ("integrate.api.nvidia.com", 443),
         ]
         for host, port in hosts:
             try:
@@ -252,6 +261,14 @@ class NuruCore:
             "api.groq.com",
             "openrouter.ai",
             "api.deepseek.com",
+            "opencode.ai",
+            "dashscope.aliyuncs.com",
+            "api.openai.com",
+            "generativelanguage.googleapis.com",
+            "api.together.xyz",
+            "api.mistral.ai",
+            "api.x.ai",
+            "integrate.api.nvidia.com",
         ]
         async def _try_host(host: str) -> bool:
             try:
@@ -273,14 +290,13 @@ class NuruCore:
     def start_background_tasks(self):
         """Lance les tâches asynchrones et le watcher en arrière-plan.
         
-        V11.2 : Auto-indexation réactivée avec RAM guard
-        Le watcher temps réel continue de fonctionner normalement.
+        V17 : Auto-indexation startup désactivée (trop de RAM sur M1 8 Go).
+        L'indexation est maintenant manuelle via les Préférences.
+        Le watcher temps réel continue pour les fichiers modifiés.
         """
-        # V11.2 : Auto-indexation réactivée avec RAM guard
-        # Vérifie la RAM avant chaque fichier pour éviter la saturation
-        asyncio.create_task(self._auto_index_with_ram_guard()).add_done_callback(
-            lambda t: t.exception() if not t.cancelled() else None
-        )
+        # V17 : Auto-indexation startup retirée — saturation RAM sur M1 8 Go
+        # asyncio.create_task(self._auto_index_with_ram_guard()).add_done_callback(...)
+        
         # V4.5 : Document watcher (watchdog) pour auto-indexation temps réel
         self._watcher = DocumentWatcher(index_callback=self.ingestion.index_file)
         self._watcher.start()
@@ -318,91 +334,139 @@ class NuruCore:
             self._watcher.stop()
         logger.info("🛑 Auto-indexation arrêtée — utiliser reset_index() pour réactiver")
 
-    async def _auto_index_with_ram_guard(self) -> None:
-        """Auto-indexation périodique avec protection RAM (V11.2).
-
-        Scanne ~/Documents, ~/Desktop, ~/Downloads toutes les 3600s.
-        Vérifie RAM libre > 500 MB avant chaque fichier pour
-        éviter la saturation sur M1 8 Go.
-        Le watcher temps réel continue de gérer les modifications.
+    async def start_indexing(self, directories: Optional[list[Path]] = None) -> int:
+        """Lance une indexation manuelle (un seul cycle) sur les dossiers spécifiés.
+        
+        V17: Pour déclenchement depuis les Préférences — pas de boucle,
+        pas de sleep initial, RAM guard conservée.
+        Retourne le nombre de fichiers indexés.
         """
+        if not self._indexing_enabled:
+            self._indexing_enabled = True
+        
+        dirs = directories or [
+            Path.home() / "Documents",
+            Path.home() / "Desktop", 
+            Path.home() / "Downloads",
+        ]
+        # Exécute la logique de _auto_index_with_ram_guard en one-shot
+        count = await self._run_index_cycle(dirs)
+        return count
+
+    async def _run_index_cycle(self, dirs_to_index: list[Path]) -> int:
+        """Exécute un cycle d'indexation one-shot avec RAM guard.
+
+        V17: extrait de _auto_index_with_ram_guard pour réutilisable
+        en manuel (start_indexing) ou automatique.
+        Retourne le nombre de fichiers indexés.
+        """
+        EXCLUDED_DIRS = {
+            ".git", ".venv", "__pycache__", "node_modules",
+            ".hermes", "indexes",
+            ".mypy_cache", ".pytest_cache", ".ruff_cache",
+        }
+        EXCLUDED_DIR_SUFFIXES = {".egg-info", ".eggs"}
+
+        def _should_skip_dir(dirname: str) -> bool:
+            if dirname in EXCLUDED_DIRS:
+                return True
+            if any(dirname.endswith(s) for s in EXCLUDED_DIR_SUFFIXES):
+                return True
+            if dirname.startswith(".") and dirname not in (".config", ".local", ".ssh"):
+                return True
+            return False
+
+        def _walk_dirs(base_dir: Path):
+            for root, dirs, files in os.walk(base_dir):
+                dirs[:] = [d for d in dirs if not _should_skip_dir(d)]
+                yield root, dirs, files
+
+        logger.info("🔍 Scan d'indexation démarré...")
+        total = 0
+
+        for base_dir in dirs_to_index:
+            if not base_dir.exists():
+                continue
+            for root, _, files in _walk_dirs(base_dir):
+                for file in files:
+                    if any(file.lower().endswith(e) for e in SUPPORTED_EXTENSIONS):
+                        total += 1
+
+        logger.info(f"📊 {total} fichiers éligibles trouvés au total")
+
+        processed = 0
+        indexed = 0
+        for base_dir in dirs_to_index:
+            if not base_dir.exists():
+                continue
+            for root, _, files in _walk_dirs(base_dir):
+                for file in files:
+                    if not any(file.lower().endswith(e) for e in SUPPORTED_EXTENSIONS):
+                        continue
+                    filepath = os.path.join(root, file)
+
+                    # Skip >500KB
+                    try:
+                        fsize = os.path.getsize(filepath)
+                        if fsize > 500 * 1024:
+                            logger.debug(
+                                f"⏭️ Trop lourd ({fsize/1024:.0f} KB): {filepath}"
+                            )
+                            continue
+                    except OSError:
+                        continue
+
+                    # RAM guard
+                    import psutil
+                    ram = psutil.virtual_memory()
+                    if ram.available < 250 * 1024 * 1024:
+                        logger.warning(
+                            f"⚠️ RAM critique ({ram.available/1024**3:.1f} Go) — "
+                            f"sauté: {filepath}"
+                        )
+                        continue
+                    if ram.available < 500 * 1024 * 1024:
+                        logger.warning(
+                            f"⚠️ RAM insuffisante ({ram.available/1024**3:.1f} Go) — "
+                            f"pause 30s avant {filepath}"
+                        )
+                        await asyncio.sleep(30)
+                        ram = psutil.virtual_memory()
+                        if ram.available < 500 * 1024 * 1024:
+                            logger.warning(
+                                f"⚠️ RAM toujours insuffisante après pause — "
+                                f"sauté: {filepath}"
+                            )
+                            continue
+
+                    await self.ingestion.index_file(filepath)
+                    indexed += 1
+                    processed += 1
+
+                    if processed % 10 == 0 or processed == total:
+                        logger.info(
+                            f"📄 Indexation: {processed}/{total} traités ({indexed} indexés)"
+                        )
+                    await asyncio.sleep(0.5)
+
+        logger.info(
+            f"✅ Indexation terminée: {indexed}/{total} fichiers indexés."
+        )
+        return indexed
+
+    async def _auto_index_with_ram_guard(self) -> None:
+        """Auto-indexation périodique (conservée pour compatibilité)."""
         dirs_to_index = [
             Path.home() / "Documents",
             Path.home() / "Desktop",
             Path.home() / "Downloads",
         ]
-
-        # 1. Attendre 60s au démarrage (laisser le temps à l'app de charger)
         await asyncio.sleep(60)
-
         while self._indexing_enabled:
-            logger.info("🔍 Scan auto-indexation V11.2 (RAM guard) démarré...")
-            total = 0
-            indexed = 0
-
-            # Compter d'abord le total de fichiers éligibles
-            for base_dir in dirs_to_index:
-                if not base_dir.exists():
-                    continue
-                for root, _, files in os.walk(base_dir):
-                    for file in files:
-                        if any(file.lower().endswith(e) for e in SUPPORTED_EXTENSIONS):
-                            total += 1
-
-            logger.info(f"📊 {total} fichiers éligibles trouvés au total")
-
-            processed = 0
-            for base_dir in dirs_to_index:
-                if not base_dir.exists():
-                    continue
-                for root, _, files in os.walk(base_dir):
-                    for file in files:
-                        if not any(file.lower().endswith(e) for e in SUPPORTED_EXTENSIONS):
-                            continue
-                        filepath = os.path.join(root, file)
-
-                        # 3. Vérifier RAM libre > 500 MB
-                        import psutil
-                        ram = psutil.virtual_memory()
-                        if ram.available < 500 * 1024 * 1024:  # 500 MB
-                            logger.warning(
-                                f"⚠️ RAM insuffisante ({ram.available / 1024**3:.1f} Go dispo) — "
-                                f"pause 60s avant {filepath}"
-                            )
-                            await asyncio.sleep(60)
-                            # Réessayer la vérification après la pause
-                            ram = psutil.virtual_memory()
-                            if ram.available < 500 * 1024 * 1024:
-                                logger.warning(
-                                    f"⚠️ RAM toujours insuffisante après pause — "
-                                    f"fichier sauté: {filepath}"
-                                )
-                                continue
-
-                        # 5. Indexer le fichier
-                        await self.ingestion.index_file(filepath)
-                        indexed += 1
-
-                        processed += 1
-                        # 8. Log le progrès
-                        if processed % 10 == 0 or processed == total:
-                            logger.info(
-                                f"📄 Auto-indexation: {processed}/{total} fichiers "
-                                f"traités ({indexed} indexés)"
-                            )
-
-                        # 6. Pause entre chaque fichier
-                        await asyncio.sleep(0.5)
-
-            logger.info(
-                f"✅ Cycle auto-indexation terminé: "
-                f"{indexed}/{total} fichiers indexés. "
-                f"Prochain scan dans 1h."
-            )
-            # 7. Vérifier le flag toutes les 10s pendant l'attente (permet un arrêt rapide)
+            await self._run_index_cycle(dirs_to_index)
+            # Attendre 1h avec arrêt possible
             for _ in range(360):
                 if not self._indexing_enabled:
-                    logger.info("🛑 Auto-indexation arrêtée sur demande")
                     return
                 await asyncio.sleep(10)
 
@@ -435,6 +499,12 @@ class NuruCore:
                 task_types=[TaskType.COMPLEX, TaskType.CODE, TaskType.CREATIVE],
                 cost_per_1k_tokens=0.0002, priority=6,
                 avg_accuracy=0.88,
+            ),
+            ModelRoute(
+                name="opencode_zen/deepseek-v4-flash-free", provider="opencode_zen",
+                task_types=[TaskType.SIMPLE, TaskType.RAG],
+                cost_per_1k_tokens=0.0, priority=10,
+                avg_accuracy=0.90,
             ),
             ModelRoute(
                 name="local/phi-4-mini", provider="local",

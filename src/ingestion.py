@@ -72,13 +72,34 @@ class IngestionEngine:
                             parts.append(row_text)
                 text = "\n".join(parts)
             elif ext in [".txt", ".md"]:
-                with open(path, "r", encoding="utf-8") as f:
-                    text = f.read()
+                # V16 FIX : fallback latin-1 si UTF-8 échoue (fichiers Windows)
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        text = f.read()
+                except UnicodeDecodeError:
+                    with open(path, "r", encoding="latin-1") as f:
+                        text = f.read()
+                        logger.info(f"  ↪ latin-1 fallback: {path.name}")
             elif ext == ".csv":
                 import csv
-                with open(path, "r", encoding="utf-8") as f:
-                    reader = csv.reader(f)
-                    text = "\n".join(["," .join(row) for row in reader])
+                import io
+                decoded = ""
+                # V16 FIX : fallback latin-1 + ignore les lignes malformées
+                try:
+                    raw = path.read_bytes()
+                    for enc in ("utf-8", "latin-1", "cp1252"):
+                        try:
+                            decoded = raw.decode(enc)
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    if not decoded:
+                        decoded = raw.decode("utf-8", errors="replace")
+                    reader = csv.reader(io.StringIO(decoded))
+                    text = "\n".join([",".join(row) for row in reader if any(cell.strip() for cell in row)])
+                except Exception as csv_err:
+                    logger.error(f"⚠️ CSV {path.name}: {csv_err}")
+                    text = decoded or ""
             elif ext == ".json":
                 with open(path, "r", encoding="utf-8") as f:
                     import json as j

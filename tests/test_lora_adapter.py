@@ -66,15 +66,16 @@ class TestLoRAConfig:
         """_load_model ne plante pas si l'adaptateur n'existe pas."""
         from src.llm_local import LocalLLM
 
+        mock_model, mock_tokenizer = MagicMock(), MagicMock()
+        sys.modules["mlx_lm"].load.return_value = (mock_model, mock_tokenizer)
+
         with (
-            patch("src.llm_local.load") as mock_load,
             patch("src.llm_local.load_adapters") as mock_load_adapter,
             patch("src.llm_local.Path") as mock_path,
         ):
             mock_path_instance = MagicMock()
             mock_path.return_value = mock_path_instance
             mock_path_instance.__truediv__.return_value.exists.return_value = False
-            mock_load.return_value = (MagicMock(), MagicMock())
 
             llm = LocalLLM()
             llm._lora_adapter_path = "models/adapters/rag"

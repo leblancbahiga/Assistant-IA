@@ -45,9 +45,10 @@ class Config(BaseSettings):
     local_model_fallback: str = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
 
     # ── Cloud ──
-    cloud_model: str = "llama-3.3-70b-versatile"
-    cloud_provider: str = "groq"
+    cloud_model: str = "deepseek-v4-flash-free"
+    cloud_provider: str = "opencode_zen"
     cloud_fallback: str = "openrouter/deepseek/deepseek-v4-flash"
+    opencode_zen_base_url: str = "https://opencode.ai/zen/v1"
 
     # ── RAG ──
     rag_k: int = 5
@@ -116,6 +117,34 @@ class Config(BaseSettings):
     @property
     def groq_key(self) -> Optional[str]:
         return keyring.get_password("com.nuru.assistant", "groq")
+
+    @property
+    def opencode_zen_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "opencode_zen")
+
+    @property
+    def qwen_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "qwen")
+
+    @property
+    def openai_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "openai")
+
+    @property
+    def together_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "together")
+
+    @property
+    def mistral_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "mistral")
+
+    @property
+    def xai_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "xai")
+
+    @property
+    def nvidia_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "nvidia")
 
     @property
     def gemini_key(self) -> Optional[str]:

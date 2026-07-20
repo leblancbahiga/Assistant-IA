@@ -17,11 +17,28 @@ _HERMES_MARKERS = ('.hermes/hermes-agent', '.hermes/hermes-agent/venv')
 os.environ.pop('PYTHONPATH', None)
 sys.path = [p for p in sys.path if not any(m in p for m in _HERMES_MARKERS)]
 
+# ── V16 FIX : Couper les connexions HuggingFace Hub ──
+# Tous les modèles (embedder, reranker, LLM local) sont déjà en cache local.
+# Les requêtes HTTP vers HF Hub ralentissent le démarrage (15s+) et peuvent
+# planter NURU sur timeout réseau. Mode offline = cache uniquement.
+os.environ["HF_HUB_OFFLINE"] = "1"
+# Définir HF_TOKEN supprime aussi le warning de rate limiting
+hf_token = os.environ.get("HF_TOKEN") or os.popen(
+    'security find-generic-password -a "$(whoami)" -s "com.nuru.assistant" -w 2>/dev/null'
+).read().strip() or ""
+if hf_token:
+    os.environ["HF_TOKEN"] = hf_token
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# V16 FIX : Supprimer le bruit HTTP des bibliothèques HuggingFace
+for noisy in ("httpx", "huggingface_hub", "urllib3", "sentence_transformers",
+              "filelock", "mlx_embeddings", "transformers", "tokenizers"):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 # ── Feature flag — migré de config.py vers flag explicite ──

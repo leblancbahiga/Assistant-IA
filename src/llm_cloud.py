@@ -37,12 +37,39 @@ class CloudLLM:
         if provider == "groq":
             url = "https://api.groq.com/openai/v1/chat/completions"
             api_key = config.groq_key
+        elif provider == "opencode_zen":
+            url = config.opencode_zen_base_url + "/chat/completions"
+            api_key = config.opencode_zen_key
         elif provider == "deepseek":
             url = "https://api.deepseek.com/v1/chat/completions"
             api_key = config.deepseek_key
         elif provider == "openrouter":
             url = "https://openrouter.ai/api/v1/chat/completions"
             api_key = config.openrouter_key
+        elif provider == "qwen":
+            url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            api_key = config.qwen_key
+        elif provider == "openai":
+            url = "https://api.openai.com/v1/chat/completions"
+            api_key = config.openai_key
+        elif provider == "gemini":
+            url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+            api_key = config.gemini_key
+        elif provider == "together":
+            url = "https://api.together.xyz/v1/chat/completions"
+            api_key = config.together_key
+        elif provider == "mistral":
+            url = "https://api.mistral.ai/v1/chat/completions"
+            api_key = config.mistral_key
+        elif provider == "xai":
+            url = "https://api.x.ai/v1/chat/completions"
+            api_key = config.xai_key
+        elif provider == "nvidia":
+            url = "https://integrate.api.nvidia.com/v1/chat/completions"
+            api_key = config.nvidia_key
+        elif provider == "ollama":
+            url = "http://localhost:11434/v1/chat/completions"
+            api_key = ""  # Pas de clé pour Ollama local
         else:
             raise ValueError(f"Provider Cloud inconnu pour generate() synchrone : {provider}")
 
@@ -191,6 +218,9 @@ class CloudLLM:
         if provider == "groq":
             url = "https://api.groq.com/openai/v1/chat/completions"
             api_key = config.groq_key
+        elif provider == "opencode_zen":
+            url = config.opencode_zen_base_url + "/chat/completions"
+            api_key = config.opencode_zen_key
         elif provider == "gemini":
             # Gemini: endpoint OpenAI-compatible pour streaming SSE standard
             url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
@@ -201,6 +231,27 @@ class CloudLLM:
         elif provider == "openrouter":
             url = "https://openrouter.ai/api/v1/chat/completions"
             api_key = config.openrouter_key
+        elif provider == "qwen":
+            url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            api_key = config.qwen_key
+        elif provider == "openai":
+            url = "https://api.openai.com/v1/chat/completions"
+            api_key = config.openai_key
+        elif provider == "together":
+            url = "https://api.together.xyz/v1/chat/completions"
+            api_key = config.together_key
+        elif provider == "mistral":
+            url = "https://api.mistral.ai/v1/chat/completions"
+            api_key = config.mistral_key
+        elif provider == "xai":
+            url = "https://api.x.ai/v1/chat/completions"
+            api_key = config.xai_key
+        elif provider == "nvidia":
+            url = "https://integrate.api.nvidia.com/v1/chat/completions"
+            api_key = config.nvidia_key
+        elif provider == "ollama":
+            url = "http://localhost:11434/v1/chat/completions"
+            api_key = ""
         else:
             raise ValueError(f"Provider Cloud inconnu : {provider}")
             

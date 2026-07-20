@@ -102,6 +102,19 @@ class ReflexionEngine:
         )
 
         # ── Pass 2 : Critique réflexive ───────────────────────────────
+        # V16+: Early stopping — si la réponse initiale est excellente,
+        # on économise la Pass 2 (appel LLM + tokens)
+        if (result.eval_initial and getattr(result.eval_initial, 'overall', 0.0) >= 0.9
+                and not self._detect_hallucinations(
+                    response=result.initial_response,
+                    context=context,
+                )):
+            logger.info(f"⏭️ Reflexion: early stopping (score initial >= 0.9)")
+            result.final_response = result.initial_response
+            result.eval_final = result.eval_initial
+            result.duration_ms = (time.time() - t0) * 1000
+            return result
+
         result.critique = self._critique(
             query=query,
             response=result.initial_response,
@@ -212,6 +225,15 @@ class ReflexionEngine:
         )
         return "\n\n".join(parts)
 
+    @staticmethod
+    def _jaccard_similarity(a: str, b: str) -> float:
+        """Jaccard sur bigrammes de caracteres — 0 dependance."""
+        bigrams_a = set(a[i:i+2] for i in range(max(0, len(a) - 1)))
+        bigrams_b = set(b[i:i+2] for i in range(max(0, len(b) - 1)))
+        inter = len(bigrams_a & bigrams_b)
+        union = len(bigrams_a | bigrams_b)
+        return inter / union if union > 0 else 0.0
+
     def _critique(
         self,
         query: str,
@@ -228,11 +250,19 @@ class ReflexionEngine:
         """
         issues: list[str] = []
 
-        # 1. Répétitions flagrantes
-        sentences = re.split(r'[.!?]+', response)
-        unique = set(s.strip().lower() for s in sentences if len(s.strip()) > 20)
-        if len(sentences) > 3 and len(unique) <= 1:
-            issues.append("La réponse semble répétitive : peu de variation entre les phrases")
+        # 1. Répétitions flagrantes (Jaccard, seuil abaissé à 5 chars — détecte les boucles courtes)
+        sentences = [s.strip() for s in re.split(r'[.!?]+', response) if len(s.strip()) > 5]
+        if len(sentences) > 3:
+            jaccard_scores = []
+            for i in range(len(sentences) - 1):
+                sim = self._jaccard_similarity(sentences[i], sentences[i+1])
+                jaccard_scores.append(sim)
+            avg_jaccard = sum(jaccard_scores) / len(jaccard_scores) if jaccard_scores else 0.0
+            if avg_jaccard > 0.5:
+                issues.append(
+                    f"La réponse présente de fortes répétitions (similarité Jaccard moyenne="
+                    f"{avg_jaccard:.2f}) — boucle ou redondance"
+                )
 
         # 2. Couverture des mots-clés
         query_words = set(

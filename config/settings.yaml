@@ -3,8 +3,8 @@ auto_fetch_interval_min: 30
 cache_maxsize: 256
 cache_ttl_seconds: 300
 cloud_fallback: openrouter/deepseek/deepseek-v4-flash
-cloud_model: llama-3.3-70b-versatile
-cloud_provider: groq
+cloud_model: deepseek-v4-flash-free
+cloud_provider: opencode_zen
 heavy_search_min_ram_mb: 1000
 hybrid_enabled: true
 hybrid_mode: cloud_first

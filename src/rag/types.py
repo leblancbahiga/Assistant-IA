@@ -17,6 +17,7 @@ class SearchResult:
     """Résultat d'une stratégie de recherche."""
     content: str
     source: str
-    score: float       # Score normalisé [0, 1]
+    score: float       # Score normalisé [0, 1] (RRF après fusion)
     strategy: str      # 'vectoriel', 'fts', 'grep', 'hyde', 'metadata'
     rank: int = 0      # Rang dans sa stratégie (pour RRF)
+    raw_score: float = 0.0  # Score brut original (pré-RRF), pour la confidence gate

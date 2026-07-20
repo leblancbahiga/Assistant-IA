@@ -50,6 +50,17 @@ class CrossEncoderReranker:
             
             device = 'mps' if torch.backends.mps.is_available() else 'cpu'
             logger.info(f"🧮 Chargement cross-encoder: {self.model_name} sur {device}")
+            
+            # V16 FIX : Forcer le mode offline HF + redirection des logs httpx vers WARNING
+            # pour éviter le bruit de 15s+ de requêtes HTTP à chaque chargement.
+            import os
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            # Réduire le log des requêtes HTTP (devient DEBUG)
+            logging.getLogger("httpx").setLevel(logging.WARNING)
+            logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+            logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+            logging.getLogger("urllib3").setLevel(logging.WARNING)
+            
             self._model = CrossEncoder(self.model_name, device=device)
             self._loaded = True
             logger.info("✅ Cross-encoder MiniLM chargé")

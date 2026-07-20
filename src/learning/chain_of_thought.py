@@ -80,41 +80,49 @@ def extract_reasoning_and_answer(response: str) -> tuple[str, str]:
     Returns:
         (reasoning, answer) — si parsing echoue, answer = response brute.
     """
-    # Pattern 1: ## RAISONNEMENT ... ## REPONSE FINALE ...
+    # Pattern 1: #{2,4} RAISONNEMENT ... #{2,4} REPONSE FINALE
     m = re.search(
-        r'##\s*RAISONNEMENT\s*\n(.*?)\n##\s*REPONSE\s*FINALE',
+        r'#{2,4}\s*RAISONNEMENT\s*\n(.*?)\n#{2,4}\s*R[EÉ]PONSE\s*(?:FINALE)?',
         response, re.DOTALL | re.IGNORECASE
     )
     if m:
         reasoning = m.group(1).strip()
         after = response[m.end():].strip()
-        # Prendre jusqu'a la fin ou jusqu'au prochain ##
-        next_header = re.search(r'##\s', after)
+        # Prendre jusqu'a la fin ou jusqu'au prochain #
+        next_header = re.search(r'#{1,4}\s', after)
         if next_header:
             answer = after[:next_header.start()].strip()
         else:
             answer = after
         return reasoning, answer
     
-    # Pattern 2: avec / sans accents (REPONSE vs RÉPONSE)
+    # Pattern 2: avec accents varies (#{2,4} RAISONNEMENT ... #{2,4} REPONSE)
     m = re.search(
-        r'##\s*RAISONNEMENT\s*\n(.*?)\n##\s*REPONSE',
+        r'#{2,4}\s*RAISONNEMENT\s*\n(.*?)\n#{2,4}\s*REPONSE',
         response, re.DOTALL | re.IGNORECASE
     )
     if m:
         reasoning = m.group(1).strip()
         after = response[m.end():].strip()
-        next_header = re.search(r'##\s', after)
+        next_header = re.search(r'#{1,4}\s', after)
         if next_header:
             answer = after[:next_header.start()].strip()
         else:
             answer = after
         return reasoning, answer
     
-    # Pattern 3: ## RAISONNEMENT present mais pas ## REPONSE FINALE
-    m = re.search(r'##\s*RAISONNEMENT\s*\n(.*)', response, re.DOTALL | re.IGNORECASE)
+    # Pattern 3: #{2,4} RAISONNEMENT present mais pas #{2,4} REPONSE FINALE
+    m = re.search(r'#{2,4}\s*RAISONNEMENT\s*\n(.*)', response, re.DOTALL | re.IGNORECASE)
     if m:
-        return m.group(1).strip(), ""
+        content = m.group(1).strip()
+        # Fallback semantique : transitions de reponse
+        fallback_split = re.split(
+            r'(?i)\n(?:en conclusion|pour resumer|finalement|reponse|reponse finale)[\s:]*\n',
+            content
+        )
+        if len(fallback_split) > 1:
+            return fallback_split[0].strip(), fallback_split[-1].strip()
+        return content, ""
     
     # Aucun format detecte → retourner la reponse brute
     return "", response

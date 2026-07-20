@@ -1,11 +1,10 @@
 import mlx.core as mx
-from mlx_lm import load, stream_generate
 from mlx_lm.utils import load_adapters
-from mlx_lm.sample_utils import make_sampler, make_repetition_penalty, make_logits_processors
 import psutil
 import logging
 import gc
 import asyncio
+import concurrent.futures
 import time
 from pathlib import Path
 from typing import AsyncGenerator, Optional
@@ -32,8 +31,8 @@ class LocalLLM:
         self._tokenizer = None
         self._current_model_id = None
         self._last_temperature = 0.7
-        # V15 P2 #27 : Delegation au ModelManager avec keep-alive reduit a 5s
-        self._model_manager = ModelManager(keep_alive_seconds=5)
+        # V15 P2 #27 : Delegation au ModelManager avec keep-alive (30s pour éviter rechargements intempestifs)
+        self._model_manager = ModelManager(keep_alive_seconds=30)
         # V10 Audit: Lock thread-safe pour generate_stream()
         self._gen_lock = asyncio.Lock()
         # V15 Phase 0B -- P0 #31 : cache de prompt pour les requetes repetees
@@ -47,6 +46,11 @@ class LocalLLM:
         self._current_session_id: str = ""
         # V15 Phase 5 (Item 38) : LoRA adaptateur RAG
         self._lora_adapter_path: Optional[str] = None
+        # MLX single-thread executor: load + generate sur le meme thread
+        # Necessite absolue sous Metal (thread-local streams et caches KV)
+        self._mlx_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix='mlx'
+        )
 
     def _schedule_unload(self):
         """Planifie le dechargement 5s apres la fin de la generation.
@@ -112,6 +116,14 @@ class LocalLLM:
                 f"(swap {budget.probe().swap_percent:.0f}%) -- eviction en cours"
             )
             budget.evict(priority_below=Priority.CACHE)
+            # Vérification finale après éviction
+            if not budget.can_load("llm"):
+                swap_pct = budget.probe().swap_percent
+                raise RuntimeError(
+                    f"RAM insuffisante pour charger le LLM (swap={swap_pct:.0f}%). "
+                    "Fermez d'autres applications et réessayez."
+                )
+            logger.info("RAM libérée après éviction, chargement autorisé")
 
         try:
             # Decharger proprement le modele precedent s'il y en a un pour liberer la RAM Metal avant de charger le nouveau
@@ -135,7 +147,7 @@ class LocalLLM:
             
             try:
                 self._model, self._tokenizer = await asyncio.wait_for(
-                    loop.run_in_executor(None, _sync_load),
+                    loop.run_in_executor(self._mlx_executor, _sync_load),
                     timeout=MODEL_LOAD_TIMEOUT_SECONDS
                 )
             except asyncio.TimeoutError:
@@ -224,36 +236,16 @@ class LocalLLM:
         logger.info("Adaptateur LoRA configure: %s", path)
 
     async def generate_stream(self, prompt: str, intent: str = "RAG") -> AsyncGenerator[str, None]:
-        """Genere une reponse via MLX en streaming.
+        """Genere une reponse via MLX en streaming sur le thread MLX dedie.
 
         MLX Metal exige que load + generate soient sur le meme thread.
-
-        V15 Phase 0B (P0 #31) -- Optimisations memoire :
-        - KV cache 8-bit (kv_bits=8) : reduit la consommation RAM GPU de ~50%
-          sans perte de qualite (preserve l'essentiel du signal attentionnel).
-        - prefill_step_size=512 : limite le pic memoire lors du pre-remplissage
-          du prompt (essentiel sur M1 8 Go avec swap).
-        - Benchmark timing integre dans self.bench{}.
-        - Speculation propre (draft model) : non applicable a Phi-4-mini
-          (vocab_size=200k, aucun petit modele compatible disponible).
-          A la place, KV cache quantifie + prefill econome.
-
-        Draft model speculative decoding feasibility :
-        - MLX supporte nativement speculative_generate_step avec draft_model
-        - Phi-4-mini utilise un tokenizer tiktoken (200019 tokens)
-        - Aucun modele draft <500MB ne partage ce tokenizer
-        - Solutions alternatives pour V15.1+ :
-          a) KV cache quantization (actif)
-          b) Prompt lookup decoding (reuse tokens du prompt comme draft)
-          c) Layer-wise speculation (dernieres couches du modele comme draft)
+        L'executeur dedie (self._mlx_executor) garantit cette contrainte.
+        Les tokens sont renvoyes via asyncio.Queue depuis le thread MLX.
         """
-        # V10 Audit: Lock thread-safe -- evite les races conditions si deux
-        # coroutines appellent generate_stream() simultanement
+        # V10 Audit: Lock thread-safe
         async with self._gen_lock:
             model_id = self._get_required_model(intent)
 
-            # Chargement synchrone sur l'event loop thread
-            # (MLX Metal GPU = thread-local, load et generate doivent cohabiter)
             try:
                 await self._load_model(model_id)
             except Exception as e:
@@ -261,102 +253,124 @@ class LocalLLM:
                 raise
 
             try:
-                # Parametres de sampling
-                if intent == "RAG":
-                    is_1_5b = "1.5B" in model_id
-                    temp = 0.35 if is_1_5b else 0.1
-                    top_p = 0.9
-                    rep_penalty = 1.10 if is_1_5b else 1.05
-                elif intent == "SIMPLE":
-                    is_1_5b = "1.5B" in model_id
-                    temp = 0.7 if is_1_5b else 0.6
-                    top_p = 0.90
-                    rep_penalty = 1.20 if is_1_5b else 1.05
-                else:
-                    temp = 0.4
-                    top_p = 0.85
-                    rep_penalty = 1.10
+                # Snapshots thread-safe pour le thread MLX dedie
+                model = self._model
+                tokenizer = self._tokenizer
 
-                self._last_temperature = temp
-
-                # V15 P0 #31 : parametres MLX optimises pour M1 8 Go
-                make_sampler_kwargs = dict(temp=temp, top_p=top_p)
-                # min_p=0.1 evite la gibberish aux tres basses temperatures
-                if temp < 0.3:
-                    make_sampler_kwargs["min_p"] = 0.1
-                sampler = make_sampler(**make_sampler_kwargs)
-                logits_processors = [make_repetition_penalty(rep_penalty)]
-
-                # apply_chat_template
-                formatted_prompt = prompt
-                if self._tokenizer is not None and hasattr(self._tokenizer, 'apply_chat_template'):
-                    try:
-                        has_special_tokens = any(
-                            marker in prompt
-                            for marker in (
-                                '<|assistant|>', 'UNKNOWN_CHAR',
-                                'UNKNOWN_CHAR', '<|end|>', '<|user|>',
-                                'UNKNOWN_CHAR', 'UNKNOWN_CHAR',
-                            )
-                        )
-                        if not has_special_tokens:
-                            system_markers = [
-                                "Tu es NURU", "Tu es", "Ta mission",
-                                "# PRIORITE", "# MODE RAG", "# MODE HYBRIDE",
-                                "## INSTRUCTION STRICTE",
-                            ]
-                            found_system = any(prompt.startswith(m) for m in system_markers)
-                            messages = [{"role": "user", "content": prompt}]
-                            formatted_prompt = self._tokenizer.apply_chat_template(
-                                messages, tokenize=False, add_generation_prompt=True,
-                            )
-                            logger.debug(f"apply_chat_template ({len(formatted_prompt)} chars)")
-                        else:
-                            logger.debug("Prompt deja formate -- skip apply_chat_template")
-                    except Exception as e:
-                        logger.debug(f"apply_chat_template ignore: {e}")
-                        formatted_prompt = prompt
-
-                # stream_generate DOIT tourner sur le meme thread que le load
-                # (Metal GPU thread-local).
+                queue: asyncio.Queue = asyncio.Queue()
                 t0 = time.perf_counter()
+
+                def _sync_stream():
+                    """Run MLX stream_generate on the dedicated executor thread."""
+                    from mlx_lm import stream_generate
+                    from mlx_lm.sample_utils import make_sampler, make_repetition_penalty
+
+                    try:
+                        # Parametres de sampling
+                        if intent == "RAG":
+                            is_1_5b = "1.5B" in model_id
+                            temp = 0.35 if is_1_5b else 0.3
+                            top_p = 0.9
+                            rep_penalty = 1.10 if is_1_5b else 1.15
+                        elif intent == "SIMPLE":
+                            is_1_5b = "1.5B" in model_id
+                            temp = 0.7 if is_1_5b else 0.6
+                            top_p = 0.90
+                            rep_penalty = 1.20 if is_1_5b else 1.05
+                        else:
+                            temp = 0.4
+                            top_p = 0.85
+                            rep_penalty = 1.10
+
+                        make_sampler_kwargs = dict(temp=temp, top_p=top_p)
+                        if temp < 0.3:
+                            make_sampler_kwargs["min_p"] = 0.1
+                        sampler = make_sampler(**make_sampler_kwargs)
+                        logits_processors = [make_repetition_penalty(rep_penalty)]
+
+                        # apply_chat_template
+                        formatted_prompt = prompt
+                        if tokenizer is not None and hasattr(tokenizer, 'apply_chat_template'):
+                            try:
+                                has_special_tokens = any(
+                                    marker in prompt
+                                    for marker in (
+                                        '<|assistant|>', 'UNKNOWN_CHAR',
+                                        'UNKNOWN_CHAR', '<|end|>', '<|user|>',
+                                        'UNKNOWN_CHAR', 'UNKNOWN_CHAR',
+                                    )
+                                )
+                                if not has_special_tokens:
+                                    messages = [{"role": "user", "content": prompt}]
+                                    formatted_prompt = tokenizer.apply_chat_template(
+                                        messages, tokenize=False, add_generation_prompt=True,
+                                    )
+                            except Exception:
+                                pass
+
+                        last_response = None
+                        n_gen = 0
+                        for response in stream_generate(
+                            model,
+                            tokenizer,
+                            formatted_prompt,
+                            max_tokens=config.local_max_tokens,
+                            sampler=sampler,
+                            logits_processors=logits_processors,
+                            kv_bits=8,
+                            prefill_step_size=512,
+                        ):
+                            queue.put_nowait(response.text)
+                            n_gen += 1
+                            last_response = response
+
+                        # Stats de benchmark
+                        if last_response is not None:
+                            queue.put_nowait({
+                                "_bench": True,
+                                "prompt_tps": last_response.prompt_tps,
+                                "n_tokens": n_gen,
+                                "temperature": temp,
+                            })
+
+                    except Exception as e:
+                        queue.put_nowait({"_error": str(e)})
+                    finally:
+                        queue.put_nowait(None)  # sentinel
+
+                loop = asyncio.get_event_loop()
+                loop.run_in_executor(self._mlx_executor, _sync_stream)
+
                 n_tokens = 0
-                response = None
-                # Assert pour LSP : a ce stade, model et tokenizer sont garantis non-None
-                assert self._model is not None
-                assert self._tokenizer is not None
-                for response in stream_generate(
-                    self._model,
-                    self._tokenizer,
-                    formatted_prompt,
-                    max_tokens=config.local_max_tokens,
-                    sampler=sampler,
-                    logits_processors=logits_processors,
-                    # V15 P0 #31 : KV cache 8-bit reduit la pression memoire
-                    kv_bits=8,
-                    # Prefill progressif pour eviter le swap
-                    prefill_step_size=512,
-                ):
-                    yield response.text
+                while True:
+                    item = await queue.get()
+                    if item is None:
+                        break
+                    if isinstance(item, dict):
+                        if "_error" in item:
+                            raise RuntimeError(item["_error"])
+                        if "_bench" in item:
+                            elapsed = time.perf_counter() - t0
+                            self._last_temperature = item.get("temperature", 0.7)
+                            prompt_tps = item["prompt_tps"]
+                            tok_count = item["n_tokens"]
+                            if tok_count > 0:
+                                self.bench["prompt_ms"].append(prompt_tps)
+                                self.bench["tok_s"].append(tok_count / elapsed)
+                                logger.debug(
+                                    "LocalLLM bench : %.1f tok/s (%d tokens, %.1fs, intent=%s)",
+                                    tok_count / elapsed, tok_count, elapsed, intent,
+                                )
+                        continue
+                    yield item
                     n_tokens += 1
                     await asyncio.sleep(0)
-
-                # Benchmark stats (uniquement si au moins un token genere)
-                if n_tokens > 0:
-                    assert response is not None  # garanti par n_tokens > 0
-                    elapsed = time.perf_counter() - t0
-                    self.bench["prompt_ms"].append(response.prompt_tps)
-                    self.bench["tok_s"].append(n_tokens / elapsed)
-                    logger.debug(
-                        "LocalLLM bench : %.1f tok/s (%d tokens, %.1fs, intent=%s)",
-                        n_tokens / elapsed, n_tokens, elapsed, intent,
-                    )
 
                 self._schedule_unload()
 
             except Exception as e:
                 logger.error(f"Erreur durant l'inference MLX : {e}")
-                self.unload()  # V10.2: Nettoyage memoire GPU en cas d'erreur (prevention fuite MLX)
+                self.unload()  # V10.2: Nettoyage memoire GPU
                 raise
 
     async def generate(
@@ -366,86 +380,79 @@ class LocalLLM:
         temperature: float = 0.7,
     ) -> str:
         """Genere une reponse complete (non-streaming) pour Self-Consistency.
-        
+
         Args:
             prompt: Prompt complet formate
             intent: Type d'intention (RAG, SIMPLE, COMPLEX)
             temperature: Temperature d'echantillonnage
-            
+
         Returns:
             Reponse complete en string
         """
         model_id = self._get_required_model(intent)
         await self._load_model(model_id)
 
-        # Parametres de sampling
-        is_1_5b = "1.5B" in model_id
-        if intent == "RAG":
-            temp = temperature
-            top_p = 0.9
-            rep_penalty = 1.10 if is_1_5b else 1.05
-        elif intent == "SIMPLE":
-            temp = temperature
-            top_p = 0.90
-            rep_penalty = 1.20 if is_1_5b else 1.05
-        else:
-            temp = temperature
-            top_p = 0.85
-            rep_penalty = 1.10
+        model = self._model
+        tokenizer = self._tokenizer
 
-        make_sampler_kwargs = dict(temp=temp, top_p=top_p)
-        if temp < 0.3:
-            make_sampler_kwargs["min_p"] = 0.1
-        sampler = make_sampler(**make_sampler_kwargs)
-        logits_processors = [make_repetition_penalty(rep_penalty)]
+        def _sync_generate():
+            from mlx_lm import generate as mlx_generate
+            from mlx_lm.sample_utils import make_sampler, make_repetition_penalty
 
-        # apply_chat_template si necessaire
-        formatted_prompt = prompt
-        if self._tokenizer is not None and hasattr(self._tokenizer, 'apply_chat_template'):
-            try:
-                has_special_tokens = any(
-                    marker in prompt
-                    for marker in (
-                        '<|assistant|>', 'UNKNOWN_CHAR',
-                        'UNKNOWN_CHAR', '<|end|>', '<|user|>',
-                        'UNKNOWN_CHAR', 'UNKNOWN_CHAR',
+            is_1_5b = "1.5B" in model_id
+            if intent == "RAG":
+                temp = temperature
+                top_p = 0.9
+                rep_penalty = 1.10 if is_1_5b else 1.15
+            elif intent == "SIMPLE":
+                temp = temperature
+                top_p = 0.90
+                rep_penalty = 1.20 if is_1_5b else 1.05
+            else:
+                temp = temperature
+                top_p = 0.85
+                rep_penalty = 1.10
+
+            make_sampler_kwargs = dict(temp=temp, top_p=top_p)
+            if temp < 0.3:
+                make_sampler_kwargs["min_p"] = 0.1
+            sampler = make_sampler(**make_sampler_kwargs)
+            logits_processors = [make_repetition_penalty(rep_penalty)]
+
+            # apply_chat_template si necessaire
+            formatted_prompt = prompt
+            if tokenizer is not None and hasattr(tokenizer, 'apply_chat_template'):
+                try:
+                    has_special_tokens = any(
+                        marker in prompt
+                        for marker in (
+                            '<|assistant|>', 'UNKNOWN_CHAR',
+                            'UNKNOWN_CHAR', '<|end|>', '<|user|>',
+                            'UNKNOWN_CHAR', 'UNKNOWN_CHAR',
+                        )
                     )
-                )
-                if not has_special_tokens:
-                    system_markers = [
-                        "Tu es NURU", "Tu es", "Ta mission",
-                        "# PRIORITE", "# MODE RAG", "# MODE HYBRIDE",
-                        "## INSTRUCTION STRICTE",
-                    ]
-                    found_system = any(prompt.startswith(m) for m in system_markers)
-                    messages = [{"role": "user", "content": prompt}]
-                    formatted_prompt = self._tokenizer.apply_chat_template(
-                        messages, tokenize=False, add_generation_prompt=True,
-                    )
-                    logger.debug(f"apply_chat_template ({len(formatted_prompt)} chars)")
-                else:
-                    logger.debug("Prompt deja formate -- skip apply_chat_template")
-            except Exception as e:
-                logger.debug(f"apply_chat_template ignore: {e}")
-                formatted_prompt = prompt
+                    if not has_special_tokens:
+                        messages = [{"role": "user", "content": prompt}]
+                        formatted_prompt = tokenizer.apply_chat_template(
+                            messages, tokenize=False, add_generation_prompt=True,
+                        )
+                except Exception:
+                    pass
 
-        # Generation complete (non-streaming) via mlx_lm.generate
-        import time
-        from mlx_lm import generate
-        
-        response = generate(
-            self._model,
-            self._tokenizer,
-            formatted_prompt,
-            max_tokens=config.local_max_tokens,
-            sampler=sampler,
-            logits_processors=logits_processors,
-            kv_bits=8,
-            prefill_step_size=512,
-        )
-        
+            response = mlx_generate(
+                model, tokenizer, formatted_prompt,
+                max_tokens=config.local_max_tokens,
+                sampler=sampler,
+                logits_processors=logits_processors,
+                kv_bits=8,
+                prefill_step_size=512,
+            )
+            return response
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(self._mlx_executor, _sync_generate)
         self._schedule_unload()
-        return response.text
+        return result
 
     def warmup(self):
         """Charge le modele approprie silencieusement pour eviter le cold start."""

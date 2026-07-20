@@ -33,6 +33,7 @@ from src.learning.trace_collector import TraceCollector
 from src.cache.llm_cache import LLMCache
 from src.orchestration import RAGOrchestrator, LLMGenerator
 from src.routing.prompt_builder import DynamicPromptBuilder
+from src.routing.v16.router_v16 import RouterV16
 # V16 FIX: SessionMemory unifié (remplace MemoryStore fragmenté)
 from src.core.session_memory import SessionMemory, get_session_memory
 # V16: Self-Consistency Engine
@@ -133,6 +134,9 @@ class NuruOrchestrator:
         # On l'aliase sur rag_engine car ce dernier est déjà DI-é depuis NuruCore.
         self.rag_pipeline = rag_engine
 
+        # V16 — Production Router (V12 déprécié, conservé pour fallback)
+        self.v16_router = RouterV16()
+
         # V16 FIX: SessionMemory unifié (remplace MemoryStore + SessionStore fragmentés)
         from src.core.session_memory import get_session_memory
         self.session_memory = get_session_memory(max_messages=6)
@@ -218,7 +222,6 @@ class NuruOrchestrator:
         route_result = await self.router.route_with_context(ctx, rag_context=rag_context, rag_result=rag_result)
         hybrid_strategy = getattr(route_result, 'hybrid_strategy', 'local_only')
         ctx = ctx.with_route(route_result.decision, hybrid_strategy=hybrid_strategy)
-        intent = self._route_to_intent(route_result.decision)
         await self.event_bus.emit("route.decided", {
             "decision": route_result.decision,
             "confidence": route_result.confidence,
@@ -229,6 +232,42 @@ class NuruOrchestrator:
             f"🧠 Route: {query[:40]}... → {route_result.decision} "
             f"(conf: {route_result.confidence:.2f})"
         )
+
+        # ── 2b. V16 Production Router (shadow run terminé, V16 prend la main) ──
+        # V16 remplace V12 : scoring multi-niveaux (keyword + sémantique + contexte)
+        v16_active = False
+        try:
+            v16_decision = self.v16_router.route(query)
+            v16_active = True
+            
+            # Mapper V16 intents vers le format attendu en aval
+            v16_to_intent = {
+                "RAG": "RAG",
+                "WEB": "COMPLEX",
+                "GENERAL": "GENERAL",
+                "ACTION": "COMPLEX",
+                "MULTI_ROUTE": "COMPLEX",
+            }
+            intent = v16_to_intent.get(v16_decision.intent, "GENERAL")
+            
+            # Log V16 comme route principale
+            logger.info(
+                f"🧠 V16 Route: {query[:40]}... → {v16_decision.intent} "
+                f"(intent={intent}, conf={v16_decision.confidence:.2f})"
+            )
+            
+            # V12 en shadow pour comparaison (log si divergence)
+            if v16_decision.intent != self._route_to_intent(route_result.decision):
+                logger.debug(
+                    f"🔮 V12 shadow divergence: V16={v16_decision.intent} "
+                    f"V12={route_result.decision}"
+                )
+                
+        except Exception as e:
+            logger.warning(f"🔮 V16 route failed, fallback V12: {e}")
+            
+        if not v16_active:
+            intent = self._route_to_intent(route_result.decision)
 
         # ── 3. Cache sémantique (L1 RAM → L2 SQLite) ──
         if intent != "COMPLEX":

@@ -101,7 +101,7 @@ class MemoryStore:
         # Semantic Cache (Vectorized)
         conn.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS semantic_cache USING vec0(
-                embedding FLOAT[768],
+                embedding FLOAT[1024],
                 query TEXT,
                 response TEXT,
                 hit_count INTEGER DEFAULT 0

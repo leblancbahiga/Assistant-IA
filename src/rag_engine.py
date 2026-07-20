@@ -33,7 +33,7 @@ def _init_budget() -> None:
     budget = get_budget()
     budget.hard_limit_gb = 6.0
     budget.soft_limit_gb = 5.0
-    budget.register_component("embedder", Priority.EMBEDDER, estimated_mb=500)
+    budget.register_component("embedder", Priority.EMBEDDER, estimated_mb=400)
     budget.register_component("reranker", Priority.RERANKER, estimated_mb=400)
     budget.register_component("llm", Priority.LLM, estimated_mb=3500)
     budget.register_component("cache_llm", Priority.CACHE, estimated_mb=200)
@@ -111,7 +111,7 @@ class RAGResult:
     rejected_chunks: int = 0
     rejection_reason: str = ""
     query_rewritten: str = ""
-    embedding_model: str = "multilingual-e5-base-mlx"
+    embedding_model: str = "Qwen3-Embedding-0.6B-4bit-DWQ"
     top_k_configured: int = 5
     top_k_actual: int = 0
     tokens_injected: int = 0
@@ -415,7 +415,7 @@ class RAGEngine:
             if self._has_vec0:
                 conn.execute("""
                     CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING vec0(
-                        embedding FLOAT[768],
+                        embedding FLOAT[1024],
                         content TEXT,
                         source TEXT,
                         chunk_date TEXT
@@ -800,7 +800,11 @@ class RAGEngine:
             return "", result
 
         # ── V8+ : SCORE GATE DYNAMIQUE (3 niveaux) ===
-        top1_score = ms_results[0].score
+        # V16+ FIX: utiliser le raw_score (similarité vectorielle/BM25 brute) pour la 
+        # porte de confiance, PAS le score RRF normalisé qui est arbitrairement bas
+        # (RRF normalise par le nombre de stratégies — un excellent résultat donne 0.07)
+        top1_raw = max(r.raw_score for r in ms_results) if any(r.raw_score > 0 for r in ms_results) else 0.0
+        top1_score = max(top1_raw, ms_results[0].score) if top1_raw > ms_results[0].score else ms_results[0].score
         self.last_top_score = top1_score
         result.top_score = top1_score
         result.all_scores = [r.score for r in ms_results]
@@ -828,7 +832,10 @@ class RAGEngine:
         # Les résultats bruts ms_results ne sont pas encore boostés.
 
         # Convertir SearchResult → tuples (content, source, score) pour post-processing
-        combined_results = [(r.content, r.source, r.score) for r in ms_results]
+        # V16 FIX : utiliser raw_score (similarité cosinus réelle) et non r.score
+        # (RRF normalisé ~0.07). Le RRF normalisé écrasait artificiellement les scores
+        # et faisait rejeter des chunks valides par le reranker + BM25.
+        combined_results = [(r.content, r.source, r.raw_score) for r in ms_results]
 
         # Profile Boost (V8+ P2 : freshness bonus supprimé — pas de chunk_date depuis multi_search)
         # Déduplication simple (tous les fichiers ont la même importance)
@@ -894,6 +901,12 @@ class RAGEngine:
                 result.retrieval_time_ms = (time.time() - t_start) * 1000
                 return "", result
 
+        # ── V17 Hybrid Scoring: Blend RRF + Reranker ─────────────
+        # Sauvegarder les scores RRF avant de les remplacer par le reranker
+        rrf_score_map: dict[str, float] = {}
+        for content, source, score in combined_results:
+            rrf_score_map[content] = score
+
         #  Phase 0 : Reranker SYSTÉMATIQUE
         # V15 Phase 4 (Item 37) : toujours activé dans le pipeline.
         # V15 Phase 5 (Item 40) : vérification budget RAM avant chargement.
@@ -919,6 +932,14 @@ class RAGEngine:
                 try:
                     self.reranker.load_model()
                     reranked = await self.reranker.rerank(query, combined_results, top_k=effective_k) or []
+                    # V17: Blend RRF (95%) + Reranker (5%)
+                    if reranked:
+                        blended = []
+                        for content, source, score in reranked:
+                            rrf_score = rrf_score_map.get(content, 0.0)
+                            blended_score = 0.95 * rrf_score + 0.05 * min(score, 1.0)
+                            blended.append((content, source, blended_score))
+                        reranked = blended
                 finally:
                     # IMMÉDIATEMENT après usage, décharger le reranker PyTorch/MPS
                     # pour libérer la mémoire GPU avant que le LLM (MLX) ne charge.
@@ -1130,7 +1151,10 @@ class RAGEngine:
                 source_bonus = 0.15
                 
             # Combinaison : 60% sémantique, 40% mots-clés + bonus source
-            final_score = 0.6 * (1 - vec_dist) + 0.4 * bm25_norm + source_bonus
+            # V16 FIX : vec_dist est une similarité (plus grand = mieux),
+            # PAS une distance. Utiliser (1-vec_dist) était un bug qui
+            # inversait le score (pénalisait les meilleurs chunks).
+            final_score = 0.6 * vec_dist + 0.4 * bm25_norm + source_bonus
             scored.append((content, source, min(final_score, 1.0)))
             
         # Trier par score décroissant
