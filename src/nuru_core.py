@@ -326,6 +326,39 @@ class NuruCore:
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
 
+        # ── Phase 5 : Purge automatique historique + cache ──
+        task = asyncio.create_task(self._auto_purge_loop())
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
+    async def _auto_purge_loop(self) -> None:
+        """Purge périodique de l'historique et du cache (toutes les 2h).
+        V16 FIX : Évite l'accumulation mémoire sur longues sessions.
+        """
+        while True:
+            try:
+                await asyncio.sleep(7200)  # Toutes les 2 heures
+                # Purger l'historien : garder les 50 derniers messages
+                try:
+                    self.memory.purge_history(keep_last=50)
+                    logger.info("🧹 Purge auto : historique réduit à 50 messages")
+                except Exception as e:
+                    logger.debug(f"Purge history: {e}")
+
+                # Purger le cache sémantique : supprimer les entrées à 0 hit
+                try:
+                    from src.core.ram_budget import get_budget
+                    probe = get_budget().probe()
+                    if probe.swap_percent > 50:
+                        self.memory.purge_cache()
+                        logger.info("🧹 Purge auto : cache sémantique vidé (swap élevé)")
+                except Exception as e:
+                    logger.debug(f"Purge cache: {e}")
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("Erreur dans _auto_purge_loop")
+
     async def _on_index_reset(self, _data=None):
         """Callback quand l'utilisateur vide l'index depuis l'UI."""
         logger.info("🛑 Index vidé par l'utilisateur — arrêt de l'auto-indexation")

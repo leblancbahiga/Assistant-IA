@@ -820,12 +820,20 @@ class RAGEngine:
             effective_k = k
         elif top1_score >= FALLBACK_THRESHOLD:
             confidence_label = "MOYENNE"
-            effective_k = max(2, k // 2)
-            logger.info(f"RAG V8+ : confiance MOYENNE (score={top1_score:.2f}), top_k réduit à {effective_k}")
+            # V16 FIX : plus de chunks quand confiance moyenne (inversé)
+            effective_k = min(k * 2, k * 3 // 2)
+            logger.info(
+                f"RAG V8+ : confiance MOYENNE (score={top1_score:.2f}), "
+                f"top_k élargi à {effective_k}"
+            )
         else:
             confidence_label = "FAIBLE"
-            effective_k = max(1, k // 3)
-            logger.info(f"RAG V8+ : confiance FAIBLE (score={top1_score:.2f}), top_k réduit à {effective_k}")
+            # V16 FIX : 2× plus de chunks quand confiance faible (inversé)
+            effective_k = k * 2
+            logger.info(
+                f"RAG V8+ : confiance FAIBLE (score={top1_score:.2f}), "
+                f"top_k élargi à {effective_k}"
+            )
 
         # ── V10 Audit: Rejeter les résultats clairement non pertinents ──
         # AVERTISSEMENT: placée APRES Profile Boost (ligne ~620), pas ici.
@@ -1035,22 +1043,29 @@ class RAGEngine:
         result.retrieval_time_ms = (time.time() - t_start) * 1000
 
         # V6 : Injection des métadonnées structurées dans le contexte
-        # Tous les documents avec des métadonnées (summary, sujets) sont injectés
+        # V16 FIX : Filtrer par sources présentes dans les résultats de recherche
         try:
             from src.document_extractor import DocumentMetadata, format_doc_for_context
 
-            # Récupérer TOUTES les métadonnées structurées disponibles
-            all_meta = self.get_all_doc_meta()
-            if all_meta:
-                injected = 0
-                meta_sections = []
+            # Récupérer UNIQUEMENT les métadonnées des documents trouvés par la recherche
+            relevant_sources = set()
+            if combined_results:
+                for _, src, _ in combined_results:
+                    if src:
+                        relevant_sources.add(src)
 
-                for entry in all_meta:
+            injected = 0
+            meta_sections = []
+            if relevant_sources:
+                for source in relevant_sources:
                     try:
-                        data = json.loads(entry["json_data"])
+                        json_str = self.get_doc_meta(source)
+                        if not json_str:
+                            continue
+                        data = json.loads(json_str)
                         meta = DocumentMetadata(
-                            source_file=entry["source"],
-                            doc_type=entry.get("doc_type", "document"),
+                            source_file=source,
+                            doc_type=data.get("doc_type", "document"),
                             title=data.get("title", ""),
                             summary=data.get("summary", ""),
                             key_topics=data.get("key_topics", []),
@@ -1059,14 +1074,14 @@ class RAGEngine:
                             language=data.get("language", ""),
                             word_count=data.get("word_count", 0),
                         )
-                        meta.structured_json = entry["json_data"]
+                        meta.structured_json = json_str
                         meta_sections.append(format_doc_for_context(meta))
                         injected += 1
                     except Exception as e:
                         logger.debug(f"Formatage métadonnées ignoré: {e}")
                         pass
 
-                if meta_sections:
+            if meta_sections:
                     meta_context = "\n\n===\n".join(meta_sections)
                     # Ajouter un marqueur clair pour le LLM
                     meta_block = "\n\n=== FICHES STRUCTURÉES DES DOCUMENTS ===\n" + meta_context

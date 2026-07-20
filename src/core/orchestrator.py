@@ -353,14 +353,16 @@ class NuruOrchestrator:
         if len(full_prompt) > max_safe_chars:
             excess = len(full_prompt) - max_safe_chars
             logger.debug(f"🧃 TokenJuice: écrêtage post-template de {excess} chars")
-            # On tronque le contexte RAG (la partie la plus longue) d'abord
+            # V16 FIX : Troncature par la fin du RAG (préserve le début + la requête utilisateur)
             if rag_context and rag_context in full_prompt:
-                # Réduire le contexte RAG de l'excédent
-                trimmed_rag = rag_context[:len(rag_context) - excess - 100] + "\n[... tronqué pour budget token ...]"
+                trimmed_rag = rag_context[:len(rag_context) - excess - 100]
+                trimmed_rag += "\n[... tronqué pour budget token ...]"
                 full_prompt = full_prompt.replace(rag_context, trimmed_rag, 1)
-            # Si toujours trop long, tronquer la fin du prompt
+            # Si toujours trop long, tronquer au milieu (préserve début + requête)
             if len(full_prompt) > max_safe_chars:
-                full_prompt = full_prompt[:max_safe_chars - 100] + "\n[... tronqué ...]"
+                keep = max_safe_chars - 200
+                half = keep // 2
+                full_prompt = full_prompt[:half] + "\n[... tronqué ...]\n" + full_prompt[-half:]
 
         # ── 6.5 Activation ToT (Tree of Thoughts) ──
         # V16: Exploration arborescente pour les goals P0 critiques.
