@@ -20,8 +20,8 @@ SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".csv", ".json"}
 class IngestionEngine:
     """Moteur d'ingestion de documents pour le RAG V8+."""
     
-    def __init__(self):
-        self.rag = RAGEngine()
+    def __init__(self, rag_engine=None):
+        self.rag = rag_engine or RAGEngine()  # V16 FIX : accepter RAGEngine existant
         self.embedder = Embedder()
 
     def _parse_file(self, file_path: str) -> str:

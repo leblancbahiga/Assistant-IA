@@ -35,8 +35,6 @@ class LocalLLM:
         self._model_manager = ModelManager(keep_alive_seconds=30)
         # V10 Audit: Lock thread-safe pour generate_stream()
         self._gen_lock = asyncio.Lock()
-        # V15 Phase 0B -- P0 #31 : cache de prompt pour les requetes repetees
-        self._prompt_cache: dict[int, object] = {}
         # Statistiques de benchmark
         self.bench: dict[str, list[float]] = {"prompt_ms": [], "tok_s": []}
         # V15 P2 #27 : Tache de dechargement differe
@@ -364,7 +362,9 @@ class LocalLLM:
                         continue
                     yield item
                     n_tokens += 1
-                    await asyncio.sleep(0)
+                    # V16 FIX : éviter busy-wait 100% CPU (asyncio.sleep(0) reschedule immédiat)
+                    if n_tokens % 10 == 0:
+                        await asyncio.sleep(0)  # Tous les 10 tokens seulement
 
                 self._schedule_unload()
 

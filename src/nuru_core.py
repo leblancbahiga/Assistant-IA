@@ -131,7 +131,7 @@ class NuruCore:
         self.runtime = RuntimeManager()
         self.event_bus = EventBus()
         # V10.3 — AUDIT Arch-01 : self.plugins et self.reflection supprimés (stubs YAGNI)
-        self.ingestion = IngestionEngine()
+        self.ingestion = IngestionEngine(rag_engine=self.rag)  # V16 FIX: partage le RAGEngine
         
         # V4 : Monitoring RAM actif
         # V10.3k — audit Option C : seuils lus depuis Config (surchargeables via YAML/env)
