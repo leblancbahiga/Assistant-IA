@@ -282,6 +282,19 @@ class ConversationSurface(QWidget):
         self._last_assistant_bubble: BubbleWidget | None = None
         self._stream_buffer: list[str] = []
         self._stream_timer: QTimer | None = None
+        # V17 Phase 2 : timer progressif (⏱ X.Xs) pendant le streaming
+        self._stream_start_time: float = 0.0
+        self._progress_timer: QTimer | None = None
+        self._time_label = QLabel()
+        self._time_label.setAlignment(Qt.AlignCenter)
+        self._time_label.setStyleSheet(
+            "background: transparent; color: #4A5568; font-size: 10px;"
+            " padding: 2px 0;"
+        )
+        self._time_label.setVisible(False)
+        # Insérer le time_label APRÈS le strategy_label (index 1 dans le layout)
+        self._time_label_pos = layout.count()  # index après strategy_label
+        layout.insertWidget(self._time_label_pos, self._time_label)
         # Glue spaces entre tokens pour providers qui strippent
         # les espaces en début de token (openrouter deepseek, etc.)
         self._glue_spaces: bool = True
@@ -317,7 +330,9 @@ class ConversationSurface(QWidget):
     # ── Streaming ──
 
     def start_stream(self) -> None:
-        """Crée une bulle vide pour le streaming de la réponse NURU."""
+        """Crée une bulle vide pour le streaming de la réponse NURU.
+        Lance le timer progressif ⏱.
+        """
         # Vider le buffer
         self._stream_buffer = []
 
@@ -341,6 +356,16 @@ class ConversationSurface(QWidget):
         self._inner_layout.insertWidget(
             self._inner_layout.count() - 1, container
         )
+
+        # V17 Phase 2 : timer progressif
+        self._stream_start_time = time.monotonic()
+        self._time_label.setText("⏱  0.0s")
+        self._time_label.setVisible(True)
+        if self._progress_timer is None:
+            self._progress_timer = QTimer(self)
+            self._progress_timer.setInterval(100)  # ms — 10 FPS
+            self._progress_timer.timeout.connect(self._update_progress_timer)
+        self._progress_timer.start()
 
         QTimer.singleShot(50, self._scroll_to_bottom)
 
@@ -380,7 +405,8 @@ class ConversationSurface(QWidget):
 
         # Déclencher le flush immédiatement (timer unique)
         if self._stream_timer is None or not self._stream_timer.isActive():
-            self._stream_timer = QTimer()
+            # V16 AUDIT FIX QW9 : parent QTimer(self) — évite fuite si widget détruit
+            self._stream_timer = QTimer(self)
             self._stream_timer.setSingleShot(True)
             self._stream_timer.timeout.connect(self._flush_stream_buffer)
             self._stream_timer.start(30)  # ms — batch tokens toutes les 30ms
@@ -408,12 +434,27 @@ class ConversationSurface(QWidget):
         self._flush_stream_buffer()
         self._streaming_bubble = None
 
-        # Nettoyer le timer
+        # Nettoyer le timer stream
         if self._stream_timer and self._stream_timer.isActive():
             self._stream_timer.stop()
         self._stream_timer = None
 
+        # V17 Phase 2 : arrêter le timer progressif
+        if self._progress_timer and self._progress_timer.isActive():
+            self._progress_timer.stop()
+        elapsed = time.monotonic() - self._stream_start_time
+        self._time_label.setText(f"✅  {elapsed:.1f}s")
+        # Cacher après 2s
+        QTimer.singleShot(2000, lambda: self._time_label.setVisible(False))
+
     # ── Utilitaires ──
+
+    def _update_progress_timer(self) -> None:
+        """Met à jour l'affichage du timer ⏱ pendant le streaming."""
+        if self._stream_start_time <= 0:
+            return
+        elapsed = time.monotonic() - self._stream_start_time
+        self._time_label.setText(f"⏱  {elapsed:.1f}s")
 
     def _scroll_to_bottom(self):
         scrollbar = self._scroll.verticalScrollBar()

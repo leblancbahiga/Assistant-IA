@@ -38,6 +38,10 @@ from src.routing.v16.router_v16 import RouterV16
 from src.core.session_memory import SessionMemory, get_session_memory
 # V16: Self-Consistency Engine
 from src.learning.self_consistency import SelfConsistencyEngine
+# V16: CoT + ToT
+from src.learning.chain_of_thought import (
+    should_use_cot, format_cot_prompt, extract_reasoning_and_answer, strip_reasoning_if_needed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,9 +134,11 @@ class NuruOrchestrator:
 
         # V10.3j — AUDIT BUG-FIX : `rag_pipeline` est référencé par ResearchArchon.
         # Avant ce fix, `self.rag_pipeline` n'était défini nulle part → crash au démarrage.
-        # Sémantique : rag_pipeline = point d'entrée du pipeline RAG (retrieve + chunks).
+        # Sémantique : _rag_engine_ref = point d'entrée du pipeline RAG (retrieve + chunks).
         # On l'aliase sur rag_engine car ce dernier est déjà DI-é depuis NuruCore.
-        self.rag_pipeline = rag_engine
+        # NOTE V16 AUDIT : renommé _rag_engine_ref pour ne pas confondre avec le
+        # RAGOrchestrator complet créé ligne 165 (Bug #2).
+        self._rag_engine_ref = rag_engine
 
         # V16 — Production Router (V12 déprécié, conservé pour fallback)
         self.v16_router = RouterV16()
@@ -141,6 +147,15 @@ class NuruOrchestrator:
         from src.core.session_memory import get_session_memory
         self.session_memory = get_session_memory(max_messages=6)
         self._session_max_context = getattr(config, 'session_max_messages', 10)
+
+        # V16 FIX BUG #7 : SelfConsistencyEngine initialisé dans __init__ (pas lazy)
+        self._self_consistency = SelfConsistencyEngine(n_samples=3, temperature=0.7)
+
+        # AUDIT V16 FIX : tracking des tâches de fond pour shutdown propre (4.1)
+        self._bg_tasks: set[asyncio.Task] = set()
+
+        # AUDIT V16 FIX : shell tools ToT désactivés par défaut (sécurité 2.1)
+        self._enable_shell_tools = False
         
         # V10.3f : Sessions conversationnelles persistantes (gardé pour compat)
         from src.session.store import SessionStore
@@ -157,7 +172,7 @@ class NuruOrchestrator:
         from src.ai.archon_research import ResearchArchon
         self.research_archon = ResearchArchon(
             cloud_llm=self.cloud_llm,
-            rag_pipeline=self.rag_pipeline,
+            rag_pipeline=self._rag_engine_ref,  # V16 FIX BUG #2 : utilise _rag_engine_ref (simple engine)
             enabled=getattr(config, 'research_archon_enabled', True),
         )
 
@@ -198,6 +213,9 @@ class NuruOrchestrator:
             query, session_id,
             is_online=is_online,
         )
+        # V17 Phase 2 : correlation ID pour traçabilité
+        logger.info(f"[{ctx.correlation_id}] Pipeline start | query_len={len(query)}")
+
         # V10.3f : Enregistrer la question dans l'historique session
         original_query = query
         query = self.token_juice.compress_query(query)
@@ -275,16 +293,19 @@ class NuruOrchestrator:
             if cached:
                 await self.event_bus.emit("cache_hit", {"query": query})
                 if use_tts and audio_engine:
-                    asyncio.create_task(audio_engine.speak(cached)).add_done_callback(
-                        lambda t: t.exception() if not t.cancelled() else None
+                    self._spawn_background(
+                        audio_engine.speak(cached),
+                        name="tts_cache_hit",
                     )
                 yield cached
+                return  # V16 FIX BUG #4 : return manquant — le pipeline continuait après cache hit
 
         # ── 4. Récupération contexte (RAGOrchestrator multi-sous-requêtes) ──
+        # V16 FIX BUG #3 : initialiser web_context avant le branchement
+        web_context = ""
         if self.response_guard.is_free:
             # Mode FREE : pas de RAG, pas de web search, conversation libre
             rag_context = ""
-            web_context = ""
             merged_result = rag_result  # pylint: disable=possibly-used-before-assignment
             intent = "SIMPLE"
             logger.info("🔓 Mode FREE: RAG + web contournés")
@@ -322,7 +343,7 @@ class NuruOrchestrator:
 
         # ── 5.5-5.6 FallbackGuard + Strict RAG ──
         strict_msg = await self.rag_pipeline.check_strict_blocks(
-            query, intent, rag_context, web_context if 'web_context' in dir() else "",
+            query, intent, rag_context, web_context,  # V16 FIX BUG #3 : 'web_context' in dir() supprimé — variable toujours définie
         )
         if strict_msg:
             await self.event_bus.emit("query.strict_refused", {"query": query})
@@ -413,6 +434,7 @@ class NuruOrchestrator:
                             f"⏭️ Self-Consistency désactivée (swap={probe.swap_percent:.0f}%)"
                         )
                 except Exception:
+                    logger.debug("RAM probe échouée pour SC", exc_info=True)
                     pass
             use_self_consistency = use_sc
 
@@ -440,9 +462,15 @@ class NuruOrchestrator:
                     try:
                         if tool_name == "read_file" and arg:
                             import os
-                            path = os.path.expanduser(arg)
-                            if os.path.isfile(path):
-                                with open(path, "r", errors="replace") as f:
+                            # AUDIT V16 FIX (2.2) : sandbox read_file — only workspace files
+                            _raw = os.path.expanduser(arg)
+                            _resolved = os.path.realpath(_raw)
+                            _workspace = os.path.realpath(".")
+                            if not _resolved.startswith(_workspace):
+                                logger.debug("🌳 ToT: read_file refusé — hors workspace")
+                                return (-0.3, "Lecture refusée (hors espace de travail)")
+                            if os.path.isfile(_resolved):
+                                with open(_resolved, "r", errors="replace") as f:
                                     content = f.read(2000)
                                 return (0.2, f"Fichier lu ({len(content)} chars): {content[:300]}")
                             return (-0.3, f"Fichier introuvable: {arg}")
@@ -465,16 +493,27 @@ class NuruOrchestrator:
 
                         elif tool_name == "search_files" and arg:
                             import glob, os
-                            matches = glob.glob(f"**/*{arg}*", recursive=True)[:5]
-                            if matches:
-                                return (0.15, f"Fichiers trouves: {', '.join(matches[:5])}")
+                            # AUDIT V16 FIX (2.3) : restreindre search_files au workspace
+                            _workspace = os.path.realpath(".")
+                            _pattern = os.path.join(_workspace, "**", "*" + arg + "*")
+                            matches = glob.glob(_pattern, recursive=True)[:5]
+                            # Retirer le préfixe workspace des résultats pour lisibilité
+                            _short = [os.path.relpath(m) for m in matches]
+                            if _short:
+                                return (0.15, "Fichiers trouves: " + ", ".join(_short[:5]))
                             return (-0.1, "Aucun fichier trouve")
 
                         elif tool_name == "run_command" and arg:
-                            # Limite aux commandes non-destructives
+                            # AUDIT V16 FIX (2.1) : run_command désactivé par défaut (sécurité)
+                            if not self._enable_shell_tools:
+                                logger.debug("🌳 ToT: run_command refusé — shell tools désactivés")
+                                return (-0.2, "Commande shell désactivée (sécurité)")
                             if any(kw in arg.lower() for kw in ["ls", "cat", "head", "tail", "wc", "find"]):
                                 import subprocess
-                                r = subprocess.run(arg.split()[:5], capture_output=True, text=True, timeout=5)
+                                r = await asyncio.to_thread(
+                                    subprocess.run, arg.split()[:5],
+                                    capture_output=True, text=True, timeout=5
+                                )
                                 out = r.stdout[:200]
                                 return (0.1, f"Shell: {out}" if out else (0.0, "Pas de sortie"))
                             return (-0.2, "Commande interdite (securite)")
@@ -501,14 +540,11 @@ class NuruOrchestrator:
                 chunk_size = 50
                 for i in range(0, len(response_content), chunk_size):
                     yield response_content[i:i+chunk_size]
-                    await asyncio.sleep(0.01)
+                    # V16 AUDIT FIX QW6 : sleep(0.01) supprimé — ajoutait ~0.8s de
+                    # latence artificielle à chaque réponse non-streaming
 
             elif use_self_consistency:
                 # V16: Self-Consistency (3 votes TF-IDF)
-                if not hasattr(self, '_self_consistency'):
-                    from src.learning.self_consistency import SelfConsistencyEngine
-                    self._self_consistency = SelfConsistencyEngine(n_samples=3, temperature=0.7)
-
                 sc_prompt = self._build_self_consistency_prompt(
                     system_prompt, full_prompt, query, rag_context, intent
                 )
@@ -528,7 +564,8 @@ class NuruOrchestrator:
                 chunk_size = 50
                 for i in range(0, len(response_content), chunk_size):
                     yield response_content[i:i+chunk_size]
-                    await asyncio.sleep(0.01)
+                    # V16 AUDIT FIX QW6 : sleep(0.01) supprimé — ajoutait ~0.8s de
+                    # latence artificielle à chaque réponse non-streaming
 
             else:
                 # Génération normale (streaming)
@@ -539,6 +576,9 @@ class NuruOrchestrator:
                     stream_session=stream_session,
                     session_id=session_id,
                 ):
+                    # V16 FIX : défense anti-None (certains streams API peuvent renvoyer None)
+                    if token is None:
+                        continue
                     response_content += token
                     yield token
 
@@ -612,7 +652,8 @@ class NuruOrchestrator:
         )
         if refined != response_content:
             response_content = refined
-            yield "\n\n🔮 **Vérification Archon : réponse raffinée**\n"
+            # Ne pas yield de message visible — le raffinement est transparent
+            logger.debug("🔮 Archon: réponse raffinée silencieusement")
 
         # V10.3f : Enregistrer la réponse dans l'historique session
         self.session_store.add_message(
@@ -621,8 +662,32 @@ class NuruOrchestrator:
         )
 
         # ── 8. Finalisation ──
-        result = self._finalize(response_content, duration, intent, rag_result)
-        event_data = result.to_dict()
+        # AUDIT V16 FIX (1.5) : OrchestratorResult est utilisé (plus du code mort)
+        _final_confidence = 0.8 if intent in ("COMPLEX", "LOCAL_LLM") else 0.6
+        _result_obj = OrchestratorResult(
+            response=response_content,
+            route=intent,
+            confidence=_final_confidence,
+            tokens_generated=len(response_content) // 4,
+            tokens_prompt=len(full_prompt) // 4 if 'full_prompt' in locals() else 0,
+            duration_s=duration,
+            tokens_per_sec=len(response_content) / (duration + 0.001) / 4,
+            model=getattr(self.cloud_llm, "model", "local"),
+        )
+        event_data = _result_obj.to_dict()
+        # Ajouter les champs UI qui ne font pas partie d'OrchestratorResult.to_dict()
+        event_data.update({
+            "response": response_content,
+            "duration_seconds": duration,
+            "intent": intent,
+            "tok_s": _result_obj.tokens_per_sec,
+            "latence": int(duration * 1000),
+            "chunks": getattr(rag_result, "chunks_injected", 0) if rag_result else 0,
+            "chunks_high": 0,
+            "chunks_med": 0,
+            "sub_queries": 0,
+            "rag_score": round(getattr(rag_result, "top_score", 0.0), 2) if rag_result else 0.0,
+        })
         # Enrichir avec les données RAG pour le dashboard d'observabilité
         if rag_result:
             event_data["rag_result"] = {
@@ -661,23 +726,33 @@ class NuruOrchestrator:
         self.memory_store.add_message("assistant", response_content)
 
         # NURU V6 : Learning Loop — enregistrement de la trace
-        asyncio.create_task(self.trace_collector.record(
-            query=original_query,
-            response=response_content[:500],
-            mode="CLOUD" if intent == "COMPLEX" else "LOCAL",
-            confidence=result.confidence,
-            tokens_prompt=result.tokens_prompt or len(full_prompt) // 4,
-            tokens_generated=result.tokens_generated,
-            latency_ms=int(duration * 1000) if 'duration' in dir() else 0,
-            model=result.model,
-        )).add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        # V16 FIX : _finalize n'existait pas — valeurs inline
+        _confidence = 0.8 if intent in ("COMPLEX", "LOCAL_LLM") else 0.6
+        _tokens_prompt = len(full_prompt) // 4 if 'full_prompt' in locals() else 512
+        _tokens_gen = len(response_content) // 4
+        self._spawn_background(
+            self.trace_collector.record(
+                query=original_query,
+                response=response_content[:500],
+                mode="CLOUD" if intent == "COMPLEX" else "LOCAL",
+                confidence=_confidence,
+                tokens_prompt=_tokens_prompt,
+                tokens_generated=_tokens_gen,
+                latency_ms=int(duration * 1000),
+                model=getattr(self.cloud_llm, "model", "local"),
+            ),
+            name="trace_collector",
+        )
 
         # ── 11. Long-Term Memory : extraction post-réponse ──
-        asyncio.create_task(self._ltm_extract_post_response(
-            query=original_query,
-            response=response_content,
-            intent=intent,
-        )).add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        self._spawn_background(
+            self._ltm_extract_post_response(
+                query=original_query,
+                response=response_content,
+                intent=intent,
+            ),
+            name="ltm_extract_post",
+        )
 
     def set_long_term_memory(self, ltm):
         """Injecte le module Long-Term Memory (injection de dépendance)."""
@@ -705,6 +780,34 @@ class NuruOrchestrator:
             logger.debug(f"🧠 LTM extrait post-réponse ignoré ({e})")
 
     # ─── Privées (conservées) ───
+
+    # AUDIT V16 FIX (4.1) : helper pour lancer une tâche fond tracée
+    _BG_TASK_MAX = 20       # sécurité : pas plus de 20 tâches pendantes
+    _BG_TASK_TIMEOUT = 60.0 # timeout max par tâche
+
+    def _spawn_background(self, coro, name: str = "bg") -> None:
+        if len(self._bg_tasks) >= self._BG_TASK_MAX:
+            logger.warning("⚠️ _bg_tasks plafonné (%s), abandon", self._BG_TASK_MAX)
+            return
+        # Envelopper la coroutine avec un timeout pour éviter le hang infini
+        async def _wrapped():
+            try:
+                await asyncio.wait_for(coro, timeout=self._BG_TASK_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.warning("⏰ Tâche fond '%s' a timeout après %ss", name, self._BG_TASK_TIMEOUT)
+            except Exception:
+                logger.error("💥 Tâche fond '%s' a échoué", name, exc_info=True)
+        task = asyncio.create_task(_wrapped(), name=name)
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
+    @staticmethod
+    def _log_bg_exception(task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            logger.error("Tâche fond '%s' a échoué: %s", task.get_name(), exc, exc_info=exc)
 
     def _route_to_intent(self, decision: str) -> str:
         return {
@@ -769,7 +872,7 @@ class NuruOrchestrator:
                         tokens.append(t)
                 return "".join(tokens)
         except Exception:
-            logger.warning("⚠️ SC: swap guard cloud a échoué → fallback local")
+            logger.warning("⚠️ SC: swap guard cloud a échoué → fallback local", exc_info=True)
             pass
 
         # Fallback local

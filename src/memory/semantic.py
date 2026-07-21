@@ -9,6 +9,7 @@ un score de confiance, et les IDs des épisodes sources.
 Inspiré de MemGPT/Letta (core memory) et MIRIX.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -94,14 +95,14 @@ class SemanticMemory:
         logger.debug("Fait ajouté : %s — %s", fact_id, fact[:60])
         return fact_id
 
-    def recall(
+    async def recall(
         self,
         query: str,
         top_k: int = 5,
         min_confidence: float = 0.0,
         categories: Optional[list[str]] = None,
     ) -> list[dict[str, Any]]:
-        """Recherche les faits les plus pertinents par similarité sémantique.
+        """Recherche les faits les plus pertinents par similarité sémantique (asynchrone).
 
         Args:
             query: Texte de recherche
@@ -113,7 +114,9 @@ class SemanticMemory:
             Liste de dicts : {id, fact, category, confidence, source_episodes,
                              created_at, updated_at, score}
         """
-        query_emb = self._embed_query(query)
+        # L'embedding est CPU-bound (MLX) → exécuté dans un thread pour ne pas
+        # bloquer l'event loop. V17 Phase 2.
+        query_emb = await asyncio.to_thread(self._embed_query, query)
         conn = self.schema._get_conn()
         try:
             sql = "SELECT id, fact, category, confidence, source_episodes, created_at, updated_at, embedding FROM semantic_memory"
@@ -361,17 +364,8 @@ class SemanticMemory:
         return emb.astype(np.float32).reshape(-1)
 
     def _embed_sync(self, text: str) -> np.ndarray:
-        """Version synchrone du calcul d'embedding."""
-        try:
-            import asyncio
-            return asyncio.run(self.embedder.embed(text, is_query=False))
-        except RuntimeError:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(self.embedder.embed(text, is_query=False))
-            finally:
-                loop.close()
+        """Version synchrone du calcul d'embedding (appel direct, pas d'asyncio.run)."""
+        return self.embedder.embed_sync(text, is_query=False)
 
     @staticmethod
     def _deserialize_embedding(blob) -> np.ndarray:

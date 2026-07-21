@@ -218,3 +218,76 @@ class MemoryManager:
             }
         finally:
             conn.close()
+
+    async def get_full_context(self, query: str = "") -> str:
+        """Retourne le contexte mémoire formaté pour injection RAG (asynchrone).
+
+        Combine :
+        - Mémoire utilisateur (profil, préférences, contexte personnel)
+        - Mémoire sémantique (faits consolidés pertinents)
+        - Mémoire de travail (session en cours)
+        - Procédures réutilisables
+
+        Args:
+            query: Requête utilisateur pour filtrer les faits pertinents.
+
+        Returns:
+            Chaîne formatée pour injection dans le prompt RAG,
+            ou chaîne vide si aucune donnée mémoire.
+        """
+        parts = []
+
+        # 1. Profil utilisateur
+        try:
+            categories = ["identity", "preference", "context", "habit", "skill", "general"]
+            user_lines = []
+            for cat in categories:
+                rows = self.user.list_by_category(cat)
+                for r in rows:
+                    user_lines.append(f"[{r['category'].upper()}] {r['key']}: {r['value']}")
+            if user_lines:
+                parts.append("=== PROFIL UTILISATEUR ===\n" + "\n".join(user_lines))
+        except Exception as e:
+            logger.debug("get_full_context user: %s", e)
+
+        # 2. Faits sémantiques consolidés (recherche par similarité si query)
+        try:
+            if query.strip():
+                facts = await self.semantic.recall(
+                    query, top_k=5, min_confidence=0.5
+                )
+                if facts:
+                    fact_lines = [f"[{f['category'].upper()}] {f['fact']}" for f in facts]
+                    parts.append("=== FAITS PERTINENTS ===\n" + "\n".join(fact_lines))
+            else:
+                # Sans requête, prendre les faits les plus récents
+                conn = self.schema._get_conn()
+                try:
+                    rows = conn.execute(
+                        "SELECT fact, category, confidence FROM semantic_memory "
+                        "ORDER BY updated_at DESC LIMIT 10"
+                    ).fetchall()
+                    if rows:
+                        fact_lines = [f"[{r['category'].upper()}] {r['fact']}" for r in rows]
+                        parts.append("=== FAITS RÉCENTS ===\n" + "\n".join(fact_lines))
+                finally:
+                    conn.close()
+        except Exception as e:
+            logger.debug("get_full_context semantic: %s", e)
+
+        # 3. Mémoire de travail (session)
+        try:
+            working = self.working.all()
+            if working:
+                work_lines = [
+                    f"{k}: {str(v)[:200]}"
+                    for k, v in working.items()
+                ]
+                parts.append("=== SESSION EN COURS ===\n" + "\n".join(work_lines))
+        except Exception as e:
+            logger.debug("get_full_context working: %s", e)
+
+        if not parts:
+            return ""
+
+        return "\n\n".join(parts)

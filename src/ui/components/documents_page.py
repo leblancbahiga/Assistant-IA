@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox, QMenu, QComboBox,
     QLineEdit, QTextEdit,
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QAction
 
 
@@ -80,6 +80,8 @@ class DocumentsPage(QWidget):
         self._documents_data = []  # cache local des documents
         self.setup_ui()
         self.setAcceptDrops(True)
+        # V17 FIX : charger les documents après le rendu UI (pas dans showEvent)
+        self._load_docs_async()
 
     # ─────────── UI SETUP ───────────
 
@@ -297,11 +299,23 @@ class DocumentsPage(QWidget):
     def showEvent(self, event):
         """Charge les documents quand la page devient visible."""
         super().showEvent(event)
-        if self.rag_engine is not None:
-            self.load_documents()
+        # V17 FIX : load_documents peut crasher sur PDF corrompus via fitz
+        # → déporté dans _load_docs_async (appelé par setup_ui via QTimer)
+
+    def _load_docs_async(self):
+        """Charge les documents dans un QTimer pour éviter de bloquer l'UI."""
+        if self._load_scheduled:
+            return
+        self._load_scheduled = True
+        # Décaler d'un tick pour laisser l'UI se monter
+        QTimer.singleShot(200, self.load_documents)
 
     def load_documents(self):
-        """Charge la liste des documents depuis la base RAG et met à jour le tableau."""
+        """Charge la liste des documents depuis la base RAG et met à jour le tableau.
+
+        V17 FIX : ne plus ouvrir les PDF avec fitz (segfault sur PDF corrompus,
+        OOM sur collections >50 PDFs). pages = '?' sauf si déjà en cache.
+        """
         if not self.rag_engine:
             self.empty_label.setText("⚠ Moteur RAG non connecté — impossible de charger les documents.")
             self.empty_label.setVisible(True)
@@ -323,12 +337,11 @@ class DocumentsPage(QWidget):
                     "SELECT source, COUNT(*) as cnt FROM chunks GROUP BY source"
                 ).fetchall()
                 chunk_counts = {r[0]: r[1] for r in cc_rows}
-                # Aussi indexer par basename pour les lookups
                 for src, cnt in cc_rows:
                     bn = os.path.basename(src)
                     chunk_counts_by_basename[bn] = chunk_counts_by_basename.get(bn, 0) + cnt
             except Exception:
-                pass  # table peut être vide
+                pass
 
             # Fallback: si indexed_files est vide, reconstruire depuis chunks
             if not rows and chunk_counts:
@@ -359,16 +372,9 @@ class DocumentsPage(QWidget):
                 size_str = self._format_size(size_bytes)
             except OSError:
                 size_str = "⚠ introuvable"
-            pages = "—"
-            # Estimation pages pour PDF
-            if ext == ".pdf":
-                try:
-                    import fitz
-                    doc = fitz.open(filepath)
-                    pages = str(doc.page_count)
-                    doc.close()
-                except Exception:
-                    pages = "?"
+            # V17 FIX : ne pas ouvrir les PDF avec fitz (cause crash Python)
+            # fitz.open() peut segfault sur PDF corrompus et consomme ~50-200 Mo/PDF
+            pages = "?"
             chunks = chunk_counts_by_basename.get(name, 0)
             date_str = ""
             if mtime:

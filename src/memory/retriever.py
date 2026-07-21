@@ -92,7 +92,7 @@ class MemoryRetriever:
 
     # ── Recherche multi-mémoire ───────────────────────────────────────
 
-    def recall(
+    async def recall(
         self,
         query: str,
         memory_types: Optional[list[str]] = None,
@@ -100,7 +100,7 @@ class MemoryRetriever:
         time_range: Optional[tuple[float, float]] = None,
     ) -> dict[str, list]:
         """Recherche multi-mémoire : interroge une ou plusieurs mémoires
-        et retourne les résultats groupés par type.
+        et retourne les résultats groupés par type (asynchrone).
 
         Args:
             query: Texte de recherche
@@ -124,7 +124,7 @@ class MemoryRetriever:
             mtype = mtype.lower()
             if mtype == "episodic":
                 try:
-                    items = self._episodic.recall(query, top_k=top_k_per_type)
+                    items = await self._episodic.recall(query, top_k=top_k_per_type)
                     if time_range:
                         items = self._filter_by_time(items, time_range)
                     results["episodic"] = items
@@ -134,7 +134,7 @@ class MemoryRetriever:
 
             elif mtype == "semantic":
                 try:
-                    results["semantic"] = self._semantic.recall(query, top_k=top_k_per_type)
+                    results["semantic"] = await self._semantic.recall(query, top_k=top_k_per_type)
                 except Exception as e:
                     logger.error("Erreur recall semantic: %s", e)
                     results["semantic"] = []
@@ -152,7 +152,7 @@ class MemoryRetriever:
 
             elif mtype == "error":
                 try:
-                    items = self._error.recall(query, top_k=top_k_per_type)
+                    items = await self._error.recall(query, top_k=top_k_per_type)
                     if time_range:
                         items = self._filter_by_time(items, time_range)
                     results["error"] = items
@@ -162,8 +162,8 @@ class MemoryRetriever:
 
         return results
 
-    def recall_combined(self, query: str, top_k: int = 5) -> list[dict]:
-        """Recherche fusionnée : interroge toutes les mémoires,
+    async def recall_combined(self, query: str, top_k: int = 5) -> list[dict]:
+        """Recherche fusionnée (asynchrone) : interroge toutes les mémoires,
         fusionne les résultats par score décroissant,
         et ajoute le champ 'memory_type' à chaque résultat.
 
@@ -175,7 +175,7 @@ class MemoryRetriever:
             Liste de dicts triés par 'score' décroissant, chaque entrée
             ayant un champ 'memory_type' supplémentaire.
         """
-        by_type = self.recall(query, top_k_per_type=top_k)
+        by_type = await self.recall(query, top_k_per_type=top_k)
 
         combined: list[dict] = []
 
@@ -195,8 +195,8 @@ class MemoryRetriever:
 
         return combined[:top_k]
 
-    def get_context_for_query(self, query: str) -> str:
-        """Génère un texte formaté pour injection dans le prompt LLM.
+    async def get_context_for_query(self, query: str) -> str:
+        """Génère un texte formaté pour injection dans le prompt LLM (asynchrone).
 
         Combine les résultats de toutes les mémoires en un bloc texte
         structuré avec des sections claires.
@@ -207,7 +207,7 @@ class MemoryRetriever:
         Returns:
             str: Bloc texte formaté, ou chaîne vide si aucun résultat.
         """
-        by_type = self.recall(query, top_k_per_type=5)
+        by_type = await self.recall(query, top_k_per_type=5)
         sections: list[str] = []
 
         # ── User memory en premier (contexte persistant) ──

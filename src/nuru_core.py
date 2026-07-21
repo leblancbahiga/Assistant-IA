@@ -3,8 +3,8 @@ import logging
 import os
 import time
 from pathlib import Path
-from threading import Lock
-from typing import Any, AsyncGenerator, Optional
+# V16 AUDIT FIX QW20 : Lock import supprimé (inutilisé)
+from typing import Any, AsyncGenerator, Awaitable, Optional
 from src.config import config
 from src.rag_engine import RAGEngine
 from src.routing import Router
@@ -116,9 +116,10 @@ class NuruCore:
     """
 
     def __init__(self):
-        self.rag = RAGEngine()
         self.cloud_llm = CloudLLM()  # V10.1 : déplacé AVANT le router pour classification
-        self.router = Router(rag_engine=self.rag, is_online_check=self._is_online,
+        # V16 AUDIT FIX QW1 : injecter cloud_llm existant dans RAGEngine (-40 Mo RAM)
+        self.rag = RAGEngine(cloud_llm=self.cloud_llm)
+        self.router = Router(rag_engine=self.rag, is_online_check=self._is_online,  # V17 Phase 2 : async
                             cloud_llm=self.cloud_llm)
         self.web = WebSearch()
         self.local_llm = LocalLLM()
@@ -141,6 +142,8 @@ class NuruCore:
         )
         # Connecte le déchargement du reranker au RAMMonitor
         self.ram_monitor.register_callback(self.rag.clear_reranker)
+        # V17 Phase 2 : déchargement conditionnel de l'embedder si swap > 50%
+        self.ram_monitor.register_callback(self._maybe_unload_embedder)
         # NOTE : ram_monitor.start() déplacé dans start_background_tasks()
         # car il nécessite une boucle asyncio en cours d'exécution.
 
@@ -222,55 +225,28 @@ class NuruCore:
         self.mcp_server = MCPServer(name="nuru-mcp", version="12.0.0")
         self.mcp_client = MCPClient()
         self._register_mcp_tools()
+        self._online_cache: tuple[float, bool] = (0.0, False)  # TTL timestamp + cached value
 
-    def _is_online(self) -> bool:
-        """Vérifie rapidement si le fournisseur Cloud est accessible.
-        
-        V8+ : Multi-provider — teste Groq, puis OpenRouter, puis DeepSeek.
-        Timeout 0.5s par tentative. Retourne True dès qu'un provider répond.
+    async def _is_online(self) -> bool:
+        """Vérifie si un fournisseur Cloud est accessible (async, parallel, cache TTL).
+
+        Cache : 30s entre les vérifications (les appels consécutifs retournent la
+        valeur en cache sans toucher au réseau). Teste TOUS les hosts en parallèle
+        avec timeout 0.5s. V17 Phase 2.
         """
+        now = time.monotonic()
+        # Cache TTL : 30 secondes
+        if now - self._online_cache[0] < 30.0:
+            return self._online_cache[1]
+
         import socket
         hosts = [
-            ("api.groq.com", 443),
-            ("openrouter.ai", 443),
-            ("api.deepseek.com", 443),
-            ("opencode.ai", 443),
-            ("dashscope.aliyuncs.com", 443),
-            ("api.openai.com", 443),
-            ("generativelanguage.googleapis.com", 443),
-            ("api.together.xyz", 443),
-            ("api.mistral.ai", 443),
-            ("api.x.ai", 443),
-            ("integrate.api.nvidia.com", 443),
+            "api.groq.com", "openrouter.ai", "api.deepseek.com",
+            "opencode.ai", "dashscope.aliyuncs.com", "api.openai.com",
+            "generativelanguage.googleapis.com", "api.together.xyz",
+            "api.mistral.ai", "api.x.ai", "integrate.api.nvidia.com",
         ]
-        for host, port in hosts:
-            try:
-                socket.create_connection((host, port), timeout=0.5)
-                return True
-            except (socket.timeout, OSError):
-                continue
-        return False
 
-    async def _check_cloud_online(self) -> bool:
-        """Version asynchrone de _is_online pour utilisation dans process_query.
-        
-        Teste TOUS les hosts en parallèle avec timeout global de 0.8s.
-        V8+ : Vérifie la connectivité AVANT d'engager le pipeline RAG.
-        """
-        import socket
-        hosts = [
-            "api.groq.com",
-            "openrouter.ai",
-            "api.deepseek.com",
-            "opencode.ai",
-            "dashscope.aliyuncs.com",
-            "api.openai.com",
-            "generativelanguage.googleapis.com",
-            "api.together.xyz",
-            "api.mistral.ai",
-            "api.x.ai",
-            "integrate.api.nvidia.com",
-        ]
         async def _try_host(host: str) -> bool:
             try:
                 loop = asyncio.get_running_loop()
@@ -284,10 +260,77 @@ class NuruCore:
                 return True
             except Exception:
                 return False
-        
+
         results = await asyncio.gather(*[_try_host(h) for h in hosts])
-        return any(results)
-        
+        online = any(results)
+        self._online_cache = (now, online)
+        return online
+
+    def _is_online_sync(self) -> bool:
+        """Version synchrone de _is_online pour les contextes sans event loop.
+
+        Ne fait PAS de cache TTL (pour cohérence avec le cache de la version async).
+        Timeout total : 0.5s par host, max 11 hosts.
+        Note: utiliser la version async dans le pipeline principal.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                # On est dans un event loop running → forcer le cache
+                return self._online_cache[1] if self._online_cache[0] > 0 else False
+        except RuntimeError:
+            pass
+        # Pas de loop → test synchrone séquentiel (fallback startup uniquement)
+        import socket
+        hosts = [
+            ("api.groq.com", 443), ("openrouter.ai", 443), ("api.deepseek.com", 443),
+            ("opencode.ai", 443), ("dashscope.aliyuncs.com", 443), ("api.openai.com", 443),
+            ("generativelanguage.googleapis.com", 443), ("api.together.xyz", 443),
+            ("api.mistral.ai", 443), ("api.x.ai", 443),
+            ("integrate.api.nvidia.com", 443),
+        ]
+        for host, port in hosts:
+            try:
+                socket.create_connection((host, port), timeout=0.5)
+                self._online_cache = (time.monotonic(), True)
+                return True
+            except (socket.timeout, OSError):
+                continue
+        self._online_cache = (time.monotonic(), False)
+        return False
+
+    def _check_cloud_online(self) -> Awaitable[bool]:
+        """Transition vers la nouvelle _is_online. Appelé par les anciens callers."""
+        return self._is_online()
+
+    async def _maybe_unload_embedder(self, force: bool = False) -> None:
+        """Callback RAMMonitor : décharge l'embedder MLX si swap > 50%.
+
+        L'embedder (~400-500 Mo) est rechargé automatiquement par _load_model()
+        au prochain appel embed()/embed_sync(). V17 Phase 2.
+        """
+        try:
+            from src.core.ram_budget import get_budget
+            budget = get_budget()
+            state = budget.probe()
+            should_unload = force or state.swap_percent > 50 or state.free_ram_gb < 1.5
+        except Exception:
+            import psutil
+            swap = psutil.swap_memory()
+            mem = psutil.virtual_memory()
+            swap_pct = swap.percent if swap.total > 0 else 0
+            free_ram_gb = mem.available / (1024**3)
+            should_unload = force or swap_pct > 50 or free_ram_gb < 1.5
+
+        if not should_unload:
+            return
+
+        from src.embedder import Embedder
+        embedder = Embedder()
+        if embedder._model is not None:
+            embedder.unload()
+            logger.info("🧹 Embedder déchargé (RAMMonitor) — libère ~400 Mo")
+
     def start_background_tasks(self):
         """Lance les tâches asynchrones et le watcher en arrière-plan.
         
@@ -510,49 +553,70 @@ class NuruCore:
     # ── Phase 4 : Routes ModelRouter ──────────────────────────────────────────
 
     def _init_model_routes(self) -> None:
-        """Configure les routes de modèles selon les providers NURU."""
+        """Configure les routes de modèles selon les providers réellement disponibles.
+
+        AUDIT V16 FIX : routes dynamiques — ne charge que les providers qui ont
+        une clé API dans le Keychain. Fin du hardcodage Groq qui n'est pas configuré.
+        """
         from src.models.router import ModelRoute, TaskType
-        routes = [
-            ModelRoute(
-                name="groq/llama-3.3-70b", provider="groq",
-                task_types=[TaskType.SIMPLE, TaskType.RAG, TaskType.TOOL],
-                cost_per_1k_tokens=0.0001, priority=10, fallback="groq/deepseek-r1",
-                avg_accuracy=0.95,
-            ),
-            ModelRoute(
-                name="groq/deepseek-r1", provider="groq",
-                task_types=[TaskType.COMPLEX, TaskType.CODE],
-                cost_per_1k_tokens=0.0003, priority=8,
-                avg_accuracy=0.92,
-            ),
-            ModelRoute(
-                name="deepseek/deepseek-chat", provider="deepseek",
-                task_types=[TaskType.COMPLEX, TaskType.CREATIVE],
-                cost_per_1k_tokens=0.0005, priority=7,
-                avg_accuracy=0.90,
-            ),
-            ModelRoute(
-                name="openrouter/qwen-qwq-32b", provider="openrouter",
-                task_types=[TaskType.COMPLEX, TaskType.CODE, TaskType.CREATIVE],
-                cost_per_1k_tokens=0.0002, priority=6,
-                avg_accuracy=0.88,
-            ),
-            ModelRoute(
-                name="opencode_zen/deepseek-v4-flash-free", provider="opencode_zen",
-                task_types=[TaskType.SIMPLE, TaskType.RAG],
-                cost_per_1k_tokens=0.0, priority=10,
-                avg_accuracy=0.90,
-            ),
-            ModelRoute(
-                name="local/phi-4-mini", provider="local",
-                task_types=list(TaskType),
-                cost_per_1k_tokens=0.0, priority=1,
-                avg_accuracy=0.80,
-            ),
+        routes: list[ModelRoute] = []
+
+        # ── Routes cloud actuelle (provider configuré) ──
+        cloud_prov = getattr(config, "cloud_provider", "opencode_zen")
+        cloud_model = getattr(config, "cloud_model", "deepseek-v4-flash-free")
+        routes.append(ModelRoute(
+            name=f"{cloud_prov}/{cloud_model}",
+            provider=cloud_prov,
+            task_types=[TaskType.SIMPLE, TaskType.RAG, TaskType.TOOL, TaskType.COMPLEX],
+            cost_per_1k_tokens=0.0,
+            priority=10,
+            avg_accuracy=0.90,
+        ))
+
+        # ── Provider fallback (cloud_fallback, ex: openrouter) ──
+        fallback_str = getattr(config, "cloud_fallback", "")
+        if fallback_str and "/" in fallback_str:
+            fb_provider = fallback_str.split("/", 1)[0]
+            _has_key = getattr(config, f"{fb_provider}_key", None) or \
+                       getattr(config, f"{fb_provider.replace('-', '_')}_key", None)
+            if _has_key:
+                routes.append(ModelRoute(
+                    name=fallback_str,
+                    provider=fb_provider,
+                    task_types=[TaskType.SIMPLE, TaskType.RAG, TaskType.COMPLEX, TaskType.CODE],
+                    cost_per_1k_tokens=0.0001,
+                    priority=5,
+                    avg_accuracy=0.85,
+                ))
+
+        # ── Routes additionnelles : uniquement si le provider a une clé ──
+        _extra_routes = [
+            ("deepseek", "deepseek/deepseek-chat", [TaskType.COMPLEX, TaskType.CODE, TaskType.CREATIVE], 0.0005, 7, 0.90),
         ]
+        for prov, name, task_types, cost, prio, acc in _extra_routes:
+            _key = getattr(config, f"{prov}_key", None)
+            if _key and prov != cloud_prov:  # éviter doublon si c'est déjà le provider actif
+                routes.append(ModelRoute(
+                    name=name, provider=prov,
+                    task_types=task_types,
+                    cost_per_1k_tokens=cost, priority=prio,
+                    avg_accuracy=acc,
+                ))
+
+        # ── Local (toujours présent) ──
+        local_model = getattr(config, "local_model", "phi-4-mini-4bit")
+        local_name = f"local/{local_model.split('/')[-1]}"
+        routes.append(ModelRoute(
+            name=local_name, provider="local",
+            task_types=list(TaskType),
+            cost_per_1k_tokens=0.0, priority=1,
+            avg_accuracy=0.80,
+        ))
+
         for route in routes:
             self.model_router.add_route(route)
-        logger.info(f"🗺️ ModelRouter: {len(routes)} routes configurées")
+        logger.info(f"🗺️ ModelRouter: {len(routes)} routes configurées "
+                     f"(provider: {cloud_prov})")
 
     # ── Phase 4 : MCP Tools ───────────────────────────────────────────────────
 

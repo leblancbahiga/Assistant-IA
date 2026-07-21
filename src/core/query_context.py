@@ -28,17 +28,21 @@ class QueryContext:
     # V8+ Sprint 5 : Guards anti-boucle
     already_retried: bool = False
     already_fact_checked: bool = False
+    # V17 Phase 2 : correlation ID pour traçabilité pipeline
+    correlation_id: str = ""
 
     @classmethod
     def from_runtime(cls, query: str, session_id: str, is_online: bool = True) -> "QueryContext":
         """Crée un contexte à partir des infos runtime."""
         import psutil
         ram_free = int(psutil.virtual_memory().available / (1024 * 1024))
+        import uuid
         return cls(
             query=query,
             session_id=session_id,
             is_online=is_online,
             ram_free_mb=ram_free,
+            correlation_id=uuid.uuid4().hex[:8],
         )
 
     def with_route(self, route: str, hybrid_strategy: str = "local_only") -> "QueryContext":

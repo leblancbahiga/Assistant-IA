@@ -154,7 +154,9 @@ class Router:
                  cloud_llm=None, policy_engine=None, hybrid_mode="local_only"):
         self.rag_engine = rag_engine
         self.cloud_llm = cloud_llm
-        self.is_online = is_online_check or (lambda: True)
+        async def _always_online() -> bool:
+            return True
+        self.is_online = is_online_check or _always_online
         self._cache = TTLDecisionCache(maxsize=256, ttl_seconds=300)
         self._spotlight = None
         try:
@@ -246,7 +248,7 @@ class Router:
             return result
 
         # ══ N3 : LLM CLASSIFICATION (Passe 2 — cas ambigus) ══
-        if self.cloud_llm and self.is_online():
+        if self.cloud_llm and await self.is_online():
             try:
                 intent = await self._classify_with_llm(user_query)
                 logger.info(f"🧠 Router N3 (LLM) → {intent}: {query_lower[:50]}")
@@ -310,7 +312,7 @@ class Router:
                 logger.warning(f"Router N4: Spotlight erreur: {e}")
 
         # ══ N5 : CLOUD FALLBACK ══
-        if self.is_online():
+        if await self.is_online():
             result.decision = "CLOUD_GROQ"
             result.confidence = 0.5
             result.reasoning = "Fallback cloud"
@@ -328,7 +330,7 @@ class Router:
 
     async def _classify_with_llm(self, query: str) -> str:
         """Classe l'intent via un appel LLM rapide (Groq)."""
-        prompt = CLASSIFY_PROMPT.format(query=query)
+        prompt = build_classify_prompt(query)
         response = ""
         async for token in self.cloud_llm.generate_stream(
             prompt, intent="SIMPLE",

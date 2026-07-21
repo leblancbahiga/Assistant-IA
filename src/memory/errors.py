@@ -12,6 +12,7 @@ Inspiré des systèmes de mémoire d'erreurs dans MemGPT/Letta
 et des boucles de rétroaction dans MIRIX.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -100,14 +101,14 @@ class ErrorMemory:
         logger.debug("Erreur enregistrée : %s — %s (%s)", error_id, error_type, description[:60])
         return error_id
 
-    def recall(
+    async def recall(
         self,
         query: str,
         top_k: int = 5,
         error_types: Optional[list[str]] = None,
         only_unresolved: bool = False,
     ) -> list[dict[str, Any]]:
-        """Recherche les erreurs similaires à une requête (cosine similarity).
+        """Recherche les erreurs similaires à une requête (asynchrone).
 
         Args:
             query: Texte de recherche
@@ -116,10 +117,9 @@ class ErrorMemory:
             only_unresolved: Si True, ne retourne que les erreurs non résolues
 
         Returns:
-            Liste de dicts : {id, timestamp, error_type, description,
-                             root_cause, correction, related_query, resolved, score}
+            Liste de dicts
         """
-        query_emb = self._embed_query(query)
+        query_emb = await asyncio.to_thread(self._embed_query, query)
         conn = self.schema._get_conn()
         try:
             sql = "SELECT id, timestamp, error_type, description, root_cause, correction, related_query, resolved, embedding FROM error_memory"
@@ -362,17 +362,8 @@ class ErrorMemory:
         return emb.astype(np.float32).reshape(-1)
 
     def _embed_sync(self, text: str) -> np.ndarray:
-        """Version synchrone du calcul d'embedding."""
-        try:
-            import asyncio
-            return asyncio.run(self.embedder.embed(text, is_query=False))
-        except RuntimeError:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(self.embedder.embed(text, is_query=False))
-            finally:
-                loop.close()
+        """Version synchrone du calcul d'embedding (appel direct, pas d'asyncio.run)."""
+        return self.embedder.embed_sync(text, is_query=False)
 
     @staticmethod
     def _deserialize_embedding(blob) -> np.ndarray:
