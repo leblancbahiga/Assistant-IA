@@ -46,7 +46,7 @@ class BubbleWidget(QFrame):
                 padding: {Spacing.SM}px;
             }}
         """)
-        self.setMaximumWidth(600)
+        self.setMaximumWidth(900)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.MD, Spacing.SM, Spacing.MD, Spacing.SM)
