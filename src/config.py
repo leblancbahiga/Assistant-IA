@@ -48,6 +48,11 @@ class Config(BaseSettings):
     lora_adapter_path: str = "data/adapters/rag"   # dossier contenant adapters.safetensors
     lora_adapter_enabled: bool = True               # coupe-circuit rapide
 
+    # V17 P#3 : AgentLoop délégué à src/agent/orchestrator.py
+    # Désactivé par défaut — le module est documenté comme "dormant". 
+    # Activer pour déléguer les requêtes COMPLEX à l'agent 4-phase (Plan→Execute→Verify→Synthesize).
+    agent_loop_enabled: bool = False
+
     # ── Cloud ──
     cloud_model: str = "deepseek-v4-flash-free"
     cloud_provider: str = "opencode_zen"

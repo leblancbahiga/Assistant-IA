@@ -1,9 +1,13 @@
-"""
-NURU V8+ — Orchestrateur asynchrone principal.
+"""NURU V8+ - Orchestrateur asynchrone principal.
 
-Point d'entrée du pipeline : reçoit une requête utilisateur,
-orchestre routage → RAG → génération → mémoire, et retourne
-un résultat structuré.
+Point d'entree du pipeline : recoit une requete utilisateur,
+orchestre routage | RAG | generation | memoire, et retourne
+un resultat structure.
+
+V17 : AgentOrchestrator (src/agent/orchestrator.py) desormais
+accessible via _agent_orchestrator. Active par config.agent_loop_enabled
+(False par defaut). Pour les requetes complexes type plan/action,
+le pipeline peut deleguer a l'agent loop 4-phase (Plan-Execute-Verify-Synthesize).
 """
 import asyncio
 import logging
@@ -168,6 +172,12 @@ class NuruOrchestrator:
             enabled=getattr(config, 'archon_enabled', True),
         )
 
+        # V17 : AgentOrchestrator lazy (src/agent/orchestrator.py)
+        # Activation via config.agent_loop_enabled (False par défaut).
+        # Mode plan→execute→verify→synthesize pour les requêtes complexes.
+        self._agent_orchestrator = None
+        self._agent_mode = getattr(config, 'agent_loop_enabled', False)
+
         # V10.3j : ResearchArchon — recherche multi‑agent pour COMPLEX
         from src.ai.archon_research import ResearchArchon
         self.research_archon = ResearchArchon(
@@ -193,6 +203,35 @@ class NuruOrchestrator:
             event_bus=self.event_bus,
             session_store=self.session_store,
         )
+
+    def _get_agent_orchestrator(self):
+        """V17 : Lazy init AgentOrchestrator (singleton, deja cree si deja utilise)."""
+        if self._agent_orchestrator is None:
+            from src.agent.orchestrator import AgentOrchestrator
+            # AgentOrchestrator est un singleton — new() cree ou renvoie l'instance
+            self._agent_orchestrator = AgentOrchestrator(
+                rag_engine=self.rag_engine,
+            )
+            logger.info(
+                "AgentOrchestrator lazy init | "
+                "agent_mode=%s", self._agent_mode
+            )
+        return self._agent_orchestrator
+
+    async def _delegate_to_agent(self, query: str) -> str:
+        """V17 : Delegue une requete complexe a l'agent loop (Plan-Execute-Verify-Synthesize).
+
+        Retourne la reponse complete ou une chaine vide si echec.
+        """
+        agent = self._get_agent_orchestrator()
+        try:
+            result = await agent.run(query)
+            if isinstance(result, dict):
+                return result.get("synthesis", result.get("status", ""))
+            return str(result)
+        except Exception as e:
+            logger.warning("AgentOrchestrator echec, fallback pipeline normal: %s", e)
+            return ""
 
     async def process_query(
         self,
@@ -286,6 +325,19 @@ class NuruOrchestrator:
             
         if not v16_active:
             intent = self._route_to_intent(route_result.decision)
+
+        # ── 2c. V17 AgentLoop delegation (pour requêtes complexes si activé) ──
+        if self._agent_mode and intent == "COMPLEX":
+            yield "[AgentLoop en cours…]\n"
+            agent_response = await self._delegate_to_agent(query)
+            if agent_response:
+                yield agent_response
+                logger.info(
+                    f"[{ctx.correlation_id}] AgentLoop OK | "
+                    f"len={len(agent_response)}"
+                )
+                return
+            # Si l'agent échoue, on continue le pipeline normal
 
         # ── 3. Cache sémantique (L1 RAM → L2 SQLite) ──
         if intent != "COMPLEX":
