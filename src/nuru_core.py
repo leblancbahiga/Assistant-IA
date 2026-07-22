@@ -124,6 +124,7 @@ class NuruCore:
     def __init__(self):
         # Phase 3 — Noyau central
         self._kernel = NuruKernel()
+        self.k = self._kernel.get  # Raccourci pour les methodes
 
         self.cloud_llm = CloudLLM()  # V10.1 : déplacé AVANT le router pour classification
         self._kernel.register("cloud_llm", self.cloud_llm)
@@ -390,7 +391,7 @@ class NuruCore:
         # asyncio.create_task(self._auto_index_with_ram_guard()).add_done_callback(...)
         
         # V4.5 : Document watcher (watchdog) pour auto-indexation temps réel
-        self._watcher = DocumentWatcher(index_callback=self.ingestion.index_file)
+        self._watcher = DocumentWatcher(index_callback=self.k('ingestion').index_file)
         self._watcher.start()
         logger.info("📁 Document watcher démarré (surveille Documents, Desktop, Downloads)")
 
@@ -402,7 +403,7 @@ class NuruCore:
         EventBus().subscribe("api_keys_updated", lambda _: self.refresh_model_routes())
 
         # ── Phase 3 : Sleep cycle monitoring ──
-        self.sleep_cycle.start_monitoring()
+        self.k('sleep_cycle').start_monitoring()
         task = asyncio.create_task(self._sleep_cycle_loop())
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
@@ -431,7 +432,7 @@ class NuruCore:
                 await asyncio.sleep(7200)  # Toutes les 2 heures
                 # Purger l'historien : garder les 50 derniers messages
                 try:
-                    self.memory.purge_history(keep_last=50)
+                    self.k('memory').purge_history(keep_last=50)
                     logger.info("🧹 Purge auto : historique réduit à 50 messages")
                 except Exception as e:
                     logger.debug(f"Purge history: {e}")
@@ -441,7 +442,7 @@ class NuruCore:
                     from src.core.ram_budget import get_budget
                     probe = get_budget().probe()
                     if probe.swap_percent > 50:
-                        self.memory.purge_cache()
+                        self.k('memory').purge_cache()
                         logger.info("🧹 Purge auto : cache sémantique vidé (swap élevé)")
                 except Exception as e:
                     logger.debug(f"Purge cache: {e}")
@@ -567,7 +568,7 @@ class NuruCore:
                             )
                             continue
 
-                    await self.ingestion.index_file(filepath)
+                    await self.k('ingestion').index_file(filepath)
                     indexed += 1
                     processed += 1
 
@@ -662,7 +663,7 @@ class NuruCore:
         ))
 
         for route in routes:
-            self.model_router.add_route(route)
+            self.k('model_router').add_route(route)
         logger.info(f"🗺️ ModelRouter: {len(routes)} routes configurées "
                      f"(provider: {cloud_prov})")
 
@@ -672,7 +673,7 @@ class NuruCore:
         V17 FIX : appelé automatiquement via EventBus~api_keys_updated,
         ou manuellement pour recharger les routes sans restart.
         """
-        self.model_router.clear_routes()
+        self.k('model_router').clear_routes()
         self._init_model_routes()
         logger.info("🗺️ Routes ModelRouter reconstruites (sans restart)")
 
@@ -694,7 +695,7 @@ class NuruCore:
             from src.llm_local import LocalLLM
             # LocalLLM est un singleton — on y accède via l'instance partagée
             if hasattr(self, "local_llm") and self.local_llm is not None:
-                self.local_llm.set_lora_adapter(lora_path)
+                self.k('local_llm').set_lora_adapter(lora_path)
                 logger.info("🧬 LoRA RAG activé : %s", lora_path)
             else:
                 logger.warning("⚠️ LoRA : llm_local pas encore initialisé, activation différée")
@@ -715,7 +716,7 @@ class NuruCore:
             query = params.get("query", "")
             limit = params.get("limit", 5)
             try:
-                results = self.memory.search(query, limit=limit)
+                results = self.k('memory').search(query, limit=limit)
                 return {"results": results, "count": len(results)}
             except Exception as e:
                 return {"error": str(e)}
@@ -731,7 +732,7 @@ class NuruCore:
         def _rag_query(**params):
             query = params.get("query", "")
             try:
-                results = self.rag.search(query)
+                results = self.k('rag_engine').search(query)
                 if hasattr(results, 'to_dict'):
                     return results.to_dict()
                 return str(results)
@@ -750,7 +751,7 @@ class NuruCore:
             query = params.get("query", "")
             limit = params.get("limit", 10)
             try:
-                nodes = self.knowledge_graph.search_nodes(query, limit=limit)
+                nodes = self.k('knowledge_graph').search_nodes(query, limit=limit)
                 return {"nodes": [n.to_dict() for n in nodes], "count": len(nodes)}
             except Exception as e:
                 return {"error": str(e)}
@@ -765,7 +766,7 @@ class NuruCore:
         # Tool: Cost summary
         def _cost_summary(**params):
             try:
-                return self.cost_guard.get_summary()
+                return self.k('cost_guard').get_summary()
             except Exception as e:
                 return {"error": str(e)}
 
@@ -789,8 +790,8 @@ class NuruCore:
             now = datetime.datetime.now()
             signals = []
             # Rappel si proche d'un horaire de routine
-            for routine in self.routines.get_active():
-                due = self.routines.check_due(time.time())
+            for routine in self.k('routines').get_active():
+                due = self.k('routines').check_due(time.time())
                 for r in due:
                     signals.append(Signal(
                         source="clock",
@@ -801,14 +802,14 @@ class NuruCore:
                     ))
             return signals
 
-        self.proactive.register_collector("clock", _clock_collector)
+        self.k('proactive').register_collector("clock", _clock_collector)
 
         def _memory_collector():
             """Collecteur basé sur les faits mémoire récents."""
             from src.proactive.engine import Signal, SignalCategory, SignalPriority
             signals = []
             try:
-                facts = self.memory.get_recent_facts(limit=5)
+                facts = self.k('memory').get_recent_facts(limit=5)
                 for fact in facts:
                     signals.append(Signal(
                         source="memory",
@@ -821,7 +822,7 @@ class NuruCore:
                 pass
             return signals
 
-        self.proactive.register_collector("memory", _memory_collector)
+        self.k('proactive').register_collector("memory", _memory_collector)
 
     # ── Phase 3 : Boucles background ──────────────────────────────────────────
 
@@ -830,11 +831,11 @@ class NuruCore:
         from src.memory.sleep_cycle import SleepPhase
         while self._indexing_enabled:
             try:
-                phase = self.sleep_cycle.tick()
+                phase = self.k('sleep_cycle').tick()
                 if phase == SleepPhase.DEEP and hasattr(self, '_on_deep_sleep'):
-                    await self.event_bus.emit("sleep_phase", {"phase": phase.value})
+                    await self.k('event_bus').emit("sleep_phase", {"phase": phase.value})
                 elif phase == SleepPhase.AWAKE:
-                    await self.event_bus.emit("sleep_phase", {"phase": phase.value})
+                    await self.k('event_bus').emit("sleep_phase", {"phase": phase.value})
             except Exception as e:
                 logger.debug(f"Sleep cycle tick: {e}")
             await asyncio.sleep(10)
@@ -844,13 +845,13 @@ class NuruCore:
         await asyncio.sleep(30)  # Laisser le temps à l'app de démarrer
         while self._indexing_enabled:
             try:
-                signals = await self.proactive.collect_signals()
+                signals = await self.k('proactive').collect_signals()
                 if signals:
                     logger.info(f"⚡ Signaux proactifs: {len(signals)} collectés")
-                    plan = await self.proactive.evaluate()
+                    plan = await self.k('proactive').evaluate()
                     pending = plan.pending_actions()
                     for action in pending:
-                        await self.event_bus.emit("proactive_action", action.to_dict())
+                        await self.k('event_bus').emit("proactive_action", action.to_dict())
             except Exception as e:
                 logger.debug(f"Proactive collect: {e}")
             await asyncio.sleep(120)  # Collecte toutes les 2 minutes
@@ -935,7 +936,7 @@ Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail,
 
         # ── Phase 3 : Contexte augmenté ──
         try:
-            kg_nodes = self.knowledge_graph.search_nodes("", limit=5)
+            kg_nodes = self.k('knowledge_graph').search_nodes("", limit=5)
             if kg_nodes:
                 kg_block = "\n".join(f"- {n.label} ({n.entity_type})" for n in kg_nodes)
                 parts.append(f"\n## Connaissances reliées (Knowledge Graph)\n{kg_block}")
@@ -943,7 +944,7 @@ Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail,
             pass
 
         try:
-            phase = self.sleep_cycle.current_phase
+            phase = self.k('sleep_cycle').current_phase
             if phase.value != "awake":
                 from src.memory.sleep_cycle import SleepPhase
                 phase_names = {SleepPhase.AWAKE.value: "éveillé", SleepPhase.LIGHT.value: "sommeil léger",
@@ -961,11 +962,11 @@ Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail,
         vérification, mémoire) au NuruOrchestrator injecté.
         """
         # ── Phase 3 : Signal d'activité utilisateur ──
-        self.sleep_cycle.user_activity_detected()
+        self.k('sleep_cycle').user_activity_detected()
 
-        async for token in self.orchestrator.process_query(
+        async for token in self.k('orchestrator').process_query(
             query=query, session_id="default",
-            use_tts=use_tts, audio_engine=self.audio if use_tts else None,
+            use_tts=use_tts, audio_engine=self.k('audio') if use_tts else None,
             stream_session=stream_session,
         ):
             yield token
@@ -986,10 +987,10 @@ Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail,
         """
         async def background_extraction():
             try:
-                history = self.memory.get_recent_history(limit=20)
+                history = self.k('memory').get_recent_history(limit=20)
                 facts = await asyncio.to_thread(self._extractor.extract, history)
                 for fact in facts:
-                    self.memory.add_fact(fact, category="user_profile")
+                    self.k('memory').add_fact(fact, category="user_profile")
             except Exception as e:
                 logger.debug(f"Extraction post-session: {e}")
 
@@ -1000,5 +1001,5 @@ Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail,
 
     def warmup(self):
         """Initialisation préventive des modèles."""
-        self.local_llm.warmup()
+        self.k('local_llm').warmup()
 
