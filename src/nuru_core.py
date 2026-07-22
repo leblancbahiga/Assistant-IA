@@ -353,6 +353,9 @@ class NuruCore:
         from src.core.events import EventBus
         EventBus().subscribe("index_reset", self._on_index_reset)
 
+        # V17 FIX : api_keys_updated → rebuild les routes ModelRouter
+        EventBus().subscribe("api_keys_updated", lambda _: self.refresh_model_routes())
+
         # ── Phase 3 : Sleep cycle monitoring ──
         self.sleep_cycle.start_monitoring()
         task = asyncio.create_task(self._sleep_cycle_loop())
@@ -617,6 +620,16 @@ class NuruCore:
             self.model_router.add_route(route)
         logger.info(f"🗺️ ModelRouter: {len(routes)} routes configurées "
                      f"(provider: {cloud_prov})")
+
+    def refresh_model_routes(self) -> None:
+        """Rebuilt les routes du modèle après un changement de clé API ou de configuration.
+
+        V17 FIX : appelé automatiquement via EventBus~api_keys_updated,
+        ou manuellement pour recharger les routes sans restart.
+        """
+        self.model_router.clear_routes()
+        self._init_model_routes()
+        logger.info("🗺️ Routes ModelRouter reconstruites (sans restart)")
 
     # ── Phase 4 : MCP Tools ───────────────────────────────────────────────────
 

@@ -769,12 +769,19 @@ class PreferencesDialog(QDialog):
         config._save_yaml_key("cloud_fallback")
         config._save_yaml_key("local_model")
 
+        # V17 FIX : rebuild les routes avec le nouveau provider/model
+        from src.core.events import EventBus
+        EventBus().emit_sync("api_keys_updated", {})
+
     def _save_apikeys(self):
         for key_id, inp in self._api_inputs.items():
             text = inp.text()
             if text and text != "••••••••":
                 keyring.set_password("com.nuru.assistant", key_id, text)
                 logger.info(f"Clé API {key_id} sauvegardée dans le trousseau")
+        # V17 FIX : notifier NuruCore pour rebuild les routes ModelRouter
+        from src.core.events import EventBus
+        EventBus().emit_sync("api_keys_updated", {})
 
     def _save_rag(self):
         config.rag_k = self._rag_k_spin.value()

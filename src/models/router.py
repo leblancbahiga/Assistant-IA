@@ -97,6 +97,10 @@ class ModelRouter:
         self.routes.append(route)
         self.routes.sort(key=lambda r: r.priority, reverse=True)
 
+    def clear_routes(self) -> None:
+        """Supprime toutes les routes (utile pour rebuild après changement de clé API)."""
+        self.routes.clear()
+
     def remove_route(self, name: str) -> None:
         self.routes = [r for r in self.routes if r.name != name]
 
