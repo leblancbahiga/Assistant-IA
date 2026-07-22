@@ -1416,11 +1416,14 @@ class RAGEngine:
     
     def clear_reranker(self, force: bool = False):
         """Décharge le reranker cross-encoder pour libérer la RAM.
-        Connecté au RAMMonitor en cas de mémoire critique.
+        Connecté au RAMBudgetManager en cas de mémoire critique.
+        V17 FIX : guard — skip si déjà déchargé (évite le spam log).
         """
+        if not self.reranker or not getattr(self.reranker, 'is_loaded', True):
+            return
         self.reranker.unload()
         self._reranker_unload_timer = None
-        logger.info("🧹 Reranker cross-encoder déchargé (RAMMonitor).")
+        logger.info("🧹 Reranker cross-encoder déchargé (RAMBudgetManager).")
 
     def _schedule_reranker_unload(self):
         """Planifie le déchargement du reranker après 120s d'inactivité.
