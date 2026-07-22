@@ -346,7 +346,8 @@ class NuruCore:
         Le watcher temps réel continue pour les fichiers modifiés.
         """
         # V16 FIX : RAMMonitor.start() ici (dans le thread asyncio) plutôt que dans __init__
-        self.ram_monitor.start()
+        # V17 : RETIRÉ — monitoring RAM centralisé via RAMBudgetManager ci-dessous
+        # self.ram_monitor.start()
         # V17 FIX : monitoring RAM centralisé via RAMBudgetManager (callbacks + éviction périodique)
         from src.core.ram_budget import get_budget
         get_budget().start_monitoring()
