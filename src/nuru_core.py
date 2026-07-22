@@ -39,8 +39,14 @@ from src.models.cost_guard import CostGuard, CostConfig
 from src.models.router import ModelRouter, ModelRoute, TaskType, RoutingDecision
 from src.mcp.server import MCPServer, MCPTool
 from src.mcp.client import MCPClient
+from src.core.ram_budget import get_budget, Priority
 
 logger = logging.getLogger(__name__)
+
+# Phase 3 — Noyau central (remplace les imports directs)
+from src.kernel import NuruKernel
+
+_kernel = NuruKernel()  # Singleton, réutilisé dans tous les modules
 
 
 SYSTEM_PROMPT_TEMPLATE = """
@@ -116,23 +122,36 @@ class NuruCore:
     """
 
     def __init__(self):
+        # Phase 3 — Noyau central
+        self._kernel = NuruKernel()
+
         self.cloud_llm = CloudLLM()  # V10.1 : déplacé AVANT le router pour classification
+        self._kernel.register("cloud_llm", self.cloud_llm)
         # V16 AUDIT FIX QW1 : injecter cloud_llm existant dans RAGEngine (-40 Mo RAM)
         self.rag = RAGEngine(cloud_llm=self.cloud_llm)
+        self._kernel.register("rag_engine", self.rag)
         self.router = Router(rag_engine=self.rag, is_online_check=self._is_online,  # V17 Phase 2 : async
                             cloud_llm=self.cloud_llm)
+        self._kernel.register("router", self.router)
         self.web = WebSearch()
+        self._kernel.register("web_search", self.web)
         self.local_llm = LocalLLM()
+        self._kernel.register("local_llm", self.local_llm, replace=True)
         self.memory = MemoryStore()
+        self._kernel.register("memory", self.memory)
         self.audio = AudioEngine()
+        self._kernel.register("audio", self.audio)
         self.context_budget = ContextBudget(
             max_prompt_tokens=8192, # V10.2: 32K pour Phi-4-mini (était 4096)
             reserved_response=2048  # V10.2: réponses plus longues (était 1024)
         )
         self.runtime = RuntimeManager()
+        self._kernel.register("runtime", self.runtime)
         self.event_bus = EventBus()
+        self._kernel.register("event_bus", self.event_bus)
         # V10.3 — AUDIT Arch-01 : self.plugins et self.reflection supprimés (stubs YAGNI)
         self.ingestion = IngestionEngine(rag_engine=self.rag)  # V16 FIX: partage le RAGEngine
+        self._kernel.register("ingestion", self.ingestion)
         
         # V4 : Monitoring RAM actif
         # V10.3k — audit Option C : seuils lus depuis Config (surchargeables via YAML/env)
@@ -166,12 +185,15 @@ class NuruCore:
             context_budget=self.context_budget,
             system_prompt_builder=self.build_system_prompt,  # Callback prompt système
         )
+        self._kernel.register("orchestrator", self.orchestrator)
         logger.info("🚀 NuruOrchestrator V4.5 initialisé")
 
         # V10.1 : MemoryBridge — connecte V5 + V9 au pipeline
         v9_db = str(Path.home() / ".nuru" / "memory_v9.db")
         self._bridge = MemoryBridge(v5_memory_store=self.memory, v9_db_path=v9_db)
+        self._kernel.register("memory_bridge", self._bridge)
         self._ltm = LongTermMemory(self._bridge)
+        self._kernel.register("long_term_memory", self._ltm)
         self.orchestrator.set_long_term_memory(self._ltm)
         logger.info("🧠 MemoryBridge + Long-Term Memory câblées")
 
@@ -190,23 +212,30 @@ class NuruCore:
         # ── Phase 3 : Knowledge Graph ──
         self.knowledge_graph = KnowledgeGraph()
         self.knowledge_graph.init()
+        self._kernel.register("knowledge_graph", self.knowledge_graph)
 
         # ── Phase 3 : Sleep Cycle ──
         self.sleep_cycle = SleepCycleManager()
+        self._kernel.register("sleep_cycle", self.sleep_cycle)
 
         # ── Phase 3 : Proactive Engine ──
         self.proactive = ProactiveEngine()
+        self._kernel.register("proactive", self.proactive)
         self._register_proactive_collectors()
 
         # ── Phase 3 : Dynamic Prompt Builder ──
+        self.persona = PersonaEngine()
+        self._kernel.register("persona", self.persona)
         self.prompt_builder = DynamicPromptBuilder(
-            persona=PersonaEngine(),
+            persona=self.persona,
             knowledge=self.knowledge_graph,
         )
+        self._kernel.register("prompt_builder", self.prompt_builder)
 
         # ── Phase 3 : Routine Scheduler ──
         self.routines = RoutineScheduler()
         self.routines.load_preset(RoutinePreset.default())
+        self._kernel.register("routines", self.routines)
 
         # ── Phase 4 : CostGuard ──
         daily_budget = getattr(config, "cost_daily_budget", getattr(config, "daily_api_budget", 0.50))
@@ -215,10 +244,12 @@ class NuruCore:
             daily_budget=daily_budget,
             monthly_budget=monthly_budget,
         ))
+        self._kernel.register("cost_guard", self.cost_guard)
         logger.info(f"💰 CostGuard: ${daily_budget}/jour, ${monthly_budget}/mois")
 
         # ── Phase 4 : ModelRouter ──
         self.model_router = ModelRouter(cost_guard=self.cost_guard)
+        self._kernel.register("model_router", self.model_router)
         self._init_model_routes()
         # V17 FIX : brancher LoRA RAG immédiatement après les routes
         self._init_lora_adapter()
@@ -227,6 +258,9 @@ class NuruCore:
         self.cloud_llm.model_router = self.model_router
         self.cloud_llm.cost_guard = self.cost_guard
         logger.info("🔗 CloudLLM connecté à ModelRouter + CostGuard")
+
+        # ── Phase 3 : Boot du Kernel ──
+        self._kernel.boot()
 
         # ── Phase 4 : MCP ──
         self.mcp_server = MCPServer(name="nuru-mcp", version="12.0.0")
