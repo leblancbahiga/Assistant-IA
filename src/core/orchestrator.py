@@ -44,7 +44,7 @@ def _yield_by_words(text: str, target_chars: int = 80) -> Iterator[str]:
 from src.config import config
 
 from src.core.query_context import QueryContext, EvidencePack
-from src.core.events import EventBus
+from src.kernel import NuruKernel
 from src.core.policies import PolicyEngine
 from src.core.response_guard import StrictRAGGuard
 from src.core.prompt_guard import (
@@ -73,6 +73,9 @@ from src.learning.chain_of_thought import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Phase 3 — Noyau central
+_kernel = NuruKernel()
 
 
 @dataclass
@@ -123,7 +126,7 @@ class NuruOrchestrator:
         cloud_llm,
         memory_store,
         policy_engine: Optional[PolicyEngine] = None,
-        event_bus: Optional[EventBus] = None,
+        event_bus=None,
         runtime_manager=None,
         web_search=None,
         context_budget=None,
@@ -135,7 +138,7 @@ class NuruOrchestrator:
         self.cloud_llm = cloud_llm
         self.memory_store = memory_store
         self.policy_engine = policy_engine or PolicyEngine()
-        self.event_bus = event_bus or EventBus()
+        self.event_bus = event_bus or _kernel.get('event_bus')
         self.runtime = runtime_manager
         self.web = web_search
         self.context_budget = context_budget
