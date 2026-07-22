@@ -15,7 +15,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Iterator, Optional
+from typing import AsyncGenerator, Iterator, Optional
 
 
 # V17 FIX : yield respectant les frontieres de mots (pas de decoupage fixe a 50 chars)
