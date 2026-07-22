@@ -374,21 +374,20 @@ class Router:
         # Le fallback Cloud ne doit se déclencher QUE si le serveur local est 
         # physiquement arrêté (ConnectionError), pas si la RAM est basse.
         # Sur M1 8Go, le swap est lent mais FONCTIONNE - ne pas basculer sur cloud.
-        if result.decision == "LOCAL_RAG" and not is_spotlight and self.policy_engine.should_use_cloud(ctx):
-            # V16 FIX: Vérifier si la requête a des mots-clés documentaires forts
-            query_lower = ctx.query.lower()
-            has_strong_doc_keywords = any(kw in query_lower for kw in RAG_KEYWORDS)
-            
-            if has_strong_doc_keywords:
+        # V17: LOCAL_RAG ne bascule JAMAIS vers Cloud — le LoRA RAG adapter
+        # n'est chargé que sur le local. Envoyer une requête RAG vers Cloud
+        # = perdre le bénéfice du fine-tuning LoRA.
+        if result.decision == "LOCAL_RAG" and not is_spotlight:
+            if self.policy_engine.should_use_cloud(ctx):
                 logger.info(
-                    f"🔒 Router: Requête documentaire détectée ({ctx.ram_free_mb} MB RAM) → "
-                    f"MAINTIEN LOCAL forcé (pas d'escalade Cloud). Le swap M1 fonctionne."
+                    f"🔒 V17: LOCAL_RAG maintenu (swap OK) — "
+                    f"le LoRA RAG adapter est local ({ctx.ram_free_mb} MB RAM)"
                 )
-                # Forcer LOCAL_RAG même si RAM basse
-            else:
-                logger.info(f"↩️ Router: RAM {ctx.ram_free_mb} MB → escalation Cloud forcée")
-                result.decision = "CLOUD_GROQ"
-                result.reasoning += " | RAM trop basse pour local"
+                # V17: PLUS JAMAIS d'escalade Cloud pour LOCAL_RAG.
+                # Le swap M1 est lent mais fonctionne, et le LoRA ne charge pas sur Cloud.
+                # Si le local crash, ce sera catché par LLMGenerator → fallback Cloud.
+                pass
+            # Spotlight bypass inchangé
         elif is_spotlight:
             logger.info(f"🔍 Router: Spotlight actif → pas d'escalade RAM")
 
