@@ -1,4 +1,19 @@
-"""NURU V9 — Module Agent : orchestration ReAct avec planification et vérification."""
+"""NURU V9 — Module Agent : orchestration ReAct avec planification et vérification.
+
+V17 NOTE : CE MODULE N'EST PAS BRANCHÉ AU PIPELINE CONVERSATIONNEL ACTIF.
+AgentOrchestrator, TaskPlanner, TaskExecutor, TaskVerifier, ErrorRecovery
+et ResumeManager ne sont importés par ConversationEngine ni par NuruCore.
+Le pipeline réel (NuruOrchestrator + LLMGenerator) gère les requêtes sans
+ce sous-système. ~2000 lignes de code dormant — conservé pour usage futur.
+"""
+
+import logging
+logger = logging.getLogger(__name__)
+logger.warning(
+    "⚠️ Module Agent (ReAct) non branché : AgentOrchestrator, Planner, "
+    "Executor, Verifier, Recovery, Resume ne sont pas connectés au pipeline "
+    "conversationnel. Voir src/agent/__init__.py pour la documentation."
+)
 
 __all__ = [
     "TaskPlanner", "TaskExecutor", "TaskVerifier",

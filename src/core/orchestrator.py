@@ -684,9 +684,10 @@ class NuruOrchestrator:
             "latence": int(duration * 1000),
             "chunks": getattr(rag_result, "chunks_injected", 0) if rag_result else 0,
             "chunks_high": 0,
-            "chunks_med": 0,
-            "sub_queries": 0,
-            "rag_score": round(getattr(rag_result, "top_score", 0.0), 2) if rag_result else 0.0,
+            'chunks_med': 0,
+            'sub_queries': 0,
+            'rag_score': round(getattr(rag_result, 'top_score', 0.0), 2) if rag_result else 0.0,
+            'lora_active': self.local_llm.lora_active if self.local_llm else False,
         })
         # Enrichir avec les données RAG pour le dashboard d'observabilité
         if rag_result:

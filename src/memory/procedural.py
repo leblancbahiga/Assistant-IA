@@ -46,16 +46,9 @@ class ProceduralMemory:
         return self._embedder
 
     def _embed_sync(self, text: str) -> np.ndarray:
-        """Version synchrone du calcul d'embedding (compatible event loop MLX)."""
-        try:
-            import asyncio
-            return asyncio.run(self.embedder.embed(text, is_query=False))
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(self.embedder.embed(text, is_query=False))
-            finally:
-                loop.close()
+        """Version synchrone du calcul d'embedding (utilitaire partage)."""
+        from src.memory._embed_utils import embed_sync
+        return embed_sync(text, self.embedder)
 
     # ── CRUD ──────────────────────────────────────────────────────────
 

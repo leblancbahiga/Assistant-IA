@@ -44,6 +44,10 @@ class Config(BaseSettings):
     local_model: str = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
     local_model_fallback: str = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
 
+    # V17 FIX : adaptateur LoRA RAG (entraîné mais jamais branché à l'inférence)
+    lora_adapter_path: str = "data/adapters/rag"   # dossier contenant adapters.safetensors
+    lora_adapter_enabled: bool = True               # coupe-circuit rapide
+
     # ── Cloud ──
     cloud_model: str = "deepseek-v4-flash-free"
     cloud_provider: str = "opencode_zen"

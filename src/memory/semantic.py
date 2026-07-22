@@ -364,8 +364,9 @@ class SemanticMemory:
         return emb.astype(np.float32).reshape(-1)
 
     def _embed_sync(self, text: str) -> np.ndarray:
-        """Version synchrone du calcul d'embedding (appel direct, pas d'asyncio.run)."""
-        return self.embedder.embed_sync(text, is_query=False)
+        """Version synchrone du calcul d'embedding (utilitaire partage)."""
+        from src.memory._embed_utils import embed_sync
+        return embed_sync(text, self.embedder)
 
     @staticmethod
     def _deserialize_embedding(blob) -> np.ndarray:

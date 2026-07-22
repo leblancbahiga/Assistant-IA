@@ -11,7 +11,7 @@ from typing import AsyncGenerator, Optional
 from src.config import config
 from src.core.model_manager import ModelManager
 from src.core.ram_budget import get_budget, Priority
-from src.cache.kv_cache import KVPersistentCache
+# V16 AUDIT FIX QW14 : V12 kv_cache supprimé (code mort — MLX n'expose pas KV)
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +31,18 @@ class LocalLLM:
         self._tokenizer = None
         self._current_model_id = None
         self._last_temperature = 0.7
-        # V15 P2 #27 : Delegation au ModelManager avec keep-alive (30s pour éviter rechargements intempestifs)
-        self._model_manager = ModelManager(keep_alive_seconds=30)
+        # V15 P2 #27 : Delegation au ModelManager avec keep-alive (120s pour M1 8Go)
+        self._model_manager = ModelManager(keep_alive_seconds=120)
         # V10 Audit: Lock thread-safe pour generate_stream()
         self._gen_lock = asyncio.Lock()
         # Statistiques de benchmark
         self.bench: dict[str, list[float]] = {"prompt_ms": [], "tok_s": []}
         # V15 P2 #27 : Tache de dechargement differe
         self._unload_task: Optional[asyncio.Task] = None
-        # V15 Phase 5 (Item 41) : KV Cache Persistant
-        self._kv_cache = KVPersistentCache(max_entries=10, max_total_mb=1024)
-        self._current_session_id: str = ""
+        # V16 AUDIT FIX QW14 : _current_session_id supprimé (KV cache mort)
         # V15 Phase 5 (Item 38) : LoRA adaptateur RAG
         self._lora_adapter_path: Optional[str] = None
+        self._lora_loaded: bool = False  # V17 FIX : état réel du chargement LoRA
         # MLX single-thread executor: load + generate sur le meme thread
         # Necessite absolue sous Metal (thread-local streams et caches KV)
         self._mlx_executor = concurrent.futures.ThreadPoolExecutor(
@@ -51,10 +50,12 @@ class LocalLLM:
         )
 
     def _schedule_unload(self):
-        """Planifie le dechargement 5s apres la fin de la generation.
+        """Planifie le dechargement différé après la fin de la génération.
 
-        V15 P2 #27 : keep_alive reduit de 300s a 5s pour liberer
-        la RAM Metal immediatement apres la reponse.
+        V16 FIX : keep_alive augmenté de 30s à 120s pour éviter rechargements
+        intempestifs sur M1 8Go (swap lourd → reload plus coûteux que keep-warm).
+        Le déchargement n'est pas une urgence RAM — l'embedder + reranker
+        consomment moins que le LLM local et le swap fait tampon.
         """
         self._cancel_unload()
 
@@ -62,7 +63,8 @@ class LocalLLM:
             try:
                 await asyncio.sleep(self._model_manager._keep_alive)
                 if self._model is not None:
-                    logger.info("Keep-alive expire (5s). Dechargement auto.")
+                    logger.info("Keep-alive expire (%ss). Déchargement auto.",
+                                self._model_manager._keep_alive)
                     self.unload()
             except asyncio.CancelledError:
                 pass
@@ -163,28 +165,20 @@ class LocalLLM:
                 if (adapter_dir / "adapters.safetensors").exists():
                     try:
                         self._model = load_adapters(self._model, self._lora_adapter_path)
+                        self._lora_loaded = True  # V17 FIX
                         logger.info("Adaptateur LoRA charge depuis %s", self._lora_adapter_path)
                     except Exception as e:
+                        self._lora_loaded = False  # V17 FIX
                         logger.warning("Echec chargement LoRA (%s) -- inference sans adaptateur", e)
                 else:
+                    self._lora_loaded = False
                     logger.info("Aucun adaptateur LoRA trouve dans %s", self._lora_adapter_path)
 
             # V15 Phase 5 (Item 40) : marquer comme charge dans le budget RAM
             budget.mark_loaded("llm")
             budget.touch("llm")
 
-            # V15 Phase 5 (Item 41) : restauration du KV cache si disponible
-            # pour eviter de recalculer le prefixe (system prompt + historique)
-            if self._current_session_id:
-                cached_kv = self._kv_cache.restore(
-                    self._model, self._current_session_id, model_id=model_id
-                )
-                if cached_kv is not None:
-                    logger.info(
-                        "KV cache restaure pour session %s -- "
-                        "prefixe non recalcule",
-                        self._current_session_id,
-                    )
+            # V16 AUDIT FIX QW14 : restore KV cache supprimé (code mort MLX)
 
             logger.info(f"Modele charge avec succes.")
         except Exception as e:
@@ -199,15 +193,7 @@ class LocalLLM:
         if self._model is not None:
             logger.info("Dechargement du modele local...")
 
-            # V15 Phase 5 (Item 41) : sauvegarder le KV cache avant dechargement
-            if self._current_session_id and self._current_model_id:
-                self._kv_cache.save(
-                    model=self._model,
-                    session_id=self._current_session_id,
-                    prompt=self._current_session_id,  # placeholder -- ID comme cle
-                    turn_number=0,
-                    model_id=self._current_model_id,
-                )
+            # V16 AUDIT FIX QW14 : save KV cache supprimé (code mort MLX)
 
             del self._model
             if self._tokenizer is not None:
@@ -224,14 +210,18 @@ class LocalLLM:
                 pass
             logger.info("Modele local decharge, cache Metal vide")
 
-    def set_session(self, session_id: str) -> None:
-        """Definit l'ID de session pour le KV cache persistant."""
-        self._current_session_id = session_id
+    # V16 AUDIT FIX QW14 : set_session supprimé (KV cache mort)
 
     def set_lora_adapter(self, path: str) -> None:
         """Definit le chemin de l'adaptateur LoRA (recharge au prochain load_model)."""
         self._lora_adapter_path = path
+        self._lora_loaded = False  # sera mis à True après load_model réussi
         logger.info("Adaptateur LoRA configure: %s", path)
+
+    @property
+    def lora_active(self) -> bool:
+        """V17 FIX : état réel du LoRA — True si adaptateur chargé avec succès."""
+        return self._lora_loaded and self._lora_adapter_path is not None
 
     async def generate_stream(self, prompt: str, intent: str = "RAG") -> AsyncGenerator[str, None]:
         """Genere une reponse via MLX en streaming sur le thread MLX dedie.
@@ -303,8 +293,11 @@ class LocalLLM:
                                     formatted_prompt = tokenizer.apply_chat_template(
                                         messages, tokenize=False, add_generation_prompt=True,
                                     )
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.warning(
+                                    "⚠️ apply_chat_template a échoué — prompt brut utilisé: %s",
+                                    e,
+                                )
 
                         last_response = None
                         n_gen = 0
@@ -462,3 +455,13 @@ class LocalLLM:
             self._load_model(model_id)
         except Exception as e:
             logger.error(f"Echec du warmup : {e}")
+
+    def close(self):
+        """Libère les ressources : décharge le modèle + shutdown executor.
+        
+        V16 AUDIT FIX QW4 : shutdown du ThreadPoolExecutor pour éviter
+        la fuite de threads à chaque hot-reload (-200 Mo/threads orphelins).
+        """
+        self.unload()
+        self._mlx_executor.shutdown(wait=False, cancel_futures=True)
+        logger.info("🔌 LocalLLM fermé : modèle déchargé, executor shutdown.")

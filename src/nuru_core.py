@@ -220,6 +220,8 @@ class NuruCore:
         # ── Phase 4 : ModelRouter ──
         self.model_router = ModelRouter(cost_guard=self.cost_guard)
         self._init_model_routes()
+        # V17 FIX : brancher LoRA RAG immédiatement après les routes
+        self._init_lora_adapter()
 
         # ── Connecter ModelRouter + CostGuard à CloudLLM ──
         self.cloud_llm.model_router = self.model_router
@@ -638,6 +640,34 @@ class NuruCore:
         self.model_router.clear_routes()
         self._init_model_routes()
         logger.info("🗺️ Routes ModelRouter reconstruites (sans restart)")
+
+    # ── Phase 4 : LoRA ───────────────────────────────────────────────
+
+    def _init_lora_adapter(self) -> None:
+        """Active l'adaptateur LoRA RAG s'il existe et si activé en config.
+
+        V17 FIX : l'adaptateur entraîné (data/adapters/rag/adapters.safetensors)
+        n'était jamais chargé à l'inférence — set_lora_adapter() n'était appelé
+        nulle part en dehors des tests unitaires.
+        """
+        if not getattr(config, "lora_adapter_enabled", True):
+            logger.info("🔌 LoRA RAG désactivé par configuration")
+            return
+        lora_path = getattr(config, "lora_adapter_path", "data/adapters/rag")
+        adapter_file = Path(lora_path) / "adapters.safetensors"
+        if adapter_file.exists():
+            from src.llm_local import LocalLLM
+            # LocalLLM est un singleton — on y accède via l'instance partagée
+            if hasattr(self, "local_llm") and self.local_llm is not None:
+                self.local_llm.set_lora_adapter(lora_path)
+                logger.info("🧬 LoRA RAG activé : %s", lora_path)
+            else:
+                logger.warning("⚠️ LoRA : llm_local pas encore initialisé, activation différée")
+        else:
+            logger.warning(
+                "⚠️ LoRA RAG configuré (%s) mais adapters.safetensors introuvable — "
+                "inférence sans fine-tuning", lora_path,
+            )
 
     # ── Phase 4 : MCP Tools ───────────────────────────────────────────────────
 
