@@ -361,7 +361,11 @@ class ConversationEngine(QObject):
     # ── Helpers ──
 
     def _safe_emit(self, signal, value) -> None:
-        """Émet un signal PySide6 depuis n'importe quel thread."""
-        signal.emit(value)  # type: ignore[attr-defined]
-        # Exécution synchrone car déjà dans le thread Qt
-        # (appelé uniquement depuis QTimer.singleShot ou directement)
+        """Émet un signal PySide6 depuis n'importe quel thread.
+
+        V17 P0-C : les signaux PySide6 gèrent nativement le marshaling
+        inter-threads via QueuedConnection automatique. Pas besoin de
+        QTimer.singleShot (qui ne fonctionne que depuis un thread avec
+        une QEventLoop active, ce que n'a pas le thread nuru-asyncio).
+        """
+        signal.emit(value)

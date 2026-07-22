@@ -5,21 +5,59 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="3593a8dd-1a26-409b-af6b-c7b826474b13" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitattributes" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/build.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/ci.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/lint.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/tests.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.hermes/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.hermes/plans/2026-06-09_NURU-V8-AGENTIC-RAG-PLUS.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.hermes/plans/2026-06-09_NURU-V8-Agentic-RAG.md" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/80" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURU-V8-AGENTIC-RAG-PLUS.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURU-V8-Agentic-RAG.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURUV15.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURU_AUDIT_2026-06-14_V10.3.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURU_AUDIT_2026-06-21_V12.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURU_AUDIT_SYNTHESE.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURU_DASHBOARD_EXPERTS_NOTES.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURU_LLM_DECISION_FINAL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURU_V14_VISION.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/NURU_V9.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/RAG_AUDIT_NURU_V12.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ROADMAP.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/_test_chunker_v21.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/_test_pipeline_v21.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/_test_printf.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/_test_printf2.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/_test_rank.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/_test_retrieval.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/audit_expert_1_llm.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/audit_expert_2_llm.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/audit_expert_3_llm.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/audit_expert_4_llm.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/concat_src_output.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/adapters/rag_LORA_backup.tar.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/question_zai_interface_V12.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_v12.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/concat_src.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cache/kv_cache.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cache/kv_compress.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cache/llm_cache.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/cache/llm_cache.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/core/conversation_engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/conversation_engine.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/core/ram_budget.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/ram_budget.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ingestion.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ingestion.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/llm_cloud.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/llm_cloud.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/main_window.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/main_window.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/agents_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/agents_page.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/chat_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/chat_page.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/dashboard_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/dashboard_page.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/documents_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/documents_page.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/memory_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/memory_page.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/models_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/models_page.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/tools_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/tools_page.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/panels/right_inspector.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/panels/right_inspector.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/llm_local.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/llm_local.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/memory/procedural.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/memory/procedural.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/memory_store.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/memory_store.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/orchestration/llm_generator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/orchestration/llm_generator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/rag_engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/rag_engine.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/presence_orb.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/presence_orb.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/voice_overlay.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/voice_overlay.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_rag.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_rag.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_rag_scoring.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_rag_scoring.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

@@ -160,15 +160,16 @@ class LLMGenerator:
         swap_too_high = False
         try:
             from src.core.ram_budget import get_budget
-            probe = get_budget().probe()
-            swap_too_high = probe.swap_percent > 80
+            _budget = get_budget()
+            # V16 FIX : utiliser should_force_cloud() — méthode unifiée RAM < 1Go OU swap > 80%
+            swap_too_high = _budget.should_force_cloud()
         except Exception:
-            pass  # Fallback silencieux si RAMBudgetManager indisponible
+            logger.debug("RAMBudget.should_force_cloud indisponible", exc_info=True)
         if not use_cloud_first and hybrid == "local_only" and ctx.is_online and swap_too_high:
             use_cloud_first = True
             logger.warning(
-                f"⚠️ Swap critique ({probe.swap_percent if 'probe' in dir() else '?'}%)"
-                f" — forçage cloud malgré hybrid={hybrid}"
+                "⚠️ Mémoire insuffisante — forçage cloud malgré hybrid=%s",
+                hybrid,
             )
 
         if use_cloud_first or hybrid == "verify":
@@ -208,11 +209,9 @@ class LLMGenerator:
                 async for token in self.cloud_llm.generate_stream(
                     anchored_prompt, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
                 ):
-                    if stream_session:
-                        if stream_session.is_cancelled:
-                            break
-                        stream_session.emit(token)
                     yield token
+                    if stream_session:
+                        stream_session.emit(token)
                 return
 
         # ── Fallback local ──
@@ -221,18 +220,14 @@ class LLMGenerator:
             gen = self.local_llm.generate_stream(full_prompt, intent=intent)
             if self.runtime:
                 async for token in self.runtime.schedule_generator("generation", gen):
-                    if stream_session:
-                        if stream_session.is_cancelled:
-                            break
-                        stream_session.emit(token)
                     yield token
+                    if stream_session:
+                        stream_session.emit(token)
             else:
                 async for token in gen:
-                    if stream_session:
-                        if stream_session.is_cancelled:
-                            break
-                        stream_session.emit(token)
                     yield token
+                    if stream_session:
+                        stream_session.emit(token)
         except (LLMError, RAGError) as e:
             logger.error(f"Local fail: {e}. Fallback Cloud.")
             if stream_session:

@@ -46,7 +46,18 @@ class WaveformRings(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(30)  # ~33 fps
         self._timer.timeout.connect(self._tick)
+        # V16 AUDIT FIX QW2 : ne PAS démarrer le timer ici — VoiceOverlay le gère
+        # self._timer.start()
+
+    def start(self):
+        """Démarre l'animation (appelé quand l'overlay est visible)."""
         self._timer.start()
+
+    def stop(self):
+        """Arrête l'animation (appelé quand l'overlay est caché)."""
+        self._timer.stop()
+        self._phase = 0.0
+        self.update()
 
     def _tick(self):
         self._phase += 0.04
@@ -234,6 +245,8 @@ class VoiceOverlay(QWidget):
         self._show_anim.start()
         self._visible = True
         self._timeout_timer.start()  # session max 60s
+        # V16 AUDIT FIX QW2 : démarrer l'animation waveform
+        self._waveform.start()
 
     def hide_overlay(self):
         """Disparition animée."""
@@ -249,6 +262,8 @@ class VoiceOverlay(QWidget):
         self._timeout_timer.stop()
         self._silence_timer.stop()
         self.closed.emit()
+        # V16 AUDIT FIX QW2 : arrêter l'animation waveform
+        self._waveform.stop()
 
     def update_transcript(self, text: str):
         """Met à jour la transcription temps réel.

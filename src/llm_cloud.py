@@ -34,12 +34,12 @@ class CloudLLM:
         provider = self.provider
         model = model or self.model
 
-        if provider == "groq":
-            url = "https://api.groq.com/openai/v1/chat/completions"
-            api_key = config.groq_key
-        elif provider == "opencode_zen":
+        if provider == "opencode_zen":
             url = config.opencode_zen_base_url + "/chat/completions"
             api_key = config.opencode_zen_key
+        elif provider == "groq":
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            api_key = config.groq_key
         elif provider == "deepseek":
             url = "https://api.deepseek.com/v1/chat/completions"
             api_key = config.deepseek_key
@@ -215,12 +215,12 @@ class CloudLLM:
 
     async def _do_stream(self, prompt: str, provider: str, model: str, system_prompt: Optional[str] = None, temperature: float = 0.7) -> AsyncGenerator[str, None]:
         """Exécute l'appel réseau réel pour un provider donné (Groq, Gemini, Deepseek, OpenRouter)."""
-        if provider == "groq":
-            url = "https://api.groq.com/openai/v1/chat/completions"
-            api_key = config.groq_key
-        elif provider == "opencode_zen":
+        if provider == "opencode_zen":
             url = config.opencode_zen_base_url + "/chat/completions"
             api_key = config.opencode_zen_key
+        elif provider == "groq":
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            api_key = config.groq_key
         elif provider == "gemini":
             # Gemini: endpoint OpenAI-compatible pour streaming SSE standard
             url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
@@ -284,7 +284,7 @@ class CloudLLM:
             "max_tokens": max_tokens
         }
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as response:
                 if response.status_code != 200:
                     error_text = await response.aread()
@@ -297,9 +297,27 @@ class CloudLLM:
                     if line.startswith("data: "):
                         try:
                             data = json.loads(line[6:])
-                            delta = data["choices"][0]["delta"]
-                            if "content" in delta:
-                                yield delta["content"]
+                            choices = data.get("choices", [])
+                            if not choices:
+                                continue
+                            choice = choices[0]
+                            # V16 FIX : certain providers renvoient le message complet
+                            # dans `message` (non-streaming) au lieu de `delta` (streaming).
+                            # On tente delta d'abord, puis message en fallback.
+                            if "delta" in choice:
+                                delta = choice["delta"]
+                            elif "message" in choice:
+                                delta = choice["message"]
+                            elif "content" in choice:           # V17 P0-E : content directement dans choice
+                                content = choice["content"]
+                                if content is not None:
+                                    yield content
+                                continue
+                            else:
+                                continue
+                            content = delta.get("content")
+                            if content is not None:
+                                yield content
                         except (json.JSONDecodeError, KeyError, IndexError) as e:
                             logger.debug(f"Erreur parsing stream cloud : {e}")
                             continue

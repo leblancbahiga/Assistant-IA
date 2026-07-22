@@ -66,12 +66,14 @@ def sanitize_rag_query(query: str, max_chars: int = 10_000) -> str:
     # 1. Troncature
     query = query[:max_chars]
 
-    # 2. Échappement des délimiteurs de contexte RAG
-    query = query.replace("===", "(triple égal)")
-
-    # 3. Échappement des blocs de code (empêche la fermeture prématurée du format)
-    query = query.replace("```", "(code block)")
-
+    # 2. (supprimé V16 AUDIT QW18) : l'échappement de `===` cassait la recherche
+    #    de documents contenant ce séparateur (ex: "RIKOLTO === BEACCOM").
+    #    Le === n'est qu'un séparateur visuel dans _format_context(), pas un
+    #    motif d'injection.
+    
+    # 3. (supprimé V16 AUDIT QW18) : l'échappement de ``` cassait la recherche
+    #    de code source contenant des triple backticks.
+    
     # 4. Neutralisation des motifs d'injection système
     #    Remplacement par homoglyphes pour casser la reconnaissance sans perdre le sens
     for pattern in _INJECTION_PATTERNS:
@@ -121,13 +123,15 @@ class RAGResult:
 class RAGEngine:
     """Moteur RAG Hybride : Recherche sémantique (sqlite-vec) + BM25."""
     
-    def __init__(self):
+    def __init__(self, cloud_llm: Optional[CloudLLM] = None):
         self.db_path = config.index_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # V15 : détection sqlite-vec (indisponible sur Python 3.13+)
         self._has_vec0 = self._check_vec0()
         self.embedder = Embedder()
-        self.cloud = CloudLLM()  # Cloud LLM pour l'expansion de requête
+        # V16 AUDIT FIX QW1 : injecter cloud_llm existant (-40 Mo RAM, coût API tracé)
+        # Si non fourni, créer un nouveau (comportement legacy)
+        self.cloud = cloud_llm or CloudLLM()
         self.rewriter = CloudQueryRewriter(cloud_llm=self.cloud)
         self.reranker = CrossEncoderReranker()  # : Reranker sémantique
         self.reranker.set_embedder(self.embedder)  # Connecte l'embedder
@@ -854,7 +858,7 @@ class RAGEngine:
         for content, source, score in combined_results:
             if content not in seen_contents:
                 count = source_counts.get(source, 0)
-                if count < 2:
+                if count < 5:  # V16 AUDIT FIX QW17 : 2→5 chunks/source (perte info documents multi-pages)
                     deduped_results.append((content, source, score))
                     source_counts[source] = count + 1
                     seen_contents.add(content)
@@ -938,12 +942,10 @@ class RAGEngine:
                 )
                 budget.evict(priority_below=Priority.CACHE)
             else:
-                #  FIX PyTorch/MLX Conflict : Décharger l'embedder (MLX) AVANT
-                # de charger le reranker (PyTorch/MPS) pour éviter le conflit GPU
-                # entre les deux frameworks sur M1 8 Go.
-                self.embedder.unload()
+                # V16 AUDIT FIX (QW15) : Ne plus décharger l'embedder systématiquement.
+                # L'unload causait un rechargement (2-3s) à la prochaine requête.
                 budget.mark_loaded("reranker")
-                
+
                 try:
                     self.reranker.load_model()
                     reranked = await self.reranker.rerank(query, combined_results, top_k=effective_k) or []
@@ -956,10 +958,14 @@ class RAGEngine:
                             blended.append((content, source, blended_score))
                         reranked = blended
                 finally:
-                    # IMMÉDIATEMENT après usage, décharger le reranker PyTorch/MPS
-                    # pour libérer la mémoire GPU avant que le LLM (MLX) ne charge.
-                    self.reranker.unload()
-                    budget.mark_unloaded("reranker")
+                    # V16 AUDIT FIX QW16 : Garder le cross-encoder chargé entre requêtes
+                    # pour éviter les 5-15s de chargement à chaque appel RAG.
+                    # Le déchargement est géré par :
+                    # 1. RAMMonitor → clear_reranker() si RAM critique
+                    # 2. Schedule_unload timer (120s d'inactivité)
+                    # self.reranker.unload()  ← supprimé
+                    # budget.mark_unloaded("reranker")  ← supprimé
+                    self._schedule_reranker_unload()
         
         # Fallback BM25 si reranker non disponible ou désactivé
         if not reranked and combined_results:
@@ -1031,7 +1037,7 @@ class RAGEngine:
         try:
             mem = self.memory  # accès paresseux
             if mem is not None:
-                memory_context = mem.get_full_context(query)
+                memory_context = await mem.get_full_context(query)
                 if memory_context and memory_context.strip():
                     memory_block = "\n\n=== SOUVENIRS (MÉMOIRE V9) ===\n" + memory_context
                     context = memory_block + "\n\n" + context
@@ -1186,11 +1192,36 @@ class RAGEngine:
         '''Formate les résultats avec marqueurs CONTEXTE clairs pour forcer le grounding.'''
         context_parts = []
         for i, (content, source, score) in enumerate(results, 1):
+            # V16 AUDIT FIX QW19 : ajouter section_title/level si disponibles
+            meta = self._get_chunk_metadata(source, content)
+            section_info = ""
+            if meta:
+                title = meta.get("section_title", "")
+                level = meta.get("level", "")
+                if title:
+                    section_info = f" [{level}] {title}"
             context_parts.append(
-                f"[SOURCE {i}] {source}\n"
+                f"[SOURCE {i}] {source}{section_info}\n"
                 f"{sanitize_chunk_content(content)}\n"
             )
         return "=== DÉBUT DU CONTEXTE ===\n" + "\n".join(context_parts) + "\n=== FIN DU CONTEXTE ==="
+
+    def _get_chunk_metadata(self, source: str, content: str) -> Optional[dict]:
+        """Récupère section_title/level depuis chunk_hierarchy pour un chunk.
+        V16 AUDIT FIX QW19.
+        """
+        try:
+            conn = self._get_conn()
+            row = conn.execute(
+                """SELECT section_title, level FROM chunk_hierarchy
+                   WHERE source = ? AND content = ? LIMIT 1""",
+                (source, content[:1000])
+            ).fetchone()
+            if row and (row[0] or row[1]):
+                return {"section_title": row[0] or "", "level": row[1] or ""}
+        except Exception:
+            pass
+        return None
 
     def add_chunks(self, chunks: List[dict], dedup_source: bool = True):
         """Ajoute des chunks à l'index vectoriel et FTS (V6.2 : avec déduplication).
@@ -1388,4 +1419,28 @@ class RAGEngine:
         Connecté au RAMMonitor en cas de mémoire critique.
         """
         self.reranker.unload()
+        self._reranker_unload_timer = None
         logger.info("🧹 Reranker cross-encoder déchargé (RAMMonitor).")
+
+    def _schedule_reranker_unload(self):
+        """Planifie le déchargement du reranker après 120s d'inactivité.
+        V16 AUDIT FIX QW16 : garde le modèle chaud entre les requêtes RAG.
+        """
+        import asyncio
+        # Annuler le timer précédent s'il existe
+        try:
+            if hasattr(self, '_reranker_unload_timer') and self._reranker_unload_timer is not None:
+                self._reranker_unload_timer.cancel()
+        except Exception:
+            pass
+
+        async def _do_unload():
+            try:
+                await asyncio.sleep(120)  # 120s d'inactivité
+                if hasattr(self, 'reranker') and self.reranker:
+                    self.reranker.unload()
+                    logger.info("🧹 Reranker déchargé après 120s d'inactivité.")
+            except asyncio.CancelledError:
+                pass  # Timer annulé → nouveau RAG request
+
+        self._reranker_unload_timer = asyncio.ensure_future(_do_unload())
