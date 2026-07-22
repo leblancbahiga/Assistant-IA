@@ -49,8 +49,8 @@ class MainWindow(QMainWindow):
 
         self.setObjectName("MainWindow")
         self.setWindowTitle("NURU")
-        self.resize(1100, 720)
-        self.setMinimumSize(900, 600)
+        self.resize(1400, 900)
+        self.setMinimumSize(1000, 700)
 
         # ── Frameless (custom title bar) ──
         self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
