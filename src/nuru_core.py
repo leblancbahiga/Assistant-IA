@@ -140,10 +140,15 @@ class NuruCore:
             warning_threshold_gb=getattr(config, "ram_warning_threshold_gb", 1.0),
             critical_threshold_gb=getattr(config, "ram_critical_threshold_gb", 0.5),
         )
-        # Connecte le déchargement du reranker au RAMMonitor
-        self.ram_monitor.register_callback(self.rag.clear_reranker)
-        # V17 Phase 2 : déchargement conditionnel de l'embedder si swap > 50%
-        self.ram_monitor.register_callback(self._maybe_unload_embedder)
+        # V17 FIX : callbacks migrés vers RAMBudgetManager (système unifié)
+        from src.core.ram_budget import get_budget, Priority
+        _budget = get_budget()
+        _budget.register_callback(self.rag.clear_reranker)
+        _budget.register_callback(self._maybe_unload_embedder)
+        # Composants enregistrés pour éviction priorisée
+        _budget.register_component("embedder", Priority.EMBEDDER, estimated_mb=450)
+        _budget.register_component("reranker", Priority.RERANKER, estimated_mb=800)
+        _budget.register_component("cache", Priority.CACHE, estimated_mb=1200)
         # NOTE : ram_monitor.start() déplacé dans start_background_tasks()
         # car il nécessite une boucle asyncio en cours d'exécution.
 
@@ -340,6 +345,9 @@ class NuruCore:
         """
         # V16 FIX : RAMMonitor.start() ici (dans le thread asyncio) plutôt que dans __init__
         self.ram_monitor.start()
+        # V17 FIX : monitoring RAM centralisé via RAMBudgetManager (callbacks + éviction périodique)
+        from src.core.ram_budget import get_budget
+        get_budget().start_monitoring()
         
         # V17 : Auto-indexation startup retirée — saturation RAM sur M1 8 Go
         # asyncio.create_task(self._auto_index_with_ram_guard()).add_done_callback(...)

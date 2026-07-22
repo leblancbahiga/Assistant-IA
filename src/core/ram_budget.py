@@ -84,8 +84,8 @@ class RAMBudgetManager:
     def __init__(
         self,
         hard_limit_gb: float = 6.0,      # V16 FIX : 6.0 Go max sur 8 Go (macOS ~2 Go)
-        soft_limit_gb: float = 6.0,
-        swap_warning_pct: float = 95.0,   # V16: 50→95% (swap inévitable sur M1 8Go)
+        soft_limit_gb: float = 4.0,      # V16 FIX : 4.0 Go → éviction préventive (avant 6.0 = aucune)
+        swap_warning_pct: float = 50.0,  # V16 FIX : 50% → on agit avant saturation (avant 95%)
     ):
         self.hard_limit_gb = hard_limit_gb
         self.soft_limit_gb = soft_limit_gb
@@ -96,6 +96,85 @@ class RAMBudgetManager:
         self._probe_interval: float = 2.0  # secondes entre probes RAM
         self._cached_state: Optional[BudgetState] = None
         self._consolidation_callback: Optional[Callable] = None
+        # V17 FIX : callbacks unifiés de libération mémoire (migration RAMMonitor)
+        self._callbacks: list[Callable] = []
+        self._monitor_task: Optional[asyncio.Task] = None
+        self._monitoring = False
+
+    # ─── Callbacks unifiés (remplace RAMMonitor) ─────────────────────
+
+    def register_callback(self, callback: Callable) -> None:
+        """Enregistre une fonction appelée lors d'une pression mémoire.
+
+        Migration V17 depuis RAMMonitor : tous les callbacks sont centralisés
+        ici, avec la boucle périodique de probe(). Le callback peut être
+        synchrone ou asynchrone.
+        """
+        self._callbacks.append(callback)
+        logger.info(f"✅ RAM: callback enregistré: {callback.__name__}")
+
+    async def _trigger_callbacks(self, force: bool = False) -> None:
+        """Appelle tous les callbacks pour libérer de la RAM."""
+        coros = []
+        for cb in self._callbacks:
+            try:
+                if asyncio.iscoroutinefunction(cb):
+                    coros.append(cb(force=force))
+                else:
+                    cb(force=force)
+            except Exception as e:
+                logger.error(f"❌ RAM: erreur callback {cb.__name__}: {e}")
+        if coros:
+            await asyncio.gather(*coros, return_exceptions=True)
+
+    def start_monitoring(self) -> None:
+        """Lance la boucle périodique de probe + éviction.
+
+        Remplace RAMMonitor._monitor_loop(). Vérifie la RAM toutes les
+        5s (1s pendant la génération, via set_generating). Appelle
+        evict() + callbacks si pression warning/critical.
+        """
+        if self._monitoring:
+            return
+        self._monitoring = True
+        self._generating = False
+        logger.info("👀 RAMBudgetManager : monitoring périodique activé")
+        try:
+            loop = asyncio.get_running_loop()
+            self._monitor_task = loop.create_task(self._monitor_loop())
+        except RuntimeError:
+            logger.warning("⚠️ RAM: pas de boucle asyncio, monitoring différé")
+
+    def set_generating(self, active: bool) -> None:
+        """Signale le début/fin de génération pour polling dynamique."""
+        self._generating = active
+
+    def stop_monitoring(self) -> None:
+        """Arrête la boucle périodique."""
+        self._monitoring = False
+        if self._monitor_task:
+            self._monitor_task.cancel()
+            self._monitor_task = None
+        logger.info("🛑 RAMBudgetManager : monitoring arrêté")
+
+    async def _monitor_loop(self) -> None:
+        """Boucle périodique de vérification RAM."""
+        while self._monitoring:
+            state = self.probe(force=True)
+            if state.pressure_level in ("warning", "critical"):
+                # Éviction préemptive par priorité
+                if state.pressure_level == "critical":
+                    evicted = self.evict(priority_below=Priority.RERANKER)
+                    await self._trigger_callbacks(force=True)
+                else:
+                    evicted = self.evict(priority_below=Priority.CACHE)
+                    if not evicted:
+                        # Si rien à évincer, quand même déclencher les callbacks
+                        await self._trigger_callbacks(force=False)
+                if evicted:
+                    logger.info(f"🧹 RAM: éviction préemptive [{state.pressure_level}]: {evicted}")
+            interval = 1.0 if getattr(self, '_generating', False) else 5.0
+            await asyncio.sleep(interval)
 
     # ─── Enregistrement des composants ───────────────────────────────
 
@@ -284,6 +363,15 @@ class RAMBudgetManager:
     def get_pressure(self) -> str:
         """Retourne le niveau de pression actuel (sans log)."""
         return self.probe().pressure_level
+
+    def should_force_cloud(self) -> bool:
+        """Vérifie si la RAM est trop basse pour utiliser le LLM local.
+
+        Returns:
+            True si RAM libre < 1 Go OU swap > 80%
+        """
+        state = self.probe()
+        return state.free_ram_gb < 1.0 or state.swap_percent > 80
 
     # ─── Nettoyage systèmes ──────────────────────────────────────────
 
