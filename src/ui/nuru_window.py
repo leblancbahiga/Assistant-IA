@@ -371,6 +371,8 @@ class NuruWindow(QMainWindow):
             self._engine.response_metadata.connect(
                 self._on_engine_metadata, Qt.ConnectionType.UniqueConnection
             )
+            # V17 FIX : glue spaces seulement pour les providers cloud
+            self._conversation._glue_spaces = (self._engine.current_provider != "local")
             self._conversation.start_stream()
             self._engine.send_message(text)
         else:

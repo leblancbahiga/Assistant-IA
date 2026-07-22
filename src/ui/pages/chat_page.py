@@ -68,6 +68,16 @@ class ChatPage(QWidget):
         self._engine.response_complete.connect(self._on_response_complete)
         self._engine.error_occurred.connect(self._on_error)
 
+        # V17 FIX : glue spaces seulement pour les providers cloud
+        # Les providers locaux (MLX/BPE) envoient des tokens déjà bien espacés
+        # et le glue-space heuristic ajoute des espaces intempestifs.
+        prov = self._engine.current_provider
+        self._surface._glue_spaces = (prov != "local")
+        logger.info(
+            "🪢 conversation surface — glue_spaces=%s (provider=%s)",
+            self._surface._glue_spaces, prov,
+        )
+
     # ── Slots ───────────────────────────────────────────────
 
     def _on_send(self, text: str) -> None:

@@ -9,12 +9,37 @@ accessible via _agent_orchestrator. Active par config.agent_loop_enabled
 (False par defaut). Pour les requetes complexes type plan/action,
 le pipeline peut deleguer a l'agent loop 4-phase (Plan-Execute-Verify-Synthesize).
 """
+
+import re
 import asyncio
 import logging
-import re
 import time
 from dataclasses import dataclass, field
-from typing import AsyncGenerator, Optional
+from typing import Iterator, Optional
+
+
+# V17 FIX : yield respectant les frontieres de mots (pas de decoupage fixe a 50 chars)
+# Previent les artefacts "av ril" dans le streaming ToT / Self-Consistency.
+def _yield_by_words(text: str, target_chars: int = 80) -> Iterator[str]:
+    """Yield du texte en chunks respectant les frontieres de mots.
+
+    Decoupe a ~target_chars mais UNIQUEMENT sur un espace, jamais
+    au milieu d'un mot. Evite que le glue-space heuristic de l'UI
+    n'ajoute des espaces intempestifs dans les mots.
+    """
+    if not text:
+        return
+    words = re.findall(r'\S+\s*', text)
+    chunk = ""
+    for word in words:
+        if len(chunk) + len(word) > target_chars and chunk:
+            yield chunk
+            chunk = word
+        else:
+            chunk += word
+    if chunk:
+        yield chunk
+
 
 from src.config import config
 
@@ -589,11 +614,9 @@ class NuruOrchestrator:
                 logger.info(f"✅ ToT: {tot_result.nodes_explored} noeuds, "
                            f"{tot_result.total_llm_calls} appels, "
                            f"{tot_result.duration_ms:.0f}ms")
-                chunk_size = 50
-                for i in range(0, len(response_content), chunk_size):
-                    yield response_content[i:i+chunk_size]
-                    # V16 AUDIT FIX QW6 : sleep(0.01) supprimé — ajoutait ~0.8s de
-                    # latence artificielle à chaque réponse non-streaming
+                # V17 FIX : yield par mots, pas blocs fixes de 50 chars
+                for chunk in _yield_by_words(response_content):
+                    yield chunk
 
             elif use_self_consistency:
                 # V16: Self-Consistency (3 votes TF-IDF)
@@ -613,11 +636,9 @@ class NuruOrchestrator:
                 )
                 response_content = sc_result.final_response
                 logger.info(f"✅ Self-Consistency: consensus {sc_result.consensus_score:.0%}")
-                chunk_size = 50
-                for i in range(0, len(response_content), chunk_size):
-                    yield response_content[i:i+chunk_size]
-                    # V16 AUDIT FIX QW6 : sleep(0.01) supprimé — ajoutait ~0.8s de
-                    # latence artificielle à chaque réponse non-streaming
+                # V17 FIX : yield par mots, pas blocs fixes de 50 chars
+                for chunk in _yield_by_words(response_content):
+                    yield chunk
 
             else:
                 # Génération normale (streaming)
