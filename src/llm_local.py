@@ -252,6 +252,9 @@ class LocalLLM:
                     """Run MLX stream_generate on the dedicated executor thread."""
                     from mlx_lm import stream_generate
                     from mlx_lm.sample_utils import make_sampler, make_repetition_penalty
+                    # V17 FIX : corriger les artefacts de tokenisation française
+                    from src.french_tokenizer_fix import TokenizationFixStream
+                    _fix_stream = TokenizationFixStream()
 
                     try:
                         # Parametres de sampling
@@ -311,9 +314,16 @@ class LocalLLM:
                             kv_bits=8,
                             prefill_step_size=512,
                         ):
-                            queue.put_nowait(response.text)
+                            fixed_text = _fix_stream.process_token(response.text)
+                            if fixed_text:
+                                queue.put_nowait(fixed_text)
                             n_gen += 1
                             last_response = response
+
+                        # Vider le buffer de correction
+                        flush_text = _fix_stream.flush()
+                        if flush_text:
+                            queue.put_nowait(flush_text)
 
                         # Stats de benchmark
                         if last_response is not None:
