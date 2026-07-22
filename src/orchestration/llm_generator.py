@@ -164,7 +164,7 @@ class LLMGenerator:
             # V16 FIX : utiliser should_force_cloud() — méthode unifiée RAM < 1Go OU swap > 80%
             swap_too_high = _budget.should_force_cloud()
         except Exception:
-            logger.debug("RAMBudget.should_force_cloud indisponible", exc_info=True)
+            logger.warning("RAMBudget.should_force_cloud indisponible — décision cloud par défaut", exc_info=True)
         if not use_cloud_first and hybrid == "local_only" and ctx.is_online and swap_too_high:
             use_cloud_first = True
             logger.warning(

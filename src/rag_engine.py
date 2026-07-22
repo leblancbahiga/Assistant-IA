@@ -272,7 +272,7 @@ class RAGEngine:
                     results.append((r[0], r[1], score))
             return results
         except Exception as e:
-            logger.debug(f"_ms_vector_search({search_type}) échoué: {e}")
+            logger.warning(f"_ms_vector_search({search_type}) échoué — résultats vides: {e}")
             return []
         finally:
             conn.close()
@@ -296,7 +296,7 @@ class RAGEngine:
             ).fetchall()
             return [(r[0], r[1], float(r[2])) for r in rows if r[0] and r[2] > 0]
         except Exception as e:
-            logger.debug(f"_ms_vector_search_vec échoué (top_k={top_k}): {e}")
+            logger.warning(f"_ms_vector_search_vec échoué (top_k={top_k}) — résultats vides: {e}")
             return []
         finally:
             conn.close()
