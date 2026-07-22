@@ -27,10 +27,13 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal, QTimer
 
 from src.nuru_core import NuruCore
-from src.core.events import EventBus
+from src.kernel import NuruKernel
 from src.ui.presence_orb import OrbState
 
 logger = logging.getLogger(__name__)
+
+# Phase 3 — Noyau central
+_kernel = NuruKernel()
 
 
 class ConversationEngine(QObject):
@@ -320,7 +323,7 @@ class ConversationEngine(QObject):
             if isinstance(data, dict):
                 _metadata = data
 
-        bus = EventBus()
+        bus = _kernel.get('event_bus')  # Phase 3 — via kernel
         bus.subscribe("pipeline.step", _on_pipeline_step)
         bus.subscribe("generation_complete", _on_generation_complete)
 
