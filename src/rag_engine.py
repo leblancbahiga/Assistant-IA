@@ -1419,7 +1419,7 @@ class RAGEngine:
         Connecté au RAMBudgetManager en cas de mémoire critique.
         V17 FIX : guard — skip si déjà déchargé (évite le spam log).
         """
-        if not self.reranker or not getattr(self.reranker, 'is_loaded', True):
+        if not self.reranker or not getattr(self.reranker, '_loaded', False):
             return
         self.reranker.unload()
         self._reranker_unload_timer = None
