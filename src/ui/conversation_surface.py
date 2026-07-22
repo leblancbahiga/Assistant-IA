@@ -394,6 +394,7 @@ class ConversationSurface(QWidget):
                 prev
                 and not prev[-1].isspace()
                 and not prev.endswith(tuple(sep_chars))
+                and not prev[0].isspace()  # V17 FIX : si prev a déjà un espace en tête (MLX BPE), ne pas ajouter
                 and chunk
                 and not chunk[0].isspace()
                 and not chunk.startswith(tuple(sep_chars))
