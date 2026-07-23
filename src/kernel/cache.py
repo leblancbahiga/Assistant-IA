@@ -308,9 +308,11 @@ class KernelCache:
 
         return total
 
-    def evict_all(self, region: Optional[str] = None) -> int:
+    def evict_all(self, region: Optional[str] = None, **kwargs) -> int:
         """Vide une région ou toutes les régions.
 
+        **kwargs : ignoré (compatibilité avec RAMBudgetManager qui passe force=).
+        
         Returns:
             Nombre d'entrées supprimées.
         """
