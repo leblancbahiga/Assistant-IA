@@ -106,6 +106,16 @@ class NuruKernel:
         return self._services.get_or_none("state")
 
     @property
+    def metrics(self) -> Any:
+        """Métriques système (RAM, CPU, threads, QObjects)."""
+        return self._services.get_or_none("metrics")
+
+    @property
+    def resources(self) -> Any:
+        """Gestionnaire de ressources (RAMBudgetManager wrapper)."""
+        return self._services.get_or_none("resources")
+
+    @property
     def audio(self) -> Any:
         """Moteur audio (capture + TTS)."""
         return self._services.get_or_none("audio")

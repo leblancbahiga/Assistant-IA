@@ -44,7 +44,7 @@ from src.core.ram_budget import get_budget, Priority
 logger = logging.getLogger(__name__)
 
 # Phase 3 — Noyau central (remplace les imports directs)
-from src.kernel import NuruKernel, KernelState
+from src.kernel import NuruKernel, KernelState, KernelMetrics, KernelResources
 
 _kernel = NuruKernel()  # Singleton, réutilisé dans tous les modules
 
@@ -126,9 +126,17 @@ class NuruCore:
         self._kernel = NuruKernel()
         self.k = self._kernel.get  # Raccourci pour les methodes
 
-        # ── Phase 3.6 : KernelState — index d'état global ──
+        # ── Phase 3.6a : KernelState — index d'état global ──
         self.kernel_state = KernelState()
         self._kernel.register("state", self.kernel_state)
+
+        # ── Phase 3.6b : KernelMetrics — sondes système périodiques ──
+        self.kernel_metrics = KernelMetrics()
+        self._kernel.register("metrics", self.kernel_metrics)
+
+        # ── Phase 3.6c : KernelResources — gestion RAM wrapper ──
+        self.kernel_resources = KernelResources()
+        self._kernel.register("resources", self.kernel_resources)
 
         self.cloud_llm = CloudLLM()  # V10.1 : déplacé AVANT le router pour classification
         self._kernel.register("cloud_llm", self.cloud_llm)
@@ -164,15 +172,14 @@ class NuruCore:
             warning_threshold_gb=getattr(config, "ram_warning_threshold_gb", 1.0),
             critical_threshold_gb=getattr(config, "ram_critical_threshold_gb", 0.5),
         )
-        # V17 FIX : callbacks migrés vers RAMBudgetManager (système unifié)
-        from src.core.ram_budget import get_budget, Priority
-        _budget = get_budget()
-        _budget.register_callback(self.rag.clear_reranker)
-        _budget.register_callback(self._maybe_unload_embedder)
+        # Phase 3.6c : Callbacks RAM via KernelResources (remplace get_budget global)
+        _r = self.k('resources')
+        _r.register_callback(self.rag.clear_reranker)
+        _r.register_callback(self._maybe_unload_embedder)
         # Composants enregistrés pour éviction priorisée
-        _budget.register_component("embedder", Priority.EMBEDDER, estimated_mb=450)
-        _budget.register_component("reranker", Priority.RERANKER, estimated_mb=800)
-        _budget.register_component("cache", Priority.CACHE, estimated_mb=1200)
+        _r.register_component("embedder", _r.Priority.EMBEDDER, estimated_mb=450)
+        _r.register_component("reranker", _r.Priority.RERANKER, estimated_mb=800)
+        _r.register_component("cache", _r.Priority.CACHE, estimated_mb=1200)
         # NOTE : ram_monitor.start() déplacé dans start_background_tasks()
         # car il nécessite une boucle asyncio en cours d'exécution.
 
