@@ -44,7 +44,7 @@ from src.core.ram_budget import get_budget, Priority
 logger = logging.getLogger(__name__)
 
 # Phase 3 — Noyau central (remplace les imports directs)
-from src.kernel import NuruKernel, KernelState, KernelMetrics, KernelResources, PipelineEngine, KernelRouter, KernelScheduler
+from src.kernel import NuruKernel, KernelState, KernelMetrics, KernelResources, PipelineEngine, KernelRouter, KernelCache, KernelScheduler
 from src.kernel.pipeline_steps import (
     ReceiveQuestion, Route, Retrieve, BuildContext,
     Generate, Validate, Respond,
@@ -149,6 +149,14 @@ class NuruCore:
         # ── Phase 3.10 : KernelScheduler — ordonnanceur de tâches ──
         self.kernel_scheduler = KernelScheduler(max_concurrent=5)
         self._kernel.register("scheduler", self.kernel_scheduler)
+
+        # ── Cache centralisé — régions + éviction sous RAM pressure ──
+        self.kernel_cache = KernelCache()
+        self._kernel.register("cache", self.kernel_cache)
+        # Intégration au système d'éviction mémoire (appelé sous pressure)
+        self.kernel_resources.register_callback(
+            self.kernel_cache.evict_all,
+        )
 
         self.cloud_llm = CloudLLM()  # V10.1 : déplacé AVANT le router pour classification
         self._kernel.register("cloud_llm", self.cloud_llm)

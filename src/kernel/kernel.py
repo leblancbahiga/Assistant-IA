@@ -131,6 +131,11 @@ class NuruKernel:
         return self._services.get_or_none("scheduler")
 
     @property
+    def cache(self) -> Any:
+        """Cache centralisé."""
+        return self._services.get_or_none("cache")
+
+    @property
     def audio(self) -> Any:
         """Moteur audio (capture + TTS)."""
         return self._services.get_or_none("audio")
