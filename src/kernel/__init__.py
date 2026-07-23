@@ -20,8 +20,10 @@ from src.kernel.pipeline_steps import (
     Generate, Validate, Respond,
 )
 from src.kernel.router import KernelRouter
+from src.kernel.scheduler import KernelScheduler, TaskPriority, TaskStatus, TaskInfo
 
 __all__ = [
     "ServiceRegistry", "NuruKernel", "KernelState", "KernelMetrics",
     "KernelResources", "PipelineEngine", "KernelRouter",
+    "KernelScheduler", "TaskPriority", "TaskStatus", "TaskInfo",
 ]
