@@ -14,5 +14,13 @@ from src.kernel.kernel import NuruKernel
 from src.kernel.state import KernelState
 from src.kernel.metrics import KernelMetrics
 from src.kernel.resources import KernelResources
+from src.kernel.pipeline import PipelineEngine
+from src.kernel.pipeline_steps import (
+    ReceiveQuestion, Route, Retrieve, BuildContext,
+    Generate, Validate, Respond,
+)
 
-__all__ = ["ServiceRegistry", "NuruKernel", "KernelState", "KernelMetrics", "KernelResources"]
+__all__ = [
+    "ServiceRegistry", "NuruKernel", "KernelState", "KernelMetrics",
+    "KernelResources", "PipelineEngine",
+]

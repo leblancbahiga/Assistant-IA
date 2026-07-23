@@ -116,6 +116,11 @@ class NuruKernel:
         return self._services.get_or_none("resources")
 
     @property
+    def pipeline(self) -> Any:
+        """Pipeline Engine (steps composables)."""
+        return self._services.get_or_none("pipeline")
+
+    @property
     def audio(self) -> Any:
         """Moteur audio (capture + TTS)."""
         return self._services.get_or_none("audio")

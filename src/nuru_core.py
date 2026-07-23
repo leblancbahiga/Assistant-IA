@@ -44,7 +44,11 @@ from src.core.ram_budget import get_budget, Priority
 logger = logging.getLogger(__name__)
 
 # Phase 3 — Noyau central (remplace les imports directs)
-from src.kernel import NuruKernel, KernelState, KernelMetrics, KernelResources
+from src.kernel import NuruKernel, KernelState, KernelMetrics, KernelResources, PipelineEngine
+from src.kernel.pipeline_steps import (
+    ReceiveQuestion, Route, Retrieve, BuildContext,
+    Generate, Validate, Respond,
+)
 
 _kernel = NuruKernel()  # Singleton, réutilisé dans tous les modules
 
@@ -199,6 +203,20 @@ class NuruCore:
         )
         self._kernel.register("orchestrator", self.orchestrator)
         logger.info("🚀 NuruOrchestrator V4.5 initialisé")
+
+        # ── Phase 3.9 : PipelineEngine — steps composables ──
+        self.pipeline = PipelineEngine()
+        self.pipeline.set_steps([
+            ReceiveQuestion(),
+            Route(),
+            Retrieve(),
+            BuildContext(),
+            Generate(),
+            Validate(),
+            Respond(),
+        ])
+        self._kernel.register("pipeline", self.pipeline)
+        logger.info("🏭 PipelineEngine V3.9 initialisé (%d steps)", len(self.pipeline._steps))
 
         # V10.1 : MemoryBridge — connecte V5 + V9 au pipeline
         v9_db = str(Path.home() / ".nuru" / "memory_v9.db")
