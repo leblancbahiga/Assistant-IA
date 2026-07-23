@@ -44,7 +44,7 @@ from src.core.ram_budget import get_budget, Priority
 logger = logging.getLogger(__name__)
 
 # Phase 3 — Noyau central (remplace les imports directs)
-from src.kernel import NuruKernel
+from src.kernel import NuruKernel, KernelState
 
 _kernel = NuruKernel()  # Singleton, réutilisé dans tous les modules
 
@@ -125,6 +125,10 @@ class NuruCore:
         # Phase 3 — Noyau central
         self._kernel = NuruKernel()
         self.k = self._kernel.get  # Raccourci pour les methodes
+
+        # ── Phase 3.6 : KernelState — index d'état global ──
+        self.kernel_state = KernelState()
+        self._kernel.register("state", self.kernel_state)
 
         self.cloud_llm = CloudLLM()  # V10.1 : déplacé AVANT le router pour classification
         self._kernel.register("cloud_llm", self.cloud_llm)

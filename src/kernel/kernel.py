@@ -101,6 +101,11 @@ class NuruKernel:
         return self._services.get_or_none("event_bus")
 
     @property
+    def state(self) -> Any:
+        """État global du système (KernelState)."""
+        return self._services.get_or_none("state")
+
+    @property
     def audio(self) -> Any:
         """Moteur audio (capture + TTS)."""
         return self._services.get_or_none("audio")

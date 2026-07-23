@@ -11,5 +11,6 @@ Migration progressive :
 
 from src.kernel.registry import ServiceRegistry
 from src.kernel.kernel import NuruKernel
+from src.kernel.state import KernelState
 
-__all__ = ["ServiceRegistry", "NuruKernel"]
+__all__ = ["ServiceRegistry", "NuruKernel", "KernelState"]
