@@ -19,8 +19,9 @@ from src.kernel.pipeline_steps import (
     ReceiveQuestion, Route, Retrieve, BuildContext,
     Generate, Validate, Respond,
 )
+from src.kernel.router import KernelRouter
 
 __all__ = [
     "ServiceRegistry", "NuruKernel", "KernelState", "KernelMetrics",
-    "KernelResources", "PipelineEngine",
+    "KernelResources", "PipelineEngine", "KernelRouter",
 ]

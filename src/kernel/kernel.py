@@ -121,6 +121,11 @@ class NuruKernel:
         return self._services.get_or_none("pipeline")
 
     @property
+    def kernel_router(self) -> Any:
+        """Routeur 5-bucket minimal."""
+        return self._services.get_or_none("kernel_router")
+
+    @property
     def audio(self) -> Any:
         """Moteur audio (capture + TTS)."""
         return self._services.get_or_none("audio")

@@ -44,7 +44,7 @@ from src.core.ram_budget import get_budget, Priority
 logger = logging.getLogger(__name__)
 
 # Phase 3 — Noyau central (remplace les imports directs)
-from src.kernel import NuruKernel, KernelState, KernelMetrics, KernelResources, PipelineEngine
+from src.kernel import NuruKernel, KernelState, KernelMetrics, KernelResources, PipelineEngine, KernelRouter
 from src.kernel.pipeline_steps import (
     ReceiveQuestion, Route, Retrieve, BuildContext,
     Generate, Validate, Respond,
@@ -141,6 +141,10 @@ class NuruCore:
         # ── Phase 3.6c : KernelResources — gestion RAM wrapper ──
         self.kernel_resources = KernelResources()
         self._kernel.register("resources", self.kernel_resources)
+
+        # ── Phase 3.8 : KernelRouter — classifieur 5-bucket ──
+        self.kernel_router = KernelRouter()
+        self._kernel.register("kernel_router", self.kernel_router)
 
         self.cloud_llm = CloudLLM()  # V10.1 : déplacé AVANT le router pour classification
         self._kernel.register("cloud_llm", self.cloud_llm)
