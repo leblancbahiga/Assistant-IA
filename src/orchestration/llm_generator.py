@@ -166,11 +166,14 @@ class LLMGenerator:
         except Exception:
             logger.warning("RAMBudget.should_force_cloud indisponible — décision cloud par défaut", exc_info=True)
         if not use_cloud_first and hybrid == "local_only" and ctx.is_online and swap_too_high:
-            use_cloud_first = True
-            logger.warning(
-                "⚠️ Mémoire insuffisante — forçage cloud malgré hybrid=%s",
-                hybrid,
-            )
+            if intent == "GENERAL":
+                logger.info("💬 GENERAL: local même sous pression mémoire")
+            else:
+                use_cloud_first = True
+                logger.warning(
+                    "⚠️ Mémoire insuffisante — forçage cloud malgré hybrid=%s",
+                    hybrid,
+                )
 
         if use_cloud_first or hybrid == "verify":
             if not ctx.is_online:
