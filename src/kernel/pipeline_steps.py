@@ -141,6 +141,7 @@ class Route(PipelineStep):
             ctx.spotlight_context = getattr(route_result, 'spotlight_context', '')
 
             hybrid = getattr(route_result, 'hybrid_strategy', 'local_only')
+            ctx.hybrid_strategy = hybrid
             ctx.intent = ctx._route_to_intent(route_result.decision)
 
             logger.info("🧠 Route: %s (conf=%.2f)", ctx.route_decision, ctx.route_confidence)
@@ -421,6 +422,10 @@ class Generate(PipelineStep):
                 # Streaming normal (accumulé + temps réel)
                 gen_kwargs = {
                     "stream_session": ctx.stream_session,
+                    "web_context": ctx.web_context,
+                    "rag_context": ctx.rag_context,
+                    "original_query": ctx.query,
+                    "session_id": ctx.session_id,
                 }
                 response = ""
                 async for token in llm_gen.generate(
@@ -493,6 +498,10 @@ class Generate(PipelineStep):
             response = ""
             async for token in llm_gen.generate(
                 ctx.system_prompt, ctx.full_prompt, ctx.query, ctx.intent, ctx,
+                web_context=ctx.web_context,
+                rag_context=ctx.rag_context,
+                original_query=ctx.query,
+                session_id=ctx.session_id,
             ):
                 response += token
             return response
