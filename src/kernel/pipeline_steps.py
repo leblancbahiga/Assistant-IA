@@ -420,12 +420,12 @@ class Generate(PipelineStep):
             else:
                 # Streaming normal (accumulé + temps réel)
                 gen_kwargs = {
-                    "intent": ctx.intent,
                     "stream_session": ctx.stream_session,
                 }
                 response = ""
-                async for token in llm_gen.generate_stream(
-                    ctx.full_prompt, ctx.system_prompt, **gen_kwargs
+                async for token in llm_gen.generate(
+                    ctx.system_prompt, ctx.full_prompt, ctx.query, ctx.intent, ctx,
+                    **gen_kwargs
                 ):
                     response += token
                     # V17 FIX : forwarder les tokens en temps réel vers run_stream()
@@ -491,8 +491,8 @@ class Generate(PipelineStep):
             logger.warning("⚠️ Self-Consistency: %s → fallback stream", e)
             # Fallback: stream simple
             response = ""
-            async for token in llm_gen.generate_stream(
-                ctx.full_prompt, ctx.system_prompt, intent=ctx.intent,
+            async for token in llm_gen.generate(
+                ctx.system_prompt, ctx.full_prompt, ctx.query, ctx.intent, ctx,
             ):
                 response += token
             return response
