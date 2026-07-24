@@ -335,7 +335,7 @@ class DocumentsPage(QWidget):
             chunk_counts_by_basename = {}
             try:
                 cc_rows = conn.execute(
-                    "SELECT source, COUNT(*) as cnt FROM chunks GROUP BY source"
+                    "SELECT source, COUNT(*) as cnt FROM chunk_vectors GROUP BY source"
                 ).fetchall()
                 chunk_counts = {r[0]: r[1] for r in cc_rows}
                 for src, cnt in cc_rows:
