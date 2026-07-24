@@ -433,9 +433,9 @@ class Generate(PipelineStep):
                         await ctx.stream_queue.put(token)
 
             ctx.response = response
-            ctx.model_used = llm_gen.last_model or ""
-            ctx.tokens_generated = llm_gen.last_tokens or 0
-            ctx.tokens_prompt = llm_gen.last_prompt_tokens or 0
+            ctx.model_used = getattr(llm_gen, 'last_model', '') or ''
+            ctx.tokens_generated = getattr(llm_gen, 'last_tokens', 0) or 0
+            ctx.tokens_prompt = getattr(llm_gen, 'last_prompt_tokens', 0) or 0
 
         except Exception as e:
             logger.exception("❌ Generation error: %s", e)
