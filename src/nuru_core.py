@@ -221,6 +221,9 @@ class NuruCore:
         # Pipeline steps references
         self._kernel.register("rag_pipeline", self.orchestrator.rag_pipeline)
         self._kernel.register("response_guard", self.orchestrator.response_guard)
+        self._kernel.register("llm_generator", self.orchestrator.llm_gen)
+        from src.ai.verifier import EvidenceVerifier
+        self._kernel.register("evidence_verifier", EvidenceVerifier())
         logger.info("🚀 NuruOrchestrator V4.5 initialisé")
 
         # ── Phase 3.9 : PipelineEngine — steps composables ──
