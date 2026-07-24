@@ -218,6 +218,9 @@ class NuruCore:
             system_prompt_builder=self.build_system_prompt,  # Callback prompt système
         )
         self._kernel.register("orchestrator", self.orchestrator)
+        # Pipeline steps references
+        self._kernel.register("rag_pipeline", self.orchestrator.rag_pipeline)
+        self._kernel.register("response_guard", self.orchestrator.response_guard)
         logger.info("🚀 NuruOrchestrator V4.5 initialisé")
 
         # ── Phase 3.9 : PipelineEngine — steps composables ──
