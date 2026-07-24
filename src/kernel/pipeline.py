@@ -47,6 +47,8 @@ class PipelineContext:
     audio_engine: Any = None
     stream_session: Any = None  # StreamSession V15 P2 #26
     is_online: bool = True
+    ram_free_mb: float = 2000.0   # RAM libre en MB — défaut optimiste
+    hybrid_strategy: str = "local_only"
 
     # Routage
     route_decision: str = ""
