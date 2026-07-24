@@ -51,11 +51,56 @@ class NavigationController(QObject):
         if make_default:
             self._default_key = key
 
+    def invalidate_page(self, key: str) -> None:
+        """Invalide une page lazy pour qu'elle soit reconstruite au prochain navigate_to.
+
+        Utile quand l'engine a changé ou que l'init asynchrone est terminée.
+        La factory reste dans _factories (pop n'est plus appelé dans navigate_to).
+        """
+        if key in self._pages and key in self._factories:
+            # Retirer l'ancien widget du stack
+            old_index = self._pages.pop(key)
+            old_widget = self._stack.widget(old_index)
+            if old_widget:
+                self._stack.removeWidget(old_widget)
+                old_widget.deleteLater()
+            # La factory est encore dans self._factories → page reconstruite
+            # au prochain navigate_to()
+
+    def invalidate_all_lazy(self) -> None:
+        """Invalide toutes les pages lazy pour reconstruction complète."""
+        for key in list(self._factories.keys()):
+            self.invalidate_page(key)
+
+    def rebuild_page(self, key: str) -> None:
+        """Recrée une page lazy déjà instanciée (ex: engine devenu prêt après coup).
+
+        Différence avec invalidate_page : la page est recréée immédiatement,
+        pas au prochain navigate_to(). Utile pour rafraîchir la page courante
+        sans que l'utilisateur ait à naviguer ailleurs et revenir.
+        """
+        factory = self._factories.get(key)
+        if factory is None or key not in self._pages:
+            return  # jamais lazy, ou pas encore créée (la prochaine navigate_to() suffira)
+        was_current = (self.current_key == key)
+        old_index = self._pages[key]
+        old_widget = self._stack.widget(old_index)
+        new_widget = factory()
+        self._stack.removeWidget(old_widget)
+        old_widget.deleteLater()
+        new_index = self._stack.addWidget(new_widget)
+        self._pages[key] = new_index
+        if was_current:
+            self._stack.setCurrentIndex(new_index)
+
     def navigate_to(self, key: str) -> None:
-        """Navigue vers une page enregistrée (crée si lazy non encore chargée)."""
+        """Navigue vers une page enregistrée (crée si lazy non encore chargée).
+
+        V17 P0-C : ne plus pop la factory — gardée pour permettre invalidate_page().
+        """
         # Si page lazy non encore chargée, la créer maintenant
         if key not in self._pages and key in self._factories:
-            widget = self._factories.pop(key)()
+            widget = self._factories[key]()  # V17 P0-C : ne plus pop
             self.register_page(key, widget)
 
         if key not in self._pages:

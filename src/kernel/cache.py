@@ -321,16 +321,19 @@ class KernelCache:
             r = self._regions.get(region)
             if r:
                 total = len(r.entries)
-                r.entries.clear()
-                r.current_size = 0
-                logger.info("🧹 Cache '%s' vidé (%d entrées)", region, total)
+                if total:
+                    r.entries.clear()
+                    r.current_size = 0
+                    logger.info("🧹 Cache '%s' vidé (%d entrées)", region, total)
         else:
             for name, r in self._regions.items():
-                total += len(r.entries)
-                r.entries.clear()
-                r.current_size = 0
-            logger.info("🧹 Cache global vidé (%d entrées, %d régions)",
-                       total, len(self._regions))
+                if r.entries:
+                    total += len(r.entries)
+                    r.entries.clear()
+                    r.current_size = 0
+            if total:
+                logger.info("🧹 Cache global vidé (%d entrées, %d régions)",
+                           total, len(self._regions))
         return total
 
     def clear(self) -> None:

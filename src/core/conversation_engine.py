@@ -60,6 +60,8 @@ class ConversationEngine(QObject):
     voice_transcript = Signal(str)
     # Session vocale terminée avec le texte final
     voice_session_end = Signal(str)
+    # V17 P0-C : signalée quand l'init asynchrone (NuruCore) est terminée
+    backend_ready = Signal()
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
@@ -128,7 +130,9 @@ class ConversationEngine(QObject):
             self._ready = True
             self._started = True
             self.state_changed.emit(OrbState.IDLE)
-            logger.info("✅ ConversationEngine prêt")
+            # V17 P0-C : signaler aux pages que l'engine est prêt (reconstruction lazy)
+            self.backend_ready.emit()
+            logger.info("✅ ConversationEngine prêt — signal ready émis")
         except Exception as e:
             logger.error(f"❌ Échec init asynchrone: {e}")
             self.error_occurred.emit("async_init", str(e))
@@ -170,6 +174,11 @@ class ConversationEngine(QObject):
     def rag_engine(self):
         """RAGEngine du backend."""
         return self._nuru.rag if self._nuru else None
+
+    @property
+    def ingestion(self):
+        """IngestionEngine du backend (indexation de documents)."""
+        return self._nuru.ingestion if self._nuru else None
 
     @property
     def orchestrator(self):
@@ -331,7 +340,10 @@ class ConversationEngine(QObject):
         self._safe_emit(self.strategy_changed, "routing")
 
         try:
-            async for token in self._nuru.orchestrator.process_query(
+            # V17 FIX : pipeline Kernel (steps composables) au lieu
+            # de self._nuru.orchestrator.process_query() direct
+            pipeline = _kernel.get("pipeline")
+            async for token in pipeline.run_stream(
                 text,
                 session_id=self._current_session,
             ):

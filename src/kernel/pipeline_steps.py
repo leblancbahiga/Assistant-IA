@@ -418,7 +418,7 @@ class Generate(PipelineStep):
                 # Self-Consistency
                 response = await self._generate_sc(ctx, llm_gen)
             else:
-                # Streaming normal (accumulé)
+                # Streaming normal (accumulé + temps réel)
                 gen_kwargs = {
                     "intent": ctx.intent,
                     "stream_session": ctx.stream_session,
@@ -428,6 +428,9 @@ class Generate(PipelineStep):
                     ctx.full_prompt, ctx.system_prompt, **gen_kwargs
                 ):
                     response += token
+                    # V17 FIX : forwarder les tokens en temps réel vers run_stream()
+                    if ctx.stream_queue is not None:
+                        await ctx.stream_queue.put(token)
 
             ctx.response = response
             ctx.model_used = llm_gen.last_model or ""

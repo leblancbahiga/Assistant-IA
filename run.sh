@@ -1,4 +1,4 @@
-#!/bin/bash
+cd#!/bin/bash
 # NURU — Lanceur automatique depuis le .venv
 # Évite les conflits pydantic-core entre Python système (3.13) et .venv.
 set -e

@@ -278,3 +278,64 @@ Profil dédié qui activerait automatiquement :
 
 *Document consolidé des 4 audits forensiques reçus.  
 Dernière MAJ : 2026-07-21*
+
+---
+
+## KERNEL SPRINT — Session 2026-07-23
+
+### Décision : Chemin A — Composants du noyau (5 modules)
+
+Ordre validé : state.py → event_bus.py → metrics.py → resources.py → enregistrement NuruCore.
+
+### État avant session
+
+| Composant | Statut | Détail |
+|-----------|--------|--------|
+| ServiceRegistry | ✅ LIVE — 189L | thread-safe, factory lazy, lifecycle start/stop, snapshot |
+| NuruKernel facade | ✅ LIVE — 211L | singleton, 18 accesseurs typés, boot/shutdown |
+| EventBus (core/events.py) | ✅ LIVE — 96L | singleton thread-safe, subscribe/emit/emit_sync/drain — DÉJÀ enregistré via `NuruCore.__init__` ligne 152 |
+| RAMBudgetManager (core/ram_budget.py) | ✅ LIVE — 441L | politique M1, monitoring loop, éviction priorisée — PAS ENCORÉ enregistré comme service kernel (singleton global `get_budget()` encore actif) |
+| SessionMemory (core/session_memory.py) | ✅ LIVE — 105L | buffer FIFO 6 messages, thread-safe — singleton global `get_session_memory()` encore actif |
+| KernelState (kernel/state.py) | ✅ Phase 3.6a — LIVE | index état global, thread-safe, property kernel.state |
+| KernelMetrics (kernel/metrics.py) | ✅ Phase 3.6b — LIVE | collecteur périodique (psutil), property kernel.metrics |
+| KernelResources (kernel/resources.py) | ✅ Phase 3.6c — LIVE | wrapper RAMBudgetManager, property kernel.resources — `get_budget()` remplacé dans NuruCore, reste legacy modules |
+| PipelineEngine (kernel/pipeline.py + steps) | ✅ Phase 3.9 — LIVE | 7 steps composables, PipelineContext, cycle de vie kernel |
+| KernelRouter (kernel/router.py) | ✅ Phase 3.8 — LIVE | classifieur 5-bucket minimal, zero LLM, cache TTL |
+| KernelScheduler (kernel/scheduler.py) | ✅ Phase 3.10 — LIVE | 7 priorités, files, conscience RAM, pause/resume/cancel |
+| KernelCache (kernel/cache.py) | ✅ Phase aval — LIVE | 5 régions, TTL, priorité éviction, intégré à KernelResources |
+
+### Constats d'audit (avant écriture)
+
+1. **Le code existant est plus mûr que la skill ne le décrit.** EventBus déjà enregistré et utilisé. RAMBudgetManager est un singleton sous `get_budget()`. Pas de régresseur bloquant.
+
+2. **Les modules consommateurs (ingestion, orchestration, memory/*.py, agent/orchestrator.py) utilisent déjà l'injection par constructeur.** Le "3.5c" est à 95% déjà appliqué — les migrations sont des fignolages sans valeur architecturale aujourd'hui.
+
+3. **Les vrais couplages à éliminer :** `llm_generator.py:162` (get_budget() appelé en inline), `agent/orchestrator.py:254` (RAGEngine instancié local), `rag/index_health.py:87` (RAGEngine instancié local).
+
+### Plan M1 — kernel/state.py (PAS ENCORÉ ÉCRIT)
+
+**Vocation :** Index léger de l'état global — le kernel "sait", pas "décide". Ne duplique PAS SessionMemory/MemoryStore/ConversationEngine — les référence. Thread-safe.
+
+**API prévue :**
+- `state.get("key")` / `state.set("key", value)` — registre clé-valeur simple
+- `state.active_model` / `state.activate_model("phi-4-mini")` — LLM actif
+- `state.active_worker` / `state.activate_worker(worker)` — worker en cours
+- `state.conversation_id` — ID de conversation courante
+- `state.ram_pressure()` — délègue à RAMBudgetManager (si enregistré)
+- `state.snapshot()` — dict complet pour debug/monitoring UI
+
+**Contrainte M1 :** Aucune dépendance croisée. Si `RAMBudgetManager` n'est pas encore enregistré dans le kernel, `ram_pressure()` retourne None silencieusement.
+
+### Point de départ pour demain
+
+1. **Écrire** `src/kernel/state.py` (~100 lignes)
+2. **Tester** : `python -c "from src.kernel.state import KernelState; print('OK')"`
+3. **Câbler** : ajouter property `state` sur `NuruKernel` + enregistrer dans `NuruCore.__init__`
+4. **Passe** aux M2-M4, même process
+
+### Environnement
+
+- Machine : M1 8 Go (swap permanent si PyCharm + Chrome + Teams)
+- Repo : `/Users/leblancbahiga/Downloads/Assistant IA/`
+- Dernier commit : `eaa56c8` (Phase 3.5b)
+- Test : `python -c "import src; print('OK')"` après chaque module

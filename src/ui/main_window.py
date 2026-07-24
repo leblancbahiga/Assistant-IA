@@ -351,9 +351,24 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.warning(f"set_engine notification: {e}")
 
-        # Màj des pages qui dépendent de l'engine
-        # (Phase 2b : pages avec services backend)
+        # V17 P0-C : rafraîchir les pages lazy dépendant de l'engine
+        # Si le backend est déjà prêt (set_engine appelé après coup),
+        # reconstruire immédiatement. Sinon, attendre le signal.
+        if getattr(engine, "is_ready", False):
+            self._refresh_engine_dependent_pages()
+        else:
+            try:
+                engine.backend_ready.connect(self._refresh_engine_dependent_pages)
+            except Exception as e:
+                logger.warning(f"set_engine: impossible de connecter backend_ready: {e}")
         logger.info("Engine connecté à StatusBar + RightInspector + Notifications")
+
+    def _refresh_engine_dependent_pages(self) -> None:
+        """Reconstruit les pages lazy créées avant que le backend soit prêt."""
+        logger.info("🔁 Backend ready — reconstruction des pages lazy")
+        for key in ("documents", "memory", "dashboard", "agents", "tools", "models"):
+            self.nav.rebuild_page(key)
+        logger.info("✅ Pages lazy reconstruites avec engine fully initialized")
 
     def _on_engine_error(self, code: str, message: str) -> None:
         """Notification d'erreur engine."""

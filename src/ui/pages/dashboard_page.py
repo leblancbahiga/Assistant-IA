@@ -121,14 +121,21 @@ class DashboardPage(QWidget):
 
     def _refresh(self):
         """Rafraîchit les cartes avec les données réelles du backend."""
-        import psutil
         data = {}
         try:
-            # Contexte système
-            cpu = psutil.cpu_percent(interval=0)
-            mem = psutil.virtual_memory()
-            data["cpu"] = f"{cpu:.0f}%"
-            data["ram"] = f"{mem.percent:.0f}% ({mem.used/1e9:.1f}/{mem.total/1e9:.0f} GiB)"
+            # Contexte système via KernelMetrics (process NURU + système)
+            from src.kernel import NuruKernel
+            kernel = NuruKernel()
+            metrics = kernel.get('metrics').collect() if kernel.has('metrics') else {}
+            
+            data["cpu"] = f"{metrics.get('cpu_percent', 0):.0f}%"
+            rss = metrics.get('process_rss_mb', 0)
+            free_gb = metrics.get('memory_free_gb', 0)
+            swap = metrics.get('swap_percent', 0)
+            ram_str = f"{rss:.0f} Mo (libre: {free_gb:.1f} Go)"
+            if swap > 0:
+                ram_str += f" | swap: {swap:.0f}%"
+            data["ram"] = ram_str
 
             # Contexte backend
             if self._engine:

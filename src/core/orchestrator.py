@@ -173,7 +173,11 @@ class NuruOrchestrator:
         self._rag_engine_ref = rag_engine
 
         # V16 — Production Router (V12 déprécié, conservé pour fallback)
-        self.v16_router = RouterV16()
+        # V17 FIX : enregistrer dans le Kernel plutôt qu'instanciation directe
+        kernel = NuruKernel()
+        if not kernel.has("v16_router"):
+            kernel.register("v16_router", RouterV16())
+        self.v16_router = kernel.get("v16_router")
 
         # V16 FIX: SessionMemory unifié (remplace MemoryStore + SessionStore fragmentés)
         from src.core.session_memory import get_session_memory

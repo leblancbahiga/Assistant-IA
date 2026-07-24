@@ -46,7 +46,7 @@ class Config(BaseSettings):
 
     # V17 FIX : adaptateur LoRA RAG (entraîné mais jamais branché à l'inférence)
     lora_adapter_path: str = "data/adapters/rag"   # dossier contenant adapters.safetensors
-    lora_adapter_enabled: bool = True               # coupe-circuit rapide
+    lora_adapter_enabled: bool = True               # coupe-circuit rapide, True si l'adaptateur existe
 
     # V17 P#3 : AgentLoop délégué à src/agent/orchestrator.py
     # Désactivé par défaut — le module est documenté comme "dormant". 

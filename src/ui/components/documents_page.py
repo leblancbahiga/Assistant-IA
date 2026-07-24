@@ -78,6 +78,7 @@ class DocumentsPage(QWidget):
         self.ingestion = ingestion_engine
         self.index_worker = None
         self._documents_data = []  # cache local des documents
+        self._load_scheduled = False
         self.setup_ui()
         self.setAcceptDrops(True)
         # V17 FIX : charger les documents après le rendu UI (pas dans showEvent)

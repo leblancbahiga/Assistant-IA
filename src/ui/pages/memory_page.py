@@ -28,7 +28,20 @@ class MemoryPage(QWidget):
         self.setObjectName("MemoryPageV16")
 
         # Extraire le service MemoryStore du backend
-        memory_store = engine.memory_store if engine and hasattr(engine, 'memory_store') else None
+        # V17 P0-C : utiliser kernel.get("memory") ou engine.memory (pas engine.memory_store)
+        memory_store = None
+        if engine:
+            try:
+                from src.kernel import NuruKernel
+                kernel = NuruKernel()
+                if kernel.has("memory"):
+                    memory_store = kernel.get("memory")
+            except Exception:
+                pass
+        if memory_store is None and engine and hasattr(engine, 'memory'):
+            memory_store = engine.memory
+        elif memory_store is None and engine and hasattr(engine, 'memory_store'):
+            memory_store = engine.memory_store
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.XXL, Spacing.XXL, Spacing.XXL, Spacing.XXL)
@@ -60,7 +73,22 @@ class MemoryPage(QWidget):
             tabs.addTab(self._episodic_tab, "Épisodique")
 
             # Onglet 2 : Exploration sémantique
+            # V17 P0-C : appeler set_data() après création pour alimenter l'explorateur
             self._semantic_tab = MemoryExplorer()
+            if memory_store is not None:
+                try:
+                    # Tentative de récupération des faits sémantiques
+                    if hasattr(memory_store, 'get_semantic_memories'):
+                        facts = memory_store.get_semantic_memories(limit=100)
+                        self._semantic_tab.set_data({"semantic": facts})
+                    elif hasattr(memory_store, 'get_user_facts'):
+                        facts = memory_store.get_user_facts(limit=100)
+                        self._semantic_tab.set_data({"semantic": facts})
+                    elif hasattr(memory_store, 'get_facts'):
+                        facts = memory_store.get_facts()
+                        self._semantic_tab.set_data({"semantic": facts})
+                except Exception:
+                    logger.debug("Impossible de charger les faits mémoire", exc_info=True)
             tabs.addTab(self._semantic_tab, "Sémantique")
         except Exception as e:
             logger.warning(f"Impossible de charger les composants mémoire: {e}")
@@ -71,7 +99,8 @@ class MemoryPage(QWidget):
 
         try:
             from src.ui.components.performance_memory_page import PerformanceMemoryPage
-            self._errors_tab = PerformanceMemoryPage()
+            # V17 P0-C : passer memory_store à l'onglet d'erreurs
+            self._errors_tab = PerformanceMemoryPage(memory_store=memory_store)
             tabs.addTab(self._errors_tab, "Erreurs")
         except Exception as e:
             logger.debug(f"PerformanceMemoryPage non disponible: {e}")

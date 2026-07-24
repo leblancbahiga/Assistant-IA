@@ -308,6 +308,14 @@ class NuruCore:
         # ── Phase 3 : Boot du Kernel ──
         self._kernel.boot()
 
+        # ── Alimenter l'état initial du KernelState ──
+        cloud_model = getattr(config, "cloud_model", "deepseek-v4-flash-free")
+        cloud_prov = getattr(config, "cloud_provider", "opencode_zen")
+        self.kernel_state.activate_model(f"{cloud_prov}/{cloud_model}")
+        self.kernel_state.set("provider", cloud_prov)
+        self.kernel_state.set("features", str(getattr(config, "enabled_tools", "rag,web,tools")))
+        logger.info("🧠 KernelState: state initial alimenté")
+
         # ── Phase 4 : MCP ──
         self.mcp_server = MCPServer(name="nuru-mcp", version="12.0.0")
         self.mcp_client = MCPClient()

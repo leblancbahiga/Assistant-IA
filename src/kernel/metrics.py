@@ -191,9 +191,23 @@ class KernelMetrics:
         self._started_at = 0.0
 
     async def _run(self) -> None:
-        """Boucle interne."""
+        """Boucle interne.
+
+        V17 P0-C : émettre les métriques collectées via EventBus
+        pour que Dashboard et RightInspector puissent s'abonner.
+        """
         while self._monitoring:
             self.collect()
+
+            # V17 P0-C : émettre les métriques pour les abonnés
+            try:
+                from src.kernel import NuruKernel
+                eb = NuruKernel().get("event_bus")
+                if eb is not None:
+                    eb.emit_sync("metrics.collected", dict(self._data))
+            except Exception:
+                pass
+
             await asyncio.sleep(self._loop_interval)
 
     # ── Snapshot ────────────────────────────────────────────────

@@ -87,6 +87,10 @@ class PipelineContext:
     error: Optional[str] = None
     strict_refused: bool = False
 
+    # Streaming temps réel — file d'attente pour tokens
+    # Remplie par Generate step, lue par PipelineEngine.run_stream()
+    stream_queue: Optional[asyncio.Queue] = None
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "query": self.query[:80],
@@ -261,21 +265,56 @@ class PipelineEngine:
         if eb:
             await eb.emit("pipeline.complete", ctx.to_dict())
 
+        # V17 FIX : signaler la fin du streaming
+        if ctx.stream_queue:
+            await ctx.stream_queue.put(None)
+
         return ctx
 
     async def run_stream(self, query: str, session_id: str = "default",
                          **kwargs) -> AsyncGenerator[str, None]:
-        """Exécute le pipeline avec streaming.
+        """Exécute le pipeline avec streaming temps réel.
 
-        Pour l'instant, délègue à l'orchestrateur existant.
-        Les steps de génération produiront le streaming à terme.
+        V17 FIX : utilise une asyncio.Queue partagée entre Generate.run()
+        (qui put les tokens) et cette méthode (qui les yield).
+        
+        Fallback : si aucun token streamé (cache hit, pas de Generate),
+        yield la réponse complète par mots.
         """
-        # Phase 1 : exécution normale (non-streaming pour les steps amont)
-        ctx = await self.run(query, session_id=session_id, **kwargs)
+        queue: asyncio.Queue = asyncio.Queue(maxsize=64)
+        kwargs["stream_queue"] = queue
 
-        # Phase 2 : yield la réponse
-        if ctx.response:
-            # Yielder par mots (respecte les frontières)
+        # Lancer le pipeline en arrière-plan (steps exécutés en séquence)
+        pipeline_task = asyncio.create_task(
+            self.run(query, session_id=session_id, **kwargs)
+        )
+
+        yielded_token = False
+
+        # Lire les tokens de la queue en temps reel
+        while True:
+            try:
+                token = await asyncio.wait_for(queue.get(), timeout=0.2)
+                if token is None:          # Sentinelle → pipeline terminé
+                    break
+                yielded_token = True
+                yield token
+            except asyncio.TimeoutError:
+                if pipeline_task.done():
+                    # Vider les derniers tokens si la tache est finie
+                    while not queue.empty():
+                        t = queue.get_nowait()
+                        if t is None:
+                            break
+                        yielded_token = True
+                        yield t
+                    break
+
+        ctx = pipeline_task.result()
+
+        # Fallback : si aucun token streamé (cache hit, validation-only), 
+        # yield la réponse complète par mots
+        if not yielded_token and ctx.response:
             from src.core.orchestrator import _yield_by_words
             for chunk in _yield_by_words(ctx.response):
                 yield chunk

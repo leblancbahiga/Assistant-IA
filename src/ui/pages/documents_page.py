@@ -25,10 +25,10 @@ class DocumentsPage(QWidget):
         self.setObjectName("DocumentsPageV16")
 
         # Extraire les services du backend
+        # V17 P0-C : utiliser engine.ingestion (propriété ConversationEngine)
+        # au lieu de rag_engine._ingestion qui n'existe pas dans RAGEngine
         rag_engine = engine.rag_engine if engine and hasattr(engine, 'rag_engine') else None
-        ingestion_engine = None
-        if rag_engine and hasattr(rag_engine, '_ingestion'):
-            ingestion_engine = rag_engine._ingestion
+        ingestion_engine = engine.ingestion if engine and hasattr(engine, 'ingestion') else None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.XXL, Spacing.XXL, Spacing.XXL, Spacing.XXL)

@@ -5,8 +5,6 @@ import hashlib
 from pathlib import Path
 from typing import List, Optional
 import numpy as np
-import fitz  # PyMuPDF
-from docx import Document
 from src.config import config
 from src.rag_engine import RAGEngine
 from src.embedder import Embedder
@@ -34,6 +32,7 @@ class IngestionEngine:
         
         try:
             if ext == ".pdf":
+                import fitz  # lazy — évite crash si PyMuPDF manquant
                 doc = fitz.open(str(path))
                 try:
                     page_count = len(doc)
@@ -48,6 +47,7 @@ class IngestionEngine:
                     if ocr_text:
                         text = ocr_text
             elif ext == ".docx":
+                from docx import Document  # lazy — évite crash si python-docx manquant
                 doc = Document(str(path))
                 # V12 : extraire aussi le contenu des tables AVEC en-têtes de colonnes
                 parts = [p.text for p in doc.paragraphs]

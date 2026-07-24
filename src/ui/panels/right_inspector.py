@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-import psutil
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, Property
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QWidget, QLabel, QScrollArea,
@@ -308,32 +307,39 @@ class RightInspectorPanel(QWidget):
         self.update_value("model", "provider", provider)
 
     def _refresh_system(self) -> None:
-        """Timer CPU/RAM toutes les 3s, plus infos backend si disponible."""
+        """Timer CPU/RAM toutes les 3s, plus infos backend si disponible.
+
+        V17 FIX : utilise kernel.metrics.collect() au lieu de psutil direct,
+        et corrige _indexed_count/_chunks_count (attributs inexistants sur RAGEngine).
+        """
         try:
-            cpu = psutil.cpu_percent(interval=0)
-            cores = psutil.cpu_count()
-            freq = psutil.cpu_freq()
-            mem = psutil.virtual_memory()
+            from src.kernel import NuruKernel
+            kernel = NuruKernel()
+            metrics = kernel.get('metrics').collect() if kernel.has('metrics') else {}
 
+            # CPU (process NURU)
+            cpu = metrics.get('cpu_percent', 0)
+            threads = metrics.get('thread_count', 0)
             self.update_value("cpu", "pct", f"{cpu:.1f}%")
-            self.update_value("cpu", "cores", str(cores))
-            self.update_value("cpu", "freq", f"{freq.current:.0f} MHz" if freq else "—")
+            self.update_value("cpu", "cores", f"{threads} threads")
 
-            used_gb = mem.used / 1e9
-            total_gb = mem.total / 1e9
-            self.update_value("ram", "used", f"{used_gb:.1f} GiB")
-            self.update_value("ram", "total", f"{total_gb:.0f} GiB")
-            self.update_value("ram", "pct", f"{mem.percent:.1f}%")
+            # RAM (process NURU + swap)
+            rss = metrics.get('process_rss_mb', 0)
+            free_gb = metrics.get('memory_free_gb', 0)
+            swap = metrics.get('swap_percent', 0)
+            self.update_value("ram", "used", f"{rss:.0f} Mo")
+            self.update_value("ram", "total", f"libre: {free_gb:.1f} Go | swap: {swap:.1f}%")
+            self.update_value("ram", "pct", f"swap: {swap:.1f}%")
 
-            # Coloration RAM
+            # Coloration RAM (sur le swap)
             ram_val = self.findChild(QLabel, "InspVal_pct")
             if ram_val:
-                if mem.percent > 85:
+                if swap > 85:
                     ram_val.setStyleSheet(
                         f"color: {Color.ROSE}; font-size: {Typography.SIZE_SMALL}pt; "
                         f"font-family: 'SF Mono', 'Menlo', monospace; font-weight: bold;"
                     )
-                elif mem.percent > 70:
+                elif swap > 70:
                     ram_val.setStyleSheet(
                         f"color: {Color.AMBER}; font-size: {Typography.SIZE_SMALL}pt; "
                         f"font-family: 'SF Mono', 'Menlo', monospace;"
@@ -346,16 +352,16 @@ class RightInspectorPanel(QWidget):
                 self.update_value("model", "temp",
                     f"{getattr(self._engine, '_temperature', 0.7):.1f}")
 
-                # ── RAG ──
+                # ── RAG — pas de _indexed_count/_chunks_count sur RAGEngine ──
                 rag = self._engine.rag_engine
                 if rag:
                     try:
-                        docs = getattr(rag, '_indexed_count', None)
-                        if docs is None and hasattr(rag, 'get_all_doc_meta'):
+                        docs = 0
+                        if hasattr(rag, 'get_all_doc_meta'):
                             docs = len(rag.get_all_doc_meta())
-                        chunks = getattr(rag, '_chunks_count', None)
-                        self.update_value("rag", "documents", str(docs or "—"))
-                        self.update_value("rag", "chunks", str(chunks or "—"))
+                        self.update_value("rag", "documents", str(docs))
+                        # chunks : pas d'API dédiée, afficher "—"
+                        self.update_value("rag", "chunks", "—")
                     except Exception:
                         pass
 
