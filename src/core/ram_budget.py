@@ -347,10 +347,10 @@ class RAMBudgetManager:
         )
         state.used_mb = used
 
-        # Niveau de pression
-        if state.free_ram_gb < 0.5 or state.swap_percent > 80:
+        # Niveau de pression (macOS: swap élevé ne signifie pas thrash)
+        if state.free_ram_gb < 0.5 or (state.free_ram_gb < 1.0 and state.swap_percent > 95):
             state.pressure_level = "critical"
-        elif state.free_ram_gb < 1.0 or state.swap_percent > 50:
+        elif state.free_ram_gb < 1.0 or (state.free_ram_gb < 1.5 and state.swap_percent > 90):
             state.pressure_level = "warning"
         else:
             state.pressure_level = "normal"
@@ -368,10 +368,10 @@ class RAMBudgetManager:
         """Vérifie si la RAM est trop basse pour utiliser le LLM local.
 
         Returns:
-            True si RAM libre < 1 Go OU swap > 80%
+            True si RAM libre < 500 Mo OU (RAM < 1 Go ET swap > 95%)
         """
         state = self.probe()
-        return state.free_ram_gb < 1.0 or state.swap_percent > 80
+        return state.free_ram_gb < 0.5 or (state.free_ram_gb < 1.0 and state.swap_percent > 95)
 
     # ─── Nettoyage systèmes ──────────────────────────────────────────
 

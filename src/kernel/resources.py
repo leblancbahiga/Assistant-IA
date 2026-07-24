@@ -106,7 +106,7 @@ class KernelResources:
         self.budget.register_callback(callback)
 
     def should_force_cloud(self) -> bool:
-        """True si RAM < 1 Go ou swap > 80%."""
+        """True si RAM < 500 Mo ou (RAM < 1 Go ET swap > 95%)."""
         return self.budget.should_force_cloud()
 
     def force_gc(self) -> None:

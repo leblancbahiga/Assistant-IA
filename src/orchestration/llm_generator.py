@@ -161,7 +161,7 @@ class LLMGenerator:
         try:
             from src.core.ram_budget import get_budget
             _budget = get_budget()
-            # V16 FIX : utiliser should_force_cloud() — méthode unifiée RAM < 1Go OU swap > 80%
+            # V16 FIX : utiliser should_force_cloud() — méthode unifiée
             swap_too_high = _budget.should_force_cloud()
         except Exception:
             logger.warning("RAMBudget.should_force_cloud indisponible — décision cloud par défaut", exc_info=True)
