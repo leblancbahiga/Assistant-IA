@@ -85,7 +85,7 @@ class RAMBudgetManager:
         self,
         hard_limit_gb: float = 6.0,      # V16 FIX : 6.0 Go max sur 8 Go (macOS ~2 Go)
         soft_limit_gb: float = 4.0,      # V16 FIX : 4.0 Go → éviction préventive (avant 6.0 = aucune)
-        swap_warning_pct: float = 50.0,  # V16 FIX : 50% → on agit avant saturation (avant 95%)
+        swap_warning_pct: float = 95.0,  # macOS: swap élevé normal (pas = thrash)
     ):
         self.hard_limit_gb = hard_limit_gb
         self.soft_limit_gb = soft_limit_gb

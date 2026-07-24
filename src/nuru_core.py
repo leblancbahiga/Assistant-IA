@@ -222,6 +222,7 @@ class NuruCore:
         self._kernel.register("rag_pipeline", self.orchestrator.rag_pipeline)
         self._kernel.register("response_guard", self.orchestrator.response_guard)
         self._kernel.register("llm_generator", self.orchestrator.llm_gen)
+        self._kernel.register("session_store", self.orchestrator.session_store)
         from src.ai.verifier import EvidenceVerifier
         self._kernel.register("evidence_verifier", EvidenceVerifier())
         logger.info("🚀 NuruOrchestrator V4.5 initialisé")
