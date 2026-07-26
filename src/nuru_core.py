@@ -178,6 +178,7 @@ class NuruCore:
             max_prompt_tokens=8192, # V10.2: 32K pour Phi-4-mini (était 4096)
             reserved_response=2048  # V10.2: réponses plus longues (était 1024)
         )
+        self._kernel.register("context_budget", self.context_budget)
         self.runtime = RuntimeManager()
         self._kernel.register("runtime", self.runtime)
         self.event_bus = EventBus()

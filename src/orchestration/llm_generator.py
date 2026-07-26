@@ -231,7 +231,7 @@ class LLMGenerator:
                     yield token
                     if stream_session:
                         stream_session.emit(token)
-        except (LLMError, RAGError) as e:
+        except Exception as e:
             logger.error(f"Local fail: {e}. Fallback Cloud.")
             if stream_session:
                 stream_session.emit(" [Bascule Cloud...] ")
