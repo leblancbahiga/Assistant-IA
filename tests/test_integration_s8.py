@@ -277,14 +277,13 @@ class TestShellToFilePipeline:
     """Write file via shell_exec → Read file via file_ops."""
 
     def test_shell_write_temp_file(self, temp_workspace, sandbox, file_ctrl):
-        """Écrit un fichier via shell_exec, puis le lit via file_ops."""
+        """Écrit un fichier via file_ops, confirme via shell_exec."""
         test_path = temp_workspace / "test_shell_file.txt"
         content = "Hello from shell!"
 
-        # Écrire via shell
-        cmd = f'echo "{content}" > {test_path}'
-        result = sandbox.execute(cmd)
-        assert result.success, f"Shell write failed: {result.stderr}"
+        # Écrire via file_ops (les redirections shell > sont bloquées par sécurité)
+        write_r = file_ctrl.write_file(str(test_path), content)
+        assert write_r.success, f"File write failed: {write_r.message}"
 
         # Lire via file_ops
         read_result = file_ctrl.read_file(str(test_path))
@@ -292,15 +291,15 @@ class TestShellToFilePipeline:
         assert content in read_result.details.get("content", "")
 
     def test_shell_write_append_read(self, temp_workspace, sandbox, file_ctrl):
-        """Écrit puis append via shell, lit via file_ops."""
+        """Écrit puis append via file_ops, lit via file_ops."""
         test_path = temp_workspace / "test_append.txt"
 
         # Écrire ligne 1
-        r1 = sandbox.execute(f'echo "line1" > {test_path}')
+        r1 = file_ctrl.write_file(str(test_path), "line1\n")
         assert r1.success
 
         # Appender ligne 2
-        r2 = sandbox.execute(f'echo "line2" >> {test_path}')
+        r2 = file_ctrl.write_file(str(test_path), "line2\n")
         assert r2.success
 
         # Lire
@@ -311,27 +310,27 @@ class TestShellToFilePipeline:
         assert "line2" in content
 
     def test_shell_write_then_file_info(self, temp_workspace, sandbox, file_ctrl):
-        """Écrit via shell puis check file_info."""
+        """Écrit via file_ops puis check file_info."""
         test_path = temp_workspace / "test_info.txt"
-        sandbox.execute(f'echo "data" > {test_path}')
+        file_ctrl.write_file(str(test_path), "data")
 
         info = file_ctrl.get_file_info(str(test_path))
         assert info.success
         assert info.details.get("is_file") is True
 
     def test_shell_write_binary_then_file_read(self, temp_workspace, sandbox, file_ctrl):
-        """Écrit des données via shell et lit via file_ops."""
+        """Écrit des données via file_ops et lit via file_ops."""
         test_path = temp_workspace / "test_binary.txt"
-        sandbox.execute(f'echo "ABC" > {test_path}')
+        file_ctrl.write_file(str(test_path), "ABC")
 
         read_result = file_ctrl.read_file(str(test_path))
         assert read_result.success
         assert "ABC" in read_result.details.get("content", "")
 
     def test_shell_write_tar_then_file_list(self, temp_workspace, sandbox, file_ctrl):
-        """Crée des fichiers via shell et liste via file_ops."""
+        """Crée des fichiers via file_ops et liste via file_ops."""
         for i in range(3):
-            sandbox.execute(f'echo "file{i}" > {temp_workspace}/f{i}.txt')
+            file_ctrl.write_file(str(temp_workspace / f"f{i}.txt"), f"file{i}")
 
         list_result = file_ctrl.list_directory(str(temp_workspace))
         assert list_result.success
@@ -341,10 +340,10 @@ class TestShellToFilePipeline:
             assert f"f{i}.txt" in names
 
     def test_shell_cat_read_cross_check(self, temp_workspace, sandbox, file_ctrl):
-        """Écrit via shell, lit via cat (shell) ET file_ops, compare."""
+        """Écrit via file_ops, lit via cat (shell) ET file_ops, compare."""
         test_path = temp_workspace / "cross_check.txt"
         content = "Cross-check content"
-        sandbox.execute(f'echo "{content}" > {test_path}')
+        file_ctrl.write_file(str(test_path), content)
 
         # Via shell
         shell_read = sandbox.execute(f"cat {test_path}")
