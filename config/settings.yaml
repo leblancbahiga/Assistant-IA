@@ -1,4 +1,4 @@
-auto_fetch_enabled: true
+auto_fetch_enabled: false
 auto_fetch_interval_min: 30
 cache_maxsize: 256
 cache_ttl_seconds: 300
@@ -7,7 +7,7 @@ cloud_model: deepseek-v4-flash-free
 cloud_provider: opencode_zen
 heavy_search_min_ram_mb: 1000
 hybrid_enabled: true
-hybrid_mode: cloud_first
+hybrid_mode: local_first
 learning_enabled: true
 local_model: mlx-community/Phi-4-mini-instruct-4bit
 local_model_fallback: mlx-community/Phi-4-mini-instruct-4bit
