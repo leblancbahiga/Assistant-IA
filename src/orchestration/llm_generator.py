@@ -56,6 +56,7 @@ class LLMGenerator:
         self.runtime = runtime
         self.event_bus = event_bus
         self.session_store = session_store
+        self.last_tokens = 0  # V17: compteur de tokens pour metriques dashboard
 
     # ══════════════════════════════════════════
     # 1. Connectivité
@@ -151,10 +152,13 @@ class LLMGenerator:
                     f"réponds à la question suivante : {user_message}"
                 )
                 logger.info(f"☁️ Cloud call — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
+                n_tok = 0
                 async for token in self.cloud_llm.generate_stream(
                     anchored_prompt, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
                 ):
+                    n_tok += 1
                     yield token
+                self.last_tokens = n_tok
                 return
 
         # ── Local LLM (tout le reste) ──
@@ -166,16 +170,22 @@ class LLMGenerator:
             yield f"💻 Erreur locale: {e}"
             return
         if self.runtime:
+            n_tok = 0
             async for token in self.runtime.schedule_generator("generation", gen):
                 if stream_session and stream_session.is_cancelled:
                     break
+                n_tok += 1
                 yield token
                 if stream_session:
                     stream_session.emit(token)
+            self.last_tokens = n_tok
         else:
+            n_tok = 0
             async for token in gen:
                 if stream_session and stream_session.is_cancelled:
                     break
+                n_tok += 1
                 yield token
                 if stream_session:
                     stream_session.emit(token)
+            self.last_tokens = n_tok
