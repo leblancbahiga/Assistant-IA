@@ -306,7 +306,7 @@ class LocalLLM:
                         try:
                             import mlx.core as mx
                             if mx.metal.is_available():
-                                mx.metal.clear_cache()
+                                mx.clear_cache()
                         except Exception:
                             pass
                         for response in stream_generate(
