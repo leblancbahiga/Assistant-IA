@@ -308,20 +308,28 @@ class BuildContext(PipelineStep):
             session_store = _get_service("session_store")
             context_budget = _get_service("context_budget")
 
-            system_prompt, full_prompt = prompt_builder.build_prompt(
-                ctx.intent, ctx.query, ctx.rag_context, ctx.web_context,
-                user_facts_str=ctx.user_facts_str,
-                session_id=ctx.session_id,
-                system_prompt_builder=None,
-                memory_store=memory_store,
-                session_store=session_store,
-                context_budget=context_budget,
-                model_family=ctx._model_for_intent(ctx.intent),
-                session_max_context=10,
-                confidence_label=getattr(ctx.rag_result, 'confidence_label', None) if ctx.rag_result else None,
-            )
-            ctx.system_prompt = system_prompt
-            ctx.full_prompt = full_prompt
+            # V17: SIMPLE → prompt minimal, sans contexte doc ni historique session
+            if ctx.intent == "SIMPLE":
+                system_prompt = "Tu es NURU, un assistant personnel amical et naturel."
+                full_prompt = f"{system_prompt}\n\n{ctx.query}"
+                ctx.system_prompt = system_prompt
+                ctx.full_prompt = full_prompt
+                logger.debug("💬 SIMPLE: prompt minimal (pas de RAG/session)")
+            else:
+                system_prompt, full_prompt = prompt_builder.build_prompt(
+                    ctx.intent, ctx.query, ctx.rag_context, ctx.web_context,
+                    user_facts_str=ctx.user_facts_str,
+                    session_id=ctx.session_id if ctx.intent != "SIMPLE" else None,
+                    system_prompt_builder=None,
+                    memory_store=memory_store,
+                    session_store=session_store,
+                    context_budget=context_budget,
+                    model_family=ctx._model_for_intent(ctx.intent),
+                    session_max_context=10,
+                    confidence_label=getattr(ctx.rag_result, 'confidence_label', None) if ctx.rag_result else None,
+                )
+                ctx.system_prompt = system_prompt
+                ctx.full_prompt = full_prompt
         except Exception as e:
             logger.warning("⚠️ Prompt builder: %s", e)
             return ctx, StepResult(error=f"Prompt construction: {e}")

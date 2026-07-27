@@ -330,7 +330,11 @@ class LocalLLM:
                             new_text = full_text[len(decoded_so_far):]
                             if new_text:
                                 decoded_so_far = full_text
-                                queue.put_nowait(new_text)
+                                # V17: retirer les balises de controle residuelles (<|end|>, <|assistant|>, etc.)
+                                import re
+                                new_text = re.sub(r"<\|[^|]+\|>", "", new_text)
+                                if new_text:
+                                    queue.put_nowait(new_text)
 
                             n_gen += 1
                             last_response = response

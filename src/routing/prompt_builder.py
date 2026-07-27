@@ -147,7 +147,7 @@ class DynamicPromptBuilder:
             full_prompt += (
                 f"\n\n## QUESTION (connaissances générales)\n"
                 f"Réponds avec tes connaissances. Si tu n'es pas certain, dis-le.\n\n"
-                f"{safe_query}<|end|>\n<|assistant|>\n"
+                f"{safe_query}"
             )
         elif intent == "RAG" and full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
             full_prompt += (
@@ -159,11 +159,11 @@ class DynamicPromptBuilder:
                 f"- Si l'utilisateur énonce une information à retenir, "
                 f"accuse réception et propose de la mémoriser.\n"
                 f"- Cite la source quand tu utilises le contexte. [Source: fichier]\n\n"
-                f"{safe_query}<|end|>\n<|assistant|>\n"
+                f"{safe_query}"
             )
         else:
             # AUDIT V10.3 — utiliser safe_query
-            full_prompt += f"{safe_query}<|end|>\n<|assistant|>\n"
+            full_prompt += f"{safe_query}"
         return system_prompt, full_prompt
 
     def _format_with_model_tags(
