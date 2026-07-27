@@ -163,6 +163,12 @@ class Route(PipelineStep):
             ctx.intent = v16_to_intent.get(v16_decision.intent, "GENERAL")
             logger.info("🧠 V16: %s → intent=%s", v16_decision.intent, ctx.intent)
 
+            # V17: Ne pas injecter de contexte RAG pour les salutations/conversation
+            if ctx.intent in ("SIMPLE", "GENERAL"):
+                ctx.rag_context = ""
+                ctx.rag_result = None
+                logger.debug("🧹 RAG context cleared for %s intent", ctx.intent)
+
             # Shadow comparison
             v12_intent = ctx._route_to_intent(route_result.decision) if route_result else "GENERAL"
             if v16_decision.intent != v12_intent:
@@ -205,6 +211,13 @@ class Retrieve(PipelineStep):
             ctx.rag_context = ""
             ctx.intent = "SIMPLE"
             logger.info("🔓 Mode FREE: RAG contourné")
+            return ctx, StepResult()
+
+        # V17: Salutations/conversation → pas de RAG
+        if ctx.intent in ("SIMPLE", "GENERAL"):
+            ctx.rag_context = ""
+            ctx.rag_result = None
+            logger.debug("🧹 RAG skipped pour %s intent", ctx.intent)
             return ctx, StepResult()
 
         # 2. Multi-retrieval
