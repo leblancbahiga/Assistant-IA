@@ -29,7 +29,7 @@ from src.memory_bridge import MemoryBridge  # V10.1 : Pont V5+V9
 # Phase 3 : Proactif, Connaissances, Cycle de sommeil
 from src.knowledge.graph import KnowledgeGraph
 from src.memory.sleep_cycle import SleepCycleManager
-from src.memory.dynamic_prompt import DynamicPromptBuilder, PromptContext
+from src.routing.prompt_builder import DynamicPromptBuilder
 from src.proactive.engine import ProactiveEngine
 from src.proactive.routines import RoutineScheduler, RoutinePreset
 from src.personality.engine import PersonaEngine
@@ -280,10 +280,7 @@ class NuruCore:
         # ── Phase 3 : Dynamic Prompt Builder ──
         self.persona = PersonaEngine()
         self._kernel.register("persona", self.persona)
-        self.prompt_builder = DynamicPromptBuilder(
-            persona=self.persona,
-            knowledge=self.knowledge_graph,
-        )
+        self.prompt_builder = DynamicPromptBuilder()
         self._kernel.register("prompt_builder", self.prompt_builder)
 
         # ── Phase 3 : Routine Scheduler ──
