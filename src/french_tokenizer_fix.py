@@ -49,13 +49,13 @@ PATTERNS: list = [
     (r" {2,}", " "),
     # V17: espaces manquants entre mots francais courants colles par le modele
     # Pattern: mot court connu suivi d'une minuscule → tres probablement un espace manquant
-    (r"\b(je|tu|il|elle|on|nous|vous|suis|es|est|sommes|etes|sont"
+    # (?<!') evite de casser "n'est" en "n'es t"
+    ( r"(?<!')\b(je|tu|il|elle|on|nous|vous|suis|es|est|sommes|etes|sont"
      r"|pour|par|dans|avec|sans|sur|sous|chez|entre|mais|ou|et|donc|car|ni|or"
-     r"|la|le|les|des|aux|du|un|une|ce|cet|cette|ces|mon|ton|son|mes|tes|ses"
+     r"|la|les|des|aux|du|un|une|ce|cet|cette|ces|mon|ton|son|mes|tes|ses"
      r"|nos|vos|leurs|que|qui|quoi|dont|ne|pas|plus|rien|personne"
-     r"|tres|trop|peu|assez|beaucoup|si|aussi|car|donc"
-     r"|apres|avant|avec"
-     r"|fait|faire|peut|veut|doit|sait|dit|voit"
+     r"|tres|trop|peu|assez|beaucoup|si|aussi"
+     r"|apres|avant|avec|fait|faire|peut|veut|doit|sait|dit|voit"
      r")([a-zéèêëàâîïôûùçœ])",
      r"\1 \2"),
 ]
