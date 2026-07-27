@@ -129,6 +129,18 @@ class TokenizationFixStream:
 
     def process_token(self, token: str) -> str:
         """Ajoute un token au buffer et retourne le texte corrigé à émettre."""
+        # V17: detecter les espaces manquants entre tokens (Phi-4-mini saute
+        # parfois le token espace 220, collant les mots)
+        if self._buffer and token:
+            last_char = self._buffer[-1]
+            first_char = token[0]
+            # Inserer un espace si le buffer se termine par un caractere lettre/chiffre
+            # ET le token commence par un caractere non-espace/non-ponctuation
+            if (last_char.isalnum() or last_char in '»)\\]') and \
+               not first_char.isspace() and \
+               first_char not in ',?!.;:…\'-(\'[«':
+                token = ' ' + token
+
         self._buffer += token
 
         # Appliquer les corrections sur tout le buffer
