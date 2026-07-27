@@ -304,6 +304,13 @@ class LocalLLM:
 
                         last_response = None
                         n_gen = 0
+                        # V17: vide le cache Metal avant generation (evite GPU Timeout)
+                        try:
+                            import mlx.core as mx
+                            if mx.metal.is_available():
+                                mx.metal.clear_cache()
+                        except Exception:
+                            pass
                         for response in stream_generate(
                             model,
                             tokenizer,
