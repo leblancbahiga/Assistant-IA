@@ -309,6 +309,10 @@ class LocalLLM:
                                 mx.clear_cache()
                         except Exception:
                             pass
+                        # V17: accumulation des token IDs pour decoder par lots
+                        # (le decodeur gere les espaces correctement avec plus de contexte)
+                        token_ids: list[int] = []
+                        decoded_so_far = ""
                         for response in stream_generate(
                             model,
                             tokenizer,
@@ -319,9 +323,17 @@ class LocalLLM:
                             kv_bits=8,
                             prefill_step_size=512,
                         ):
-                            fixed_text = _fix_stream.process_token(response.text)
-                            if fixed_text:
-                                queue.put_nowait(fixed_text)
+                            token_ids.append(response.token)
+
+                            # Decoder le lot a chaque token et produire le diff
+                            full_text = tokenizer.decode(token_ids)
+                            new_text = full_text[len(decoded_so_far):]
+                            if new_text:
+                                decoded_so_far = full_text
+                                fixed_text = _fix_stream.process_token(new_text)
+                                if fixed_text:
+                                    queue.put_nowait(fixed_text)
+
                             n_gen += 1
                             last_response = response
 

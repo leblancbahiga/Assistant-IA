@@ -47,6 +47,17 @@ PATTERNS: list = [
     (r"(\w)\.(\w)", r"\1. \2"),
     # Doubles espaces
     (r" {2,}", " "),
+    # V17: espaces manquants entre mots francais courants colles par le modele
+    # Pattern: mot court connu suivi d'une minuscule → tres probablement un espace manquant
+    (r"\b(je|tu|il|elle|on|nous|vous|suis|es|est|sommes|etes|sont"
+     r"|pour|par|dans|avec|sans|sur|sous|chez|entre|mais|ou|et|donc|car|ni|or"
+     r"|la|le|les|des|aux|du|un|une|ce|cet|cette|ces|mon|ton|son|mes|tes|ses"
+     r"|nos|vos|leurs|que|qui|quoi|dont|ne|pas|plus|rien|personne"
+     r"|tres|trop|peu|assez|beaucoup|si|aussi|car|donc"
+     r"|apres|avant|avec"
+     r"|fait|faire|peut|veut|doit|sait|dit|voit"
+     r")([a-zéèêëàâîïôûùçœ])",
+     r"\1 \2"),
 ]
 
 # ── Mots spéciaux (préservation de cas spécifiques) ──
@@ -129,18 +140,6 @@ class TokenizationFixStream:
 
     def process_token(self, token: str) -> str:
         """Ajoute un token au buffer et retourne le texte corrigé à émettre."""
-        # V17: detecter les espaces manquants entre tokens (Phi-4-mini saute
-        # parfois le token espace 220, collant les mots)
-        if self._buffer and token:
-            last_char = self._buffer[-1]
-            first_char = token[0]
-            # Inserer un espace si le buffer se termine par un caractere lettre/chiffre
-            # ET le token commence par un caractere non-espace/non-ponctuation
-            if (last_char.isalnum() or last_char in '»)\\]') and \
-               not first_char.isspace() and \
-               first_char not in ',?!.;:…\'-(\'[«':
-                token = ' ' + token
-
         self._buffer += token
 
         # Appliquer les corrections sur tout le buffer
