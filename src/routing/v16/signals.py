@@ -75,7 +75,7 @@ STRONG_TEMPORAL_MARKERS = (
     "actuellement", "aujourd'hui", "aujourd hui", "en ce moment", "cette annee",
     "de nos jours", "en ce moment meme", "recemment",
 )
-TEMPORAL_BOOST_WEIGHT = 6.0
+TEMPORAL_BOOST_WEIGHT = 10.0
 
 # Marqueurs possessifs → override RAG quand accolés à un terme générique.
 POSSESSIVE_MARKERS = ("mon", "ma", "mes", "notre", "nos")
@@ -163,7 +163,10 @@ def score_intents(raw_query: str, tokens: list[str], folded_query: str) -> Score
         vec.hits["RAG"].append("possessive_override")
 
     # ── Modificateur 3 : identité personnelle ("Qui est Leblanc ?") ──
-    if _identity_query(raw_query, folded_query):
+    # V17: ne pas ajouter le bonus RAG si la requete contient un marqueur
+    # temporel fort ("actuel President de la RDC" → WEB, pas RAG)
+    has_temporal = any(marker in folded_query for marker in STRONG_TEMPORAL_MARKERS)
+    if _identity_query(raw_query, folded_query) and not has_temporal:
         vec.scores["RAG"] += 4.0
         vec.hits["RAG"].append("identity_override")
 
