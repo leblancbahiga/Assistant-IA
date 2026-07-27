@@ -358,6 +358,10 @@ class RAMBudgetManager:
         state.slots = list(self._components.values())
         self._cached_state = state
         self._last_probe = now
+        logger.debug(
+            "RAM probe: free=%.1fGo swap=%.0f%% rss=%.0fMo pressure=%s",
+            state.free_ram_gb, state.swap_percent, state.process_rss_mb, state.pressure_level,
+        )
         return state
 
     def get_pressure(self) -> str:
