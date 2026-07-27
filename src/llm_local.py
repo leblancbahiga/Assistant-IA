@@ -1,5 +1,4 @@
 import mlx.core as mx
-from mlx_lm.utils import load_adapters
 import psutil
 import logging
 import gc
@@ -143,10 +142,23 @@ class LocalLLM:
             
             def _sync_load():
                 from mlx_lm import load
-                return load(resolved_path)
-            
+                from mlx_lm.utils import load_adapters
+                model, tokenizer = load(resolved_path)
+                # V15 Phase 5 (Item 38) : Chargement LoRA sur le meme thread MLX
+                lora_loaded = False
+                if self._lora_adapter_path:
+                    adapter_dir = Path(self._lora_adapter_path)
+                    if (adapter_dir / "adapters.safetensors").exists():
+                        try:
+                            model = load_adapters(model, self._lora_adapter_path)
+                            lora_loaded = True
+                            logger.info("Adaptateur LoRA charge depuis %s", self._lora_adapter_path)
+                        except Exception as e:
+                            logger.warning("Echec chargement LoRA (%s) -- inference sans adaptateur", e)
+                return model, tokenizer, lora_loaded
+
             try:
-                self._model, self._tokenizer = await asyncio.wait_for(
+                self._model, self._tokenizer, self._lora_loaded = await asyncio.wait_for(
                     loop.run_in_executor(self._mlx_executor, _sync_load),
                     timeout=MODEL_LOAD_TIMEOUT_SECONDS
                 )
@@ -159,21 +171,7 @@ class LocalLLM:
             
             self._current_model_id = model_id
 
-            # V15 Phase 5 (Item 38) : Chargement adaptateur LoRA RAG si existant
-            if self._lora_adapter_path:
-                adapter_dir = Path(self._lora_adapter_path)
-                if (adapter_dir / "adapters.safetensors").exists():
-                    try:
-                        self._model = load_adapters(self._model, self._lora_adapter_path)
-                        self._lora_loaded = True  # V17 FIX
-                        logger.info("Adaptateur LoRA charge depuis %s", self._lora_adapter_path)
-                    except Exception as e:
-                        self._lora_loaded = False  # V17 FIX
-                        logger.warning("Echec chargement LoRA (%s) -- inference sans adaptateur", e)
-                else:
-                    self._lora_loaded = False
-                    logger.info("Aucun adaptateur LoRA trouve dans %s", self._lora_adapter_path)
-
+            # ── Notify RAMBudgetManager ──
             # V15 Phase 5 (Item 40) : marquer comme charge dans le budget RAM
             budget.mark_loaded("llm")
             budget.touch("llm")
