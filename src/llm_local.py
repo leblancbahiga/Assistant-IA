@@ -330,19 +330,12 @@ class LocalLLM:
                             new_text = full_text[len(decoded_so_far):]
                             if new_text:
                                 decoded_so_far = full_text
-                                fixed_text = _fix_stream.process_token(new_text)
-                                if fixed_text:
-                                    queue.put_nowait(fixed_text)
+                                queue.put_nowait(new_text)
 
                             n_gen += 1
                             last_response = response
 
-                        # Vider le buffer de correction
-                        flush_text = _fix_stream.flush()
-                        if flush_text:
-                            queue.put_nowait(flush_text)
-
-                        # Stats de benchmark
+                        # ── Stats de benchmark ──
                         if last_response is not None:
                             queue.put_nowait({
                                 "_bench": True,

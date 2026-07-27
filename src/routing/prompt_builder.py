@@ -151,14 +151,14 @@ class DynamicPromptBuilder:
             )
         elif intent == "RAG" and full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
             full_prompt += (
-                f"\n\n## INSTRUCTION STRICTE — RAG UNIQUEMENT\n"
-                f"Tu dois répondre UNIQUEMENT à partir du CONTEXTE ci-dessus "
-                f"(entre <<DOC_CONTENT_START>> et <<DOC_CONTENT_END>>).\n"
-                f"- N'utilise PAS tes connaissances internes.\n"
-                f"- Si l'information n'est pas dans le contexte, dis \""
-                f"Je ne trouve pas cette information dans les documents.\"\n"
-                f"- N'invente RIEN. Ne complète PAS.\n"
-                f"- Cite la source avec [Source: nom_du_fichier].\n\n"
+                f"\n\n## INSTRUCTION — CONTEXTE DISPONIBLE\n"
+                f"Le CONTEXTE ci-dessus contient des documents de l'utilisateur.\n"
+                f"Utilise-le en priorité pour répondre.\n"
+                f"- Si le contexte contient l'information, base-toi dessus.\n"
+                f"- Si le contexte ne contient pas l'information, utilise tes connaissances.\n"
+                f"- Si l'utilisateur énonce une information à retenir, "
+                f"accuse réception et propose de la mémoriser.\n"
+                f"- Cite la source quand tu utilises le contexte. [Source: fichier]\n\n"
                 f"{safe_query}<|end|>\n<|assistant|>\n"
             )
         else:

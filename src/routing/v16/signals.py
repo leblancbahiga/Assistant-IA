@@ -41,7 +41,6 @@ INTENT_KEYWORDS: dict[str, dict[str, int]] = {
         "rapport": 2, "presentation": 2, "projet": 2, "fichier": 2, "document": 2,
         "yarid": 3, "iamgold": 3, "walikale": 3, "beaccom": 3, "rikolto": 3,
         "iita": 3, "fao": 3, "usaid": 3, "filiere": 2,
-        "leblanc": 3, "bahiga": 3, "mudarhi": 3,
         "etude de base": 3, "enquete": 2, "sondage": 2,
         "compte rendu": 2, "proces verbal": 2, "pv": 1,
         "qui suis-je": 4, "qui suis je": 4, "parle-moi de moi": 4, "parle moi de moi": 4,
