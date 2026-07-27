@@ -102,8 +102,14 @@ class LocalLLM:
             return config.local_model_fallback
         return config.local_model
 
-    async def _load_model(self, model_id: str):
-        """Charge ou swappe le modele en memoire."""
+    async def _load_model(self, model_id: str, load_lora: bool = True):
+        """Charge ou swappe le modele en memoire.
+        
+        Args:
+            model_id: Identifiant du modele a charger
+            load_lora: Si True, charge aussi l'adaptateur LoRA (defaut: True).
+                       Desactive pour SIMPLE/GENERAL afin d'eviter le biais documentaire.
+        """
         if self._current_model_id == model_id and self._model is not None:
             return
 
@@ -146,7 +152,7 @@ class LocalLLM:
                 model, tokenizer = load(resolved_path)
                 # V15 Phase 5 (Item 38) : Chargement LoRA sur le meme thread MLX
                 lora_loaded = False
-                if self._lora_adapter_path:
+                if load_lora and self._lora_adapter_path:
                     adapter_dir = Path(self._lora_adapter_path)
                     if (adapter_dir / "adapters.safetensors").exists():
                         try:
@@ -233,7 +239,9 @@ class LocalLLM:
             model_id = self._get_required_model(intent)
 
             try:
-                await self._load_model(model_id)
+                # V17: pas de LoRA pour les intents conversationnels (evite biais documentaire)
+                use_lora = intent not in ("SIMPLE", "GENERAL")
+                await self._load_model(model_id, load_lora=use_lora)
             except Exception as e:
                 logger.error(f"Impossible de charger le modele {model_id} : {e}")
                 raise
