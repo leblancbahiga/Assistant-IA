@@ -330,6 +330,15 @@ class BuildContext(PipelineStep):
                 )
                 ctx.system_prompt = system_prompt
                 ctx.full_prompt = full_prompt
+
+            # V17 P12: trace prompt final (DEBUG)
+            logger.debug(
+                "📝 BuildContext trace [%s] intent=%s system=%d chars full=%d chars rag=%d chars web=%d",
+                ctx.correlation_id[:12], ctx.intent,
+                len(ctx.system_prompt or ""), len(ctx.full_prompt or ""),
+                len(ctx.rag_context or ""), len(ctx.web_context or ""),
+            )
+
         except Exception as e:
             logger.warning("⚠️ Prompt builder: %s", e)
             return ctx, StepResult(error=f"Prompt construction: {e}")

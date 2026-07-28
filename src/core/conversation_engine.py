@@ -113,14 +113,14 @@ class ConversationEngine(QObject):
         self._loop.run_forever()
 
     async def _init_async(self) -> None:
-        """Construit NuruCore et démarre les tâches background (thread asyncio)."""
+        """Récupère NuruCore depuis le kernel (évite duplication)."""
         try:
-            self._nuru = NuruCore()
-            logger.info("✅ NuruCore initialisé dans le thread asyncio")
+            self._nuru = _kernel.get("nuru_core")
+            logger.info("✅ NuruCore récupéré depuis le Kernel")
             self._nuru.start_background_tasks()
             logger.info("✅ Tâches background NuruCore démarrées")
         except Exception as e:
-            logger.error(f"⚠️ Échec NuruCore asynchrone: {e}")
+            logger.error(f"⚠️ Échec récupération NuruCore: {e}")
             raise
 
     def _on_init_done(self, future: asyncio.Future) -> None:

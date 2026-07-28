@@ -325,6 +325,8 @@ class NuruCore:
         self.mcp_server = MCPServer(name="nuru-mcp", version="12.0.0")
         self.mcp_client = MCPClient()
         self._register_mcp_tools()
+        # V17 P9 : enregistrer NuruCore dans le kernel (evite 2e instanciation par ConversationEngine)
+        self._kernel.register("nuru_core", self)
         self._online_cache: tuple[float, bool] = (0.0, False)  # TTL timestamp + cached value
 
     async def _is_online(self) -> bool:
@@ -1022,24 +1024,24 @@ Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail,
 
 
     async def process_query(self, query: str, use_tts: bool = False, stream_session=None) -> AsyncGenerator[str, None]:
-        """Traite une requête utilisateur en déléguant au NuruOrchestrator.
+        """Traite une requête utilisateur via le PipelineEngine.
 
-        Délègue l'intégralité du pipeline (routage, RAG, génération,
-        vérification, mémoire) au NuruOrchestrator injecté.
+        Délègue le pipeline complet (routage, RAG, génération,
+        vérification, mémoire) au PipelineEngine composable.
+        Note: use_tts/audio_engine sont gérés par l'UI (ConversationEngine),
+        pas ici.
         """
         # ── Phase 3 : Signal d'activité utilisateur ──
         self.k('sleep_cycle').user_activity_detected()
 
-        async for token in self.k('orchestrator').process_query(
-            query=query, session_id="default",
-            use_tts=use_tts, audio_engine=self.k('audio') if use_tts else None,
-            stream_session=stream_session,
+        pipeline = self._kernel.get("pipeline")
+        async for token in pipeline.run_stream(
+            query,
+            session_id="default",
         ):
             yield token
 
         # Extraction post-session déportée en background.
-        # V10.3k : utilise le bookkeeping _bg_tasks pour éviter
-        # "Task was destroyed but it is pending!" à la fermeture de loop.
         await self._schedule_background_extraction()
 
     async def _schedule_background_extraction(self) -> None:
