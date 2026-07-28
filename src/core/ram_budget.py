@@ -347,10 +347,11 @@ class RAMBudgetManager:
         )
         state.used_mb = used
 
-        # Niveau de pression (macOS: swap élevé ne signifie pas thrash)
-        if state.free_ram_gb < 0.5 or (state.free_ram_gb < 1.0 and state.swap_percent > 95):
+        # Niveau de pression (V17: macOS swap.percent est PEU fiable car dynamic_pager
+        # alloue un swapfile de taille variable — utiliser free_ram uniquement)
+        if state.free_ram_gb < 0.5:
             state.pressure_level = "critical"
-        elif state.free_ram_gb < 1.0 or (state.free_ram_gb < 1.5 and state.swap_percent > 90):
+        elif state.free_ram_gb < 1.0:
             state.pressure_level = "warning"
         else:
             state.pressure_level = "normal"

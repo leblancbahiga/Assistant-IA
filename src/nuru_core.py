@@ -513,6 +513,14 @@ class NuruCore:
         """Callback quand l'utilisateur vide l'index depuis l'UI."""
         logger.info("🛑 Index vidé par l'utilisateur — arrêt de l'auto-indexation")
         await self.stop_indexing()
+        # V17: vider le cache LLM L1 (les reponses precedentes sont invalides)
+        try:
+            orch = self._kernel.get("orchestrator")
+            if orch and hasattr(orch, "llm_cache"):
+                await orch.llm_cache.clear_l1()
+                logger.info("🧠 Cache LLM L1 vidé (index_reset)")
+        except Exception as e:
+            logger.debug("⚠️ clear_l1 sur index_reset: %s", e)
 
     async def stop_indexing(self) -> None:
         """Stoppe l'auto-indexation périodique et le watcher temps réel."""
