@@ -150,9 +150,10 @@ class LocalLLM:
                 from mlx_lm import load
                 from mlx_lm.utils import load_adapters
                 model, tokenizer = load(resolved_path)
-                # V15 Phase 5 (Item 38) : Chargement LoRA sur le meme thread MLX
+                # V17: LoRA désactivé — dataset trop petit (~84 ex.), dégrade
+                # les réponses (biais documentaire) au lieu de les améliorer.
                 lora_loaded = False
-                if load_lora and self._lora_adapter_path:
+                if False and load_lora and self._lora_adapter_path:
                     adapter_dir = Path(self._lora_adapter_path)
                     if (adapter_dir / "adapters.safetensors").exists():
                         try:
