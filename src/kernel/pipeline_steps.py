@@ -159,6 +159,7 @@ class Route(PipelineStep):
             v16_to_intent = {
                 "RAG": "RAG", "WEB": "COMPLEX", "GENERAL": "GENERAL",
                 "ACTION": "COMPLEX", "MULTI_ROUTE": "COMPLEX",
+                "SIMPLE": "SIMPLE",
             }
             ctx.intent = v16_to_intent.get(v16_decision.intent, "GENERAL")
             logger.info("🧠 V16: %s → intent=%s", v16_decision.intent, ctx.intent)

@@ -320,11 +320,24 @@ class LocalLLM:
                         # (le decodeur gere les espaces correctement avec plus de contexte)
                         token_ids: list[int] = []
                         decoded_so_far = ""
+                        # V17 P12: ajuster max_tokens selon RAM disponible
+                        try:
+                            import psutil
+                            _vm = psutil.virtual_memory()
+                            _ram_gb = _vm.available / (1024**3)
+                            if _ram_gb < 1.0:
+                                _max_tok = min(config.local_max_tokens, 128)
+                            elif _ram_gb < 2.0:
+                                _max_tok = min(config.local_max_tokens, 256)
+                            else:
+                                _max_tok = config.local_max_tokens
+                        except Exception:
+                            _max_tok = config.local_max_tokens
                         for response in stream_generate(
                             model,
                             tokenizer,
                             formatted_prompt,
-                            max_tokens=config.local_max_tokens,
+                            max_tokens=_max_tok,
                             sampler=sampler,
                             logits_processors=logits_processors,
                             kv_bits=8,

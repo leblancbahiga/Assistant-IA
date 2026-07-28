@@ -90,7 +90,10 @@ class DynamicPromptBuilder:
         else:
             from src.identity_manager import IdentityManager
             identity = IdentityManager.load()
-            system_prompt = f"Tu es NURU, assistant personnel de {identity['user_name']}."
+            system_prompt = (
+                f"Tu es NURU, assistant personnel de {identity['user_name']}."
+                " Tu réponds TOUJOURS en français, de manière naturelle et fluide."
+            )
 
         # V10.3f : Injection contexte conversationnel de session
         if session_id:
