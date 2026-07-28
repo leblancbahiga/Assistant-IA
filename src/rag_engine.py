@@ -948,12 +948,12 @@ class RAGEngine:
                 try:
                     self.reranker.load_model()
                     reranked = await self.reranker.rerank(query, combined_results, top_k=effective_k) or []
-                    # V17: Blend RRF (95%) + Reranker (5%)
+                    # V17: Blend RRF (40%) + Reranker (60%) — le Cross-Encoder est plus fiable
                     if reranked:
                         blended = []
                         for content, source, score in reranked:
                             rrf_score = rrf_score_map.get(content, 0.0)
-                            blended_score = 0.95 * rrf_score + 0.05 * min(score, 1.0)
+                            blended_score = 0.40 * rrf_score + 0.60 * min(score, 1.0)
                             blended.append((content, source, blended_score))
                         reranked = blended
                 finally:
