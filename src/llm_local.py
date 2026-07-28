@@ -289,12 +289,11 @@ class LocalLLM:
                         formatted_prompt = prompt
                         if tokenizer is not None and hasattr(tokenizer, 'apply_chat_template'):
                             try:
+                                # V17: markers corrects pour Phi-4-mini (pas de UNKNOWN_CHAR)
                                 has_special_tokens = any(
                                     marker in prompt
                                     for marker in (
-                                        '<|assistant|>', 'UNKNOWN_CHAR',
-                                        'UNKNOWN_CHAR', '<|end|>', '<|user|>',
-                                        'UNKNOWN_CHAR', 'UNKNOWN_CHAR',
+                                        '<|system|>', '<|user|>', '<|assistant|>', '<|end|>',
                                     )
                                 )
                                 if not has_special_tokens:
@@ -451,9 +450,7 @@ class LocalLLM:
                     has_special_tokens = any(
                         marker in prompt
                         for marker in (
-                            '<|assistant|>', 'UNKNOWN_CHAR',
-                            'UNKNOWN_CHAR', '<|end|>', '<|user|>',
-                            'UNKNOWN_CHAR', 'UNKNOWN_CHAR',
+                            '<|system|>', '<|user|>', '<|assistant|>', '<|end|>',
                         )
                     )
                     if not has_special_tokens:
