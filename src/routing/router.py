@@ -205,13 +205,25 @@ class Router:
         is_identity_query = False
         if m_gk:
             next_word_lower = m_gk.group(1).rstrip("?!.,;:")  # sans ponctuation
-            # Trouver ce mot dans la user_query ORIGINALE pour récupérer sa casse
-            pattern_next = re.escape(next_word_lower[:min(4, len(next_word_lower))])
-            m_orig = re.search(pattern_next, user_query, re.IGNORECASE)
-            if m_orig and m_orig.start() >= 4:  # bien après "qui est"
-                next_word_original = m_orig.group(0)
-                if next_word_original[0].isupper():
-                    is_identity_query = True
+            # V17: si le nom est une personnalite publique connue, pas du RAG
+            KNOWN_PUBLIC_FIGURES = (
+                "tshisekedi", "kabila", "lumumba", "muzito", "kamerhe",
+                "macron", "poutine", "biden", "trump", "merkel",
+                "président", "presidente", "premier ministre", "roi", "reine",
+            )
+            if next_word_lower in KNOWN_PUBLIC_FIGURES or any(
+                f"{next_word_lower} {fig}".strip()
+                for fig in ("président", "premier ministre", "ministre", "sénateur")
+            ):
+                is_identity_query = False
+            else:
+                # Trouver ce mot dans la user_query ORIGINALE pour récupérer sa casse
+                pattern_next = re.escape(next_word_lower[:min(4, len(next_word_lower))])
+                m_orig = re.search(pattern_next, user_query, re.IGNORECASE)
+                if m_orig and m_orig.start() >= 4:  # bien après "qui est"
+                    next_word_original = m_orig.group(0)
+                    if next_word_original[0].isupper():
+                        is_identity_query = True
         # Si on a matché un nom propre, override GENERAL → RAG
         if has_gk and is_identity_query and not has_rag_kw:
             has_gk_unless_identity = False
