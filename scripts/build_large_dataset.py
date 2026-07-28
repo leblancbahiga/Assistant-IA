@@ -1,424 +1,274 @@
 #!/usr/bin/env python3
-"""Génère un dataset LoRA RAG de 400+ exemples depuis l'index nuru.db.
+"""Génère un dataset d'entraînement LoRA à partir des chunks RAG indexés.
 
-Stratégie :
-1. Extrait tous les chunks de chunks_fts (contenu chunké propre)
-2. Analyse chaque chunk pour identifier son type (définition, personne, 
-   entreprise, procédure, chiffre, date, lieu, concept)
-3. Génère une question naturelle et variée adaptée au type
-4. Produit 80% positifs (contexte contient la réponse) + 20% pièges
-5. Sauvegarde au format Phi-4 ChatML
-
-Évite les artefacts PDF : filtre les lignes trop courtes, les fragments
-de tableaux, les caractères Unicode exotiques.
+Méthode: bulk generation — crée des paires Q/R à partir des chunks,
+avec 18% de questions piège (contexte A + question B → refus).
+Sortie: train.jsonl (384 ex) + valid.jsonl (16 ex) au format ChatML.
+Voir skill mlx-lora-training → references/bulk-dataset-generation.md
 """
-import json
-import math
-import os
-import random
-import re
-import sqlite3
-from collections import defaultdict
+
+import json, os, re, random, sqlite3
 from pathlib import Path
 
-random.seed(42)
-
-# ── Configuration ──
-DB_PATH = "indexes/nuru.db"
-OUTPUT_DIR = "data/adapters/rag"
-TARGET_TRAIN = 384  # 400 - 16 validation
+SEED = 42
+TARGET_TRAIN = 384
 TARGET_VALID = 16
-PIEGE_RATIO = 0.18  # 18% d'exemples piège
+PIEGE_RATIO = 0.18
 MIN_CHUNK_CHARS = 80
 MAX_CHUNK_CHARS = 2000
+INDEX_DB = "indexes/nuru.db"
+OUT_DIR = "data/adapters/rag"
 
-# ── Templates de questions par type de contenu ──
+random.seed(SEED)
 
 QUESTION_TEMPLATES = {
     "definition": [
         "Qu'est-ce que {sujet} exactement ?",
-        "Peux-tu expliquer ce qu'est {sujet} ?",
         "Comment définir {sujet} ?",
         "Que comprend le concept de {sujet} ?",
-        "Quelle est la définition de {sujet} ?",
     ],
     "person": [
         "Qui est {sujet} ?",
         "Peux-tu présenter {sujet} ?",
-        "Quel est le parcours de {sujet} ?",
-        "Que fait {sujet} dans l'organisation ?",
         "Quelles sont les compétences de {sujet} ?",
     ],
     "organization": [
         "Qu'est-ce que {sujet} ?",
-        "Peux-tu décrire {sujet} ?",
-        "Quel est le rôle de {sujet} ?",
         "Comment fonctionne {sujet} ?",
-        "Que fait {sujet} ?",
+        "Quel est le rôle de {sujet} ?",
     ],
     "procedure": [
         "Comment {sujet} ?",
         "Quelle est la procédure pour {sujet} ?",
-        "Peux-tu expliquer les étapes de {sujet} ?",
-        "Comment mettre en œuvre {sujet} ?",
         "Quelles sont les bonnes pratiques pour {sujet} ?",
     ],
     "number": [
         "Quel est le {sujet} ?",
         "Combien de {sujet} ?",
-        "Quelle quantité de {sujet} ?",
         "Quels sont les chiffres concernant {sujet} ?",
-        "Peux-tu donner les statistiques de {sujet} ?",
     ],
     "date": [
         "Quand {sujet} ?",
         "À quelle date {sujet} ?",
-        "Quel est le calendrier pour {sujet} ?",
-        "Depuis quand {sujet} ?",
-        "Quelle période couvre {sujet} ?",
+        "À quel moment {sujet} ?",
     ],
     "location": [
         "Où {sujet} ?",
         "Dans quelle région {sujet} ?",
-        "Quel est le lieu de {sujet} ?",
         "Où se déroule {sujet} ?",
-        "Dans quel pays {sujet} ?",
     ],
     "general": [
-        "Que nous apprend le document sur {sujet} ?",
-        "Que contient le document concernant {sujet} ?",
-        "Peux-tu résumer les informations sur {sujet} ?",
+        "Que dit le document sur {sujet} ?",
+        "Peux-tu résumer les informations concernant {sujet} ?",
         "Quels sont les points clés à retenir sur {sujet} ?",
-        "Que dit le rapport à propos de {sujet} ?",
     ],
 }
 
-# Expansions de sujets (pour varier les questions d'un même chunk)
-def expand_sujets(chunk_text):
-    """Extrait des sujets potentiels depuis le début du chunk."""
-    sujets = []
-    lines = chunk_text.strip().split('\n')
-    for line in lines[:5]:
-        line = line.strip()
-        if not line:
-            continue
-        # Prendre les 3-6 premiers mots significatifs
-        words = re.findall(r'\b[A-Z][a-zéèêëàâäùûüôöîïçÉÈÊËÀÂÄÙÛÜÔÖÎÏÇ]+(?:\s+[A-Z][a-zéèêëàâäùûüôöîïç]+)*\b', line)
-        if words:
-            s = ' '.join(words[:4])
-            if len(s) > 15:
-                sujets.append(s[:80])
-        # Sinon, prendre les premiers mots tout court
-        if not sujets:
-            words = line.split()[:5]
-            if words:
-                s = ' '.join(words)
-                if len(s) > 10:
-                    sujets.append(s[:80])
-    return sujets
+PATTERNS = {
+    "definition": re.compile(r'\b(?:défini|concept|notion|terme|s\'agit|est un|est une)\b', re.I),
+    "person": re.compile(r'\b(?:né[e]?\s+(?:en|à|le)|diplômé|CV|poste|responsable|consultant|expert)\b', re.I),
+    "organization": re.compile(r'\b(?:société|institution|ministère|programme|projet|bureau)\b', re.I),
+    "procedure": re.compile(r'\b(?:étape|procédure|processus|méthode|protocole|marche\s+à\s+suivre)\b', re.I),
+    "number": re.compile(r'\b(?:%|\d+[.,]\d+\s*(?:%|million|kg|tonne|ha|FCFA|EUR|\$))'),
+    "date": re.compile(r'\b(?:20\d\d|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|période|calendrier)\b', re.I),
+    "location": re.compile(r'\b(?:région|ville|province|pays|localité|situé|basé|département)\b', re.I),
+}
+
+SYSTEM_PROMPT = (
+    "Tu es NURU, assistant IA spécialisé en agronomie et chaînes de valeur agricoles.\n"
+    "Tu réponds UNIQUEMENT à partir des documents fournis ci-dessous.\n"
+    "Tu cites tes sources avec [Source: nom_fichier].\n"
+    "Si l'information n'est pas dans les documents, tu dis que tu ne trouves pas.\n"
+    "Tu es concis et tu vas droit au but."
+)
+
+PIEGE_ANSWER = (
+    "Je ne trouve pas l'information demandée dans les documents fournis."
+)
 
 
-def classify_chunk(text):
-    """Classifie le type de contenu d'un chunk."""
-    text_lower = text.lower()
-    
-    # Mots-clés par type
-    patterns = {
-        "definition": r'\b(?:défini|concept|notion|terme|désigne|représente|constitue|s\'agit|est un|est une)\b',
-        "person": r'\b(?:né[e]?\s+(?:en|à|le)|diplômé|expérience\s+professionnelle|compétences|CV|curriculum|poste|responsable|directeur|consultant|expert)\b',
-        "organization": r'\b(?:organisation|entreprise|société|institution|ministère|association|bureau|agence|mission|programme|projet)\b',
-        "procedure": r'\b(?:étape|procédure|processus|méthode|protocole|marche\s+à\s+suivre|instruction|guide|manuel|recommandation)\b',
-        "number": r'\b(?:%|\d+[.,]\d+\s*(?:%|million|milliard|kg|tonne|ha|FCFA|EUR|\$))',
-        "date": r'\b(?:20\d\d|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|période|calendrier)\b',
-        "location": r'\b(?:région|département|ville|province|pays|localité|zone|territoire|situé|basé)\b',
-    }
-    
-    # Score chaque type
-    scores = {}
-    for ctype, pat in patterns.items():
-        matches = len(re.findall(pat, text_lower))
-        if matches > 0:
-            scores[ctype] = matches
-    
-    # Priorité : definition > person > organization > ...
-    priority = ["definition", "person", "organization", "procedure", "number", "date", "location"]
-    for p in priority:
-        if p in scores:
-            return p
-    
-    return "general"
-
-
-def clean_chunk(text):
-    """Nettoie un chunk des artefacts PDF/OCR."""
-    # Supprimer les lignes vides multiples
+def clean_chunk(text: str) -> str:
+    """Nettoie les artefacts OCR et formatage."""
     text = re.sub(r'\n{3,}', '\n\n', text)
-    # Supprimer les lignes trop courtes (artefacts)
     lines = text.split('\n')
     cleaned = []
     for line in lines:
         line = line.strip()
         if len(line) < 3 and line and not line.isdigit():
             continue
-        # Supprimer les séparateurs de tableaux
         if re.match(r'^[\s_\-|+]+$', line):
             continue
-        # Supprimer les numéros de page isolés
         if re.match(r'^\d+\s*$', line):
             continue
-        # Supprimer les artefacts unicode exotiques
         line = re.sub(r'[^\x20-\x7EÀ-ÿœŒæÆ\s]', '', line)
         cleaned.append(line)
-    text = '\n'.join(cleaned)
-    # Tronquer si trop long (garde 3 premières + 2 dernières phrases)
-    if len(text) > MAX_CHUNK_CHARS:
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        if len(sentences) > 5:
-            text = ' '.join(sentences[:3]) + ' [...] ' + ' '.join(sentences[-2:])
-        else:
-            text = text[:MAX_CHUNK_CHARS]
-    return text.strip()
+    return '\n'.join(cleaned).strip()
 
 
-def generate_question(chunk_text, chunk_type, source_name, doc_index):
-    """Génère une question naturelle à partir d'un chunk."""
-    sujets = expand_sujets(chunk_text)
-    
-    if not sujets:
-        # Fallback : question générique avec le nom du document
-        sujet = source_name.replace('_', ' ').replace('-', ' ')[:60]
-        templates = [
-            f"Que contient le document sur {sujet} ?",
-            f"Quelles informations trouve-t-on dans le document {sujet} ?",
-            f"Peux-tu résumer le contenu du document {sujet} ?",
-        ]
-        return random.choice(templates)
-    
-    # Choisir un sujet aléatoire
-    sujet = random.choice(sujets)
-    
-    # Prendre les templates du type, avec fallback general
-    templates = QUESTION_TEMPLATES.get(chunk_type, QUESTION_TEMPLATES["general"])
-    
-    # Optionnellement, ajouter une référence au document source
-    if random.random() < 0.3:
-        ref = f"(d'après le document {source_name})"
-        template = random.choice(templates)
-        return f"{template} {ref}"
-    
-    return random.choice(templates).format(sujet=sujet)
+def classify_chunk(text: str) -> str:
+    """Détecte le type de contenu du chunk."""
+    for ctype, pattern in PATTERNS.items():
+        if pattern.search(text):
+            return ctype
+    return "general"
 
 
-def generate_answer(chunk_text, source_name):
-    """Génère une réponse sourcée à partir du chunk."""
-    # Nettoyer et résumer si nécessaire
+def expand_sujets(chunk_text: str) -> list[str]:
+    """Extrait 1-3 sujets (noms propres/termes techniques) d'un chunk."""
+    sujets = []
+    lines = chunk_text.strip().split('\n')
+    for line in lines[:5]:
+        line = line.strip()
+        if not line:
+            continue
+        words = re.findall(r'\b[A-Z][a-zéèêëâàùûüôöîïç]+(?:\s+[A-Z][a-zéèêëâàùûüôöîïç]+)*\b', line)
+        if words:
+            s = ' '.join(words[:4])
+            if len(s) > 15:
+                sujets.append(s[:80])
+    return sujets
+
+
+def generate_answer(chunk_text: str, source_name: str) -> str:
+    """Génère une réponse à partir du chunk."""
     text = chunk_text.strip()
     if len(text) > 800:
-        # Garder les 2-3 premières phrases
         sentences = re.split(r'(?<=[.!?])\s+', text)
         answer = ' '.join(sentences[:3])
         if len(sentences) > 3:
             answer += ' [...]'
     else:
         answer = text
-    
-    # Ajouter la source
     source_clean = source_name.replace('_', ' ').replace('-', ' ')
-    return f"[Source: {source_clean}] {answer}"
+    return f"Selon le document '{source_clean}': {answer}"
 
 
-def build_example(chunk_text, source_name, chunk_type, is_piege=False, wrong_source=""):
-    """Construit un exemple complet au format Phi-4 ChatML."""
-    clean = clean_chunk(chunk_text)
-    
-    if is_piege:
-        # Piège : contexte d'un document, question d'un autre
-        question = generate_question(clean, chunk_type, source_name, 0)
-        # On garde le contexte mais la réponse dit "pas trouvé"
-        answer = "Je ne trouve pas la réponse à cette question dans le contexte documentaire fourni."
-        context_source = wrong_source
-    else:
-        question = generate_question(clean, chunk_type, source_name, 0)
-        answer = generate_answer(clean, source_name)
-        context_source = source_name
-    
-    # Contexte documentaire
-    context = (
-        f"CONTEXTE DOCUMENTAIRE LOCAL TROUVÉ :\n"
-        f"[{context_source}]\n{clean}\n\n"
-        f"INSTRUCTION : Réponds UNIQUEMENT à partir du contexte ci-dessus."
-    )
-    
-    system_prompt = (
-        "Tu es NURU, assistant cognitif local. Tu réponds UNIQUEMENT à partir des documents "
-        "fournis dans le contexte. Cite tes sources avec [Source: nom]. "
-        "Si la réponse ne se trouve pas dans le contexte, dis-le clairement."
-    )
-    
-    text = (
-        f"<|im_start|>system\n{system_prompt}\n\n{context}\n<|im_end|>\n"
-        f"<|im_start|>user\n{question}\n<|im_end|>\n"
-        f"<|im_start|>assistant\n{answer}\n<|im_end|>"
-    )
-    
-    return text
+def build_chatml(system: str, context_chunks: list[tuple[str, str]],
+                 question: str, answer: str) -> str:
+    """Construit un exemple au format ChatML."""
+    parts = [f"<|im_start|>system\n{system}<|im_end|>"]
+    user_lines = []
+    for i, (content, source) in enumerate(context_chunks, 1):
+        clean = clean_chunk(content)[:1200]
+        user_lines.append(f"[Document {i}] (Source: {source})\n{clean}")
+    user_lines.append(f"\nQuestion : {question}")
+    parts.append(f"<|im_start|>user\n{chr(10).join(user_lines)}<|im_end|>")
+    parts.append(f"<|im_start|>assistant\n{answer}<|im_end|>")
+    return "\n".join(parts)
 
 
 def main():
-    print("🔍 Extraction des chunks depuis l'index RAG...")
+    conn = sqlite3.connect(INDEX_DB)
     
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    
-    # Récupérer les documents disponibles
-    cur.execute("SELECT DISTINCT source FROM chunk_hierarchy WHERE source IS NOT NULL")
-    docs = [row[0] for row in cur.fetchall()]
-    print(f"📚 {len(docs)} documents sources trouvés")
-    
-    # Récupérer les chunks groupés par document
-    doc_chunks = defaultdict(list)
-    cur.execute("""
+    # 1. Charger tous les chunks avec leurs sources
+    rows = conn.execute("""
         SELECT cfts.rowid, cfts.content, ch.source
         FROM chunks_fts cfts
         JOIN chunk_hierarchy ch ON cfts.rowid = ch.chunk_id
-        WHERE ch.source IS NOT NULL
+        WHERE ch.source IS NOT NULL AND length(cfts.content) > ?
         ORDER BY ch.source, cfts.rowid
-    """)
+    """, (MIN_CHUNK_CHARS,)).fetchall()
     
-    total = 0
-    for rowid, content, source in cur.fetchall():
-        if content and len(content.strip()) >= MIN_CHUNK_CHARS:
-            doc_chunks[source].append(content)
-            total += 1
+    # Grouper par source
+    sources: dict[str, list[dict]] = {}
+    for rowid, content, source in rows:
+        if len(content) > MAX_CHUNK_CHARS:
+            content = content[:MAX_CHUNK_CHARS] + "\n[...]"
+        sources.setdefault(source, []).append({
+            "rowid": rowid, "content": content, "source": source
+        })
     
-    print(f"📄 {total} chunks extraits, répartis sur {len(doc_chunks)} documents")
+    source_names = list(sources.keys())
+    print(f"📚 {len(source_names)} sources, {sum(len(v) for v in sources.values())} chunks")
     
-    # Statistiques par document
-    for doc, chunks in sorted(doc_chunks.items(), key=lambda x: -len(x[1])):
-        print(f"   {doc}: {len(chunks)} chunks")
-    
-    conn.close()
-    
-    if total < TARGET_TRAIN + TARGET_VALID:
-        print(f"⚠️ Pas assez de chunks ({total}) pour générer {TARGET_TRAIN + TARGET_VALID} exemples")
-        # Ajuster les cibles
-        ratio = TARGET_TRAIN / (TARGET_TRAIN + TARGET_VALID)
-        TARGET_TRAIN_ACTUAL = int(total * ratio)
-        TARGET_VALID_ACTUAL = total - TARGET_TRAIN_ACTUAL
-        print(f"   Cibles ajustées : {TARGET_TRAIN_ACTUAL} train, {TARGET_VALID_ACTUAL} valid")
-    else:
-        TARGET_TRAIN_ACTUAL = TARGET_TRAIN
-        TARGET_VALID_ACTUAL = TARGET_VALID
-    
-    # Préparer les chunks pour la génération
-    # Mélanger les chunks mais garder la trace du document
-    all_chunks = []
-    for doc, chunks in doc_chunks.items():
-        for chunk in chunks:
-            all_chunks.append((chunk, doc))
-    
-    random.shuffle(all_chunks)
-    
-    # Calculer les besoins
-    n_total = TARGET_TRAIN_ACTUAL + TARGET_VALID_ACTUAL
-    n_piege = int(n_total * PIEGE_RATIO)
-    n_positive = n_total - n_piege
-    
-    print(f"\n🎯 Cibles : {n_positive} positifs + {n_piege} pièges = {n_total} total")
-    
-    # Génération des exemples
+    # 2. Générer les exemples positifs
     examples = []
-    chunk_idx = 0
-    
-    # Exemples positifs
-    success_pos = 0
-    for _ in range(n_positive):
-        if chunk_idx >= len(all_chunks):
+    for src_name in source_names:
+        chunks = sources[src_name]
+        for chunk in chunks[:5]:  # max 5 chunks par source
+            ctype = classify_chunk(chunk["content"])
+            sujets = expand_sujets(chunk["content"])
+            if not sujets:
+                continue
+            sujet = random.choice(sujets)
+            templates = QUESTION_TEMPLATES.get(ctype, QUESTION_TEMPLATES["general"])
+            question = random.choice(templates).format(sujet=sujet)
+            answer = generate_answer(chunk["content"], src_name)
+            context = [(chunk["content"], src_name)]
+            examples.append({
+                "type": "positive",
+                "context": context,
+                "question": question,
+                "answer": answer,
+                "source": src_name,
+            })
+            if len(examples) >= TARGET_TRAIN + TARGET_VALID:
+                break
+        if len(examples) >= TARGET_TRAIN + TARGET_VALID:
             break
-        chunk_text, doc_name = all_chunks[chunk_idx]
-        chunk_idx += 1
-        
-        chunk_type = classify_chunk(chunk_text)
-        example = build_example(chunk_text, doc_name, chunk_type, is_piege=False)
-        
-        # Vérifier que la question n'est pas exactement identique à la précédente
-        if examples and example == examples[-1]:
-            continue
-        
-        examples.append(example)
-        success_pos += 1
-        
-        if success_pos % 50 == 0:
-            print(f"   Générés {success_pos} exemples positifs...")
     
-    print(f"✅ {success_pos} exemples positifs générés")
+    print(f"✅ {len(examples)} exemples positifs générés")
     
-    # Exemples piège
-    success_piege = 0
-    for _ in range(n_piege):
-        if chunk_idx >= len(all_chunks):
+    # 3. Générer les exemples piège (18%)
+    n_piege = int((TARGET_TRAIN + TARGET_VALID) * PIEGE_RATIO)
+    pieges = []
+    all_flat = [c for clist in sources.values() for c in clist]
+    
+    for _ in range(n_piege * 3):  # *3 pour tenter plus de combinaisons
+        if len(pieges) >= n_piege:
             break
-        
-        # Chunk pour le contexte
-        chunk_text, doc_name = all_chunks[chunk_idx]
-        chunk_idx += 1
-        
-        # Choisir un document différent pour la question
-        other_docs = [d for d in docs if d != doc_name]
-        if not other_docs:
+        # Chunk A → contexte
+        chunk_a = random.choice(all_flat)
+        # Chunk B → sujet de la question (source différente)
+        src_b = random.choice([s for s in source_names if s != chunk_a["source"]])
+        if not src_b:
             continue
-        
-        wrong_doc = random.choice(other_docs)
-        chunk_type = classify_chunk(chunk_text)
-        example = build_example(chunk_text, doc_name, chunk_type, is_piege=True, wrong_source=wrong_doc)
-        
-        # Éviter les doublons
-        if examples and example == examples[-1]:
+        chunk_b = random.choice(sources[src_b])
+        sujets = expand_sujets(chunk_b["content"])
+        if not sujets:
             continue
-        
-        examples.append(example)
-        success_piege += 1
+        sujet = random.choice(sujets)
+        ctype = classify_chunk(chunk_b["content"])
+        templates = QUESTION_TEMPLATES.get(ctype, QUESTION_TEMPLATES["general"])
+        question = random.choice(templates).format(sujet=sujet)
+        pieges.append({
+            "type": "piege",
+            "context": [(chunk_a["content"], chunk_a["source"])],
+            "question": question,
+            "answer": PIEGE_ANSWER,
+            "source": f"{chunk_a['source']} / {chunk_b['source']}",
+        })
     
-    print(f"✅ {success_piege} exemples piège générés")
-    print(f"📊 Total : {len(examples)} exemples ({success_piege/len(examples)*100:.0f}% piège)")
+    print(f"✅ {len(pieges)} exemples piège générés")
     
-    # Division train/valid
-    random.shuffle(examples)
-    valid_count = min(TARGET_VALID_ACTUAL, len(examples) // 10)
-    valid_examples = examples[:valid_count]
-    train_examples = examples[valid_count:]
+    # 4. Mélanger et séparer train/valid
+    all_examples = examples + pieges
+    random.shuffle(all_examples)
     
-    print(f"\n💾 Sauvegarde...")
+    valid_count = min(TARGET_VALID, len(all_examples) // 10)
+    train_examples = all_examples[valid_count:]
+    valid_examples = all_examples[:valid_count]
     
-    # Écrire train.jsonl
-    train_path = os.path.join(OUTPUT_DIR, "train.jsonl")
-    with open(train_path, 'w', encoding='utf-8') as f:
-        for ex in train_examples:
-            f.write(json.dumps({"text": ex}, ensure_ascii=False) + '\n')
-    print(f"   train.jsonl : {len(train_examples)} exemples")
+    # 5. Écrire les fichiers
+    out_dir = Path(OUT_DIR)
+    out_dir.mkdir(parents=True, exist_ok=True)
     
-    # Écrire valid.jsonl
-    valid_path = os.path.join(OUTPUT_DIR, "valid.jsonl")
-    with open(valid_path, 'w', encoding='utf-8') as f:
-        for ex in valid_examples:
-            f.write(json.dumps({"text": ex}, ensure_ascii=False) + '\n')
-    print(f"   valid.jsonl : {len(valid_examples)} exemples")
+    for fname, exs in [("train.jsonl", train_examples), ("valid.jsonl", valid_examples)]:
+        path = out_dir / fname
+        with open(path, "w", encoding="utf-8") as f:
+            for ex in exs:
+                chatml = build_chatml(SYSTEM_PROMPT, ex["context"],
+                                      ex["question"], ex["answer"])
+                f.write(json.dumps({"text": chatml}, ensure_ascii=False) + "\n")
+        print(f"📝 {fname}: {len(exs)} exemples")
     
     # Stats
-    train_words = [len(ex.split()) for ex in train_examples]
-    valid_words = [len(ex.split()) for ex in valid_examples]
+    train_piege = sum(1 for e in train_examples if e["type"] == "piege")
+    valid_piege = sum(1 for e in valid_examples if e["type"] == "piege")
+    print(f"\n📊 Stats: train={len(train_examples)} ({train_piege/len(train_examples)*100:.0f}% piège), "
+          f"valid={len(valid_examples)} ({valid_piege/len(valid_examples)*100:.0f}% piège)")
     
-    piege_train = sum(1 for ex in train_examples if "Je ne trouve pas" in ex)
-    piege_valid = sum(1 for ex in valid_examples if "Je ne trouve pas" in ex)
-    
-    print(f"\n📊 Statistiques finales :")
-    print(f"   Train : {len(train_examples)} ex ({piege_train} pièges, {piege_train/len(train_examples)*100:.0f}%)")
-    print(f"   Valid : {len(valid_examples)} ex ({piege_valid} pièges, {piege_valid/len(valid_examples)*100:.0f}%)")
-    print(f"   Mots/ex train : moyen={sum(train_words)/len(train_words):.0f} "
-          f"min={min(train_words)} max={max(train_words)}")
-    print(f"   Mots/ex valid : moyen={sum(valid_words)/len(valid_words):.0f} "
-          f"min={min(valid_words)} max={max(valid_words)}")
-    print(f"\n✅ Dataset prêt dans {OUTPUT_DIR}/")
+    conn.close()
 
 
 if __name__ == "__main__":
