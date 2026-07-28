@@ -1032,18 +1032,10 @@ class RAGEngine:
         else:
             context = confidence_header + "\n" + context
 
-        # V12 — Intégration mémoire V9 : injecter les souvenirs dans le contexte
-        try:
-            mem = self.memory  # accès paresseux
-            if mem is not None:
-                memory_context = await mem.get_full_context(query)
-                if memory_context and memory_context.strip():
-                    memory_block = "\n\n=== SOUVENIRS (MÉMOIRE V9) ===\n" + memory_context
-                    context = memory_block + "\n\n" + context
-                    result.tokens_injected += len(memory_block) // 4
-                    logger.debug("🧠 Contexte mémoire V9 injecté (%d chars)", len(memory_context))
-        except Exception as e:
-            logger.debug("⚠️ Injection mémoire V9 ignorée: %s", e)
+        # V17: mémoire NON injectée dans le contexte RAG (contaminait les réponses
+        # avec des souvenirs/instructions/fragments précédents). La mémoire est
+        # gérée séparément par BuildContext → prompt_builder.)
+
         result.tokens_injected = len(context) // 4
         result.retrieval_time_ms = (time.time() - t_start) * 1000
 

@@ -124,25 +124,16 @@ class LLMGenerator:
                 logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")
             else:
                 logger.info(f"☁️ Cloud (intent={intent}, hybrid={hybrid}, temp={cloud_temp})")
-                from src.identity_manager import IdentityManager
-                identity = IdentityManager.load()
-                cloud_system = f"Tu es NURU, assistant personnel de {identity['user_name']}. Tu réponds en français." + "\\n\\n"
-                user_facts_section = _extract_user_facts(system_prompt)
+                # V17: utiliser le system_prompt du pipeline (conserve les instructions
+                # de mode RAG, format de citation, etc.) au lieu de le reconstruire
+                cloud_system = system_prompt
                 if rag_context.strip():
                     cloud_system += (
-                        f"## CONTEXTE DE VOS DOCUMENTS (prioritaire, utilise EXCLUSIVEMENT ces informations)" + "\\n"
-                        + "Les informations ci-dessous sont extraites de VOS documents personnels. "
-                        + "Elles sont prioritaires sur toute autre source." + "\\n"
-                        + "- N'invente PAS d'information. Utilise UNIQUEMENT ce contexte." + "\\n"
-                        + "- Si l'information n'est pas dans le contexte, dis "
-                        + "\\\"Je ne trouve pas cette information dans vos documents.\\\"" + "\\n"
-                        + "- Cite tes sources avec [Source: fichier]." + "\\n"
-                        + f"{rag_context}" + "\\n\\n"
+                        f"\n\n## CONTEXTE DE VOS DOCUMENTS\n"
+                        f"{rag_context}\n"
                     )
                 if web_context.strip():
-                    cloud_system += f"## CONTEXTE DE RECHERCHE WEB" + "\\n" + f"{web_context}" + "\\n\\n"
-                if user_facts_section:
-                    cloud_system += "\\n" + user_facts_section + "\\n"
+                    cloud_system += f"\n\n## CONTEXTE DE RECHERCHE WEB\n{web_context}\n"
                 if session_id and self.session_store:
                     session_ctx = self.session_store.build_context(session_id, max_messages=8)
                     if session_ctx:

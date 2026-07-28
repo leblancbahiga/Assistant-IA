@@ -120,15 +120,20 @@ class Route(PipelineStep):
     async def run(self, ctx: PipelineContext) -> tuple[PipelineContext, StepResult]:
         logger.info("🧭 Route: %s...", ctx.query[:50])
 
-        # 1. RAG primary retrieval (nécessaire pour le routage contextuel)
-        rag_context = ""
-        rag_result = None
-        if self.rag_required:
+        # 1. Vérification rapide : éviter retrieve_primary pour les salutations évidentes
+        # (V17: ne pas lancer RAG avant de savoir ce qu'on route)
+        _trivial_greeting = ctx.query.strip().lower() in (
+            "bonjour", "salut", "hello", "cc", "coucou", "hey", "hi",
+        )
+        if not _trivial_greeting and self.rag_required:
             try:
                 rag_pipeline = _get_service("rag_pipeline")
                 rag_context, rag_result = await rag_pipeline.retrieve_primary(ctx.query, ctx)
             except Exception as e:
                 logger.warning("⚠️ RAG primary: %s", e)
+        else:
+            rag_context = ""
+            rag_result = None
 
         # 2. Routeur sémantique
         try:
