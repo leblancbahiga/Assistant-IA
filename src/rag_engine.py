@@ -867,9 +867,8 @@ class RAGEngine:
 
         # ── V10 Audit: Rejeter les résultats non pertinents ──
         # Vérifie si le top résultat contient des mots-clés de la requête.
-        # V16 FIX: Désactivé par défaut car trop agressif - rejette des résultats
-        # pertinents sur embeddings locaux. Le reranker cross-encoder fait le tri.
-        ENABLE_KEYWORD_REJECTION = False  # Mettre True pour réactiver
+        # V17: paramétrable via config.rag_keyword_rejection (defaut: True)
+        ENABLE_KEYWORD_REJECTION = getattr(config, "rag_keyword_rejection", True)
         
         if ENABLE_KEYWORD_REJECTION and combined_results:
             query_keywords = set(
@@ -889,13 +888,13 @@ class RAGEngine:
                 rejection_reason = f"score insuffisant ({top1_score:.2f} < {RAG_MIN_USABLE_SCORE})"
 
             # Règle 2: Aucun mot-clé dans le TOP résultat boosté
-            # On scanne les 3 meilleurs résultats pour trouver un chunk pertinent
+            # V17: seuil de correspondance relevé de 30% → 50%
             if not should_reject and query_keywords:
                 found_relevant = False
                 for rank, (top_content, top_source, _) in enumerate(combined_results[:3]):
                     top_text = (top_content + " " + top_source).lower()
                     keyword_matches = sum(1 for kw in query_keywords if kw in top_text)
-                    if keyword_matches >= max(1, len(query_keywords) * 0.3):
+                    if keyword_matches >= max(1, len(query_keywords) * 0.5):
                         found_relevant = True
                         break
                 if not found_relevant:
@@ -929,9 +928,9 @@ class RAGEngine:
             budget = get_budget()
             # V16 FIX : Skip reranker si swap > 50% (M1 8 Go — thrashing évité)
             probe = budget.probe()
-            if probe.swap_percent > 50:
+            if probe.swap_percent > 80:
                 logger.info(
-                    f"⏭️ Reranker sauté : swap {probe.swap_percent:.0f}% > 50% → BM25 direct"
+                    f"⏭️ Reranker sauté : swap {probe.swap_percent:.0f}% > 80% → BM25 direct"
                 )
                 should_rerank = False
             # Vérifier si on peut charger le reranker dans le budget
