@@ -258,9 +258,7 @@ class LocalLLM:
                     """Run MLX stream_generate on the dedicated executor thread."""
                     from mlx_lm import stream_generate
                     from mlx_lm.sample_utils import make_sampler, make_repetition_penalty
-                    # V17 FIX : corriger les artefacts de tokenisation française
-                    from src.french_tokenizer_fix import TokenizationFixStream
-                    _fix_stream = TokenizationFixStream()
+                    # V17 FIX : correcteur français via _fix_tokenization (appliqué plus bas)
 
                     try:
                         # Parametres de sampling
@@ -320,6 +318,9 @@ class LocalLLM:
                         # (le decodeur gere les espaces correctement avec plus de contexte)
                         token_ids: list[int] = []
                         decoded_so_far = ""
+                        # V17 P11: correcteur leger des composés français (bon jour → Bonjour)
+                        from src.french_tokenizer_fix import _fix_tokenization as _fr_fix
+                        _fr_has = _fr_fix  # reference pour usage
                         # V17 P12: ajuster max_tokens selon RAM disponible
                         try:
                             import psutil
@@ -353,6 +354,8 @@ class LocalLLM:
                                 # V17: retirer les balises de controle residuelles (<|end|>, <|assistant|>, etc.)
                                 import re
                                 new_text = re.sub(r"<\|[^|]+\|>", "", new_text)
+                                # V17 P11: appliquer le correcteur francais leger (composes)
+                                new_text = _fr_has(new_text)
                                 if new_text:
                                     queue.put_nowait(new_text)
 
