@@ -497,8 +497,8 @@ class Generate(PipelineStep):
         try:
             from src.ai.verifier import EvidenceVerifier
             verifier = EvidenceVerifier()
-            score, feedback = await verifier.verify(candidate, query, context)
-            return score, feedback
+            result = verifier.verify(candidate, query, context)
+            return result.confidence, result.reason
         except Exception:
             return 0.5, ""
 
@@ -567,11 +567,11 @@ class Validate(PipelineStep):
         if ctx.rag_result and ctx.rag_context:
             try:
                 verifier = _get_service("evidence_verifier")
-                score, feedback = await verifier.verify(
+                result = verifier.verify(
                     ctx.response, ctx.query, ctx.rag_context,
                 )
-                if score < 0.3:
-                    logger.warning("⚠️ Score évidence faible: %.2f", score)
+                if not result.valid and result.confidence < 0.3:
+                    logger.warning("⚠️ Score évidence faible: %.2f — %s", result.confidence, result.reason)
             except Exception as e:
                 logger.debug("⚠️ Evidence verifier: %s", e)
 
