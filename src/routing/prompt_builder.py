@@ -185,10 +185,7 @@ class DynamicPromptBuilder:
         """
         parts = []
         if include_system:
-            parts.append(f"<|system|>\n{system}\n")
-            if model_family == "phi":
-                parts[-1] += "<|end|>\n"
-            parts.append("<|user|>\n")
+            parts.append(f"{system}\n")
 
         if rag.strip():
             parts.append(f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag.strip()}\n")

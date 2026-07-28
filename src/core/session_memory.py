@@ -81,26 +81,31 @@ class SessionMemory:
             return bool(self._history)
 
 
-# Instance globale (singleton) pour la session courante
-_session_memory_instance: Optional[SessionMemory] = None
-_session_memory_lock = Lock()
+# Registre de sessions cloisonne (V17: plus de singleton global)
+_session_registry: dict[str, SessionMemory] = {}
+_session_registry_lock = Lock()
 
 
-def get_session_memory(max_messages: int = 6) -> SessionMemory:
-    """Retourne l'instance singleton de SessionMemory (création lazy)."""
-    global _session_memory_instance
-    with _session_memory_lock:
-        if _session_memory_instance is None:
-            _session_memory_instance = SessionMemory(max_messages=max_messages)
-            logger.info(f"🧠 SessionMemory initialisé (max_messages={max_messages})")
-        return _session_memory_instance
+def get_session_memory(session_id: str = "default", max_messages: int = 6) -> SessionMemory:
+    """Retourne l'instance cloisonnee de SessionMemory pour l'ID de session.
+
+    Chaque session_id possede sa propre memoire, sans contamination entre sessions.
+    """
+    with _session_registry_lock:
+        if session_id not in _session_registry:
+            _session_registry[session_id] = SessionMemory(max_messages=max_messages)
+            logger.info(f"🧠 SessionMemory cree pour session={session_id}")
+        return _session_registry[session_id]
 
 
-def reset_session_memory() -> None:
-    """Réinitialise l'instance globale (nouvelle session)."""
-    global _session_memory_instance
-    with _session_memory_lock:
-        if _session_memory_instance is not None:
-            _session_memory_instance.clear()
-            _session_memory_instance = None
-            logger.info("🧠 SessionMemory réinitialisé")
+def reset_session_memory(session_id: str | None = None) -> None:
+    """Reinitialise la memoire d'une session (ou toutes si session_id=None)."""
+    global _session_registry
+    with _session_registry_lock:
+        if session_id is None:
+            _session_registry.clear()
+            logger.info("🧠 Toutes les sessions memoire reinitialisees")
+        elif session_id in _session_registry:
+            _session_registry[session_id].clear()
+            del _session_registry[session_id]
+            logger.info(f"🧠 SessionMemory session={session_id} reinitialisee")

@@ -141,16 +141,17 @@ def reciprocal_rank_fusion(
     raw_scores: dict[tuple[str, str], float] = defaultdict(float)  # V16+: preserve max raw score
 
     total_max_possible = 0.0
+    active_weights_sum = 0.0
 
     for results, label in zip(strategy_results, strategy_labels):
         weight = STRATEGY_WEIGHTS.get(label, 0.5)
+        active_weights_sum += weight
         for rank in range(1, len(results) + 1):
             total_max_possible += weight * (1.0 / (k + rank))
 
         for rank, r in enumerate(results, start=1):
             key = (r.content[:400], r.source)
             scores[key] += weight * (1.0 / (k + rank))
-            # V16+: preserve le meilleur raw_score parmi les stratégies
             if key not in raw_scores or r.raw_score > raw_scores[key]:
                 raw_scores[key] = r.raw_score
             if key not in content_map or len(r.content) > len(content_map[key]):
@@ -159,12 +160,15 @@ def reciprocal_rank_fusion(
     if not scores or total_max_possible <= 0:
         return []
 
-    # Normaliser [0, 1] par la somme des max possibles
+    # V17: normaliser [0, 1] par le score max possible pour un top-1 parfait
+    # dans TOUTES les strategies (evite ecrasement du seuil de confiance)
+    max_theoretical = active_weights_sum * (1.0 / (k + 1))
+    normalizer = max(max_theoretical, total_max_possible / len(strategy_results))
     fused = [
         SearchResult(
             content=content_map[key],
             source=key[1],
-            score=min(rrf_score / total_max_possible, 1.0),
+            score=min(rrf_score / normalizer, 1.0),
             raw_score=raw_scores.get(key, 0.0),
             strategy='rrf',
             rank=0,
