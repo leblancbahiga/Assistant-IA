@@ -19,13 +19,15 @@ overrides = dict(
     adapter_path="data/adapters/rag",
     train=True,
     fine_tune_type="lora",
-    num_layers=4,
+    mask_prompt=True,              # ← CRITIQUE: ne pas apprendre a predire le prompt
+    num_layers=8,                  # ← passe de 4 a 8 pour plus de capacite
     batch_size=1,
+    grad_accumulation_steps=4,     # ← stabilise les gradients (batch effectif=4)
     iters=2000,
     learning_rate=5e-5,
     max_seq_length=1024,
-    grad_checkpoint=True,
-    clear_cache_threshold=1024,
+    grad_checkpoint=True,          # ← economise la RAM
+    clear_cache_threshold=1024,    # ← evite la fragmentation Metal
     lora_parameters={
         "rank": 8,
         "alpha": 16,
