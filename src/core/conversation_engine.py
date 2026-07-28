@@ -113,23 +113,22 @@ class ConversationEngine(QObject):
         self._loop.run_forever()
 
     async def _init_async(self) -> None:
-        """Récupère NuruCore depuis le kernel (évite duplication).
-        Si le kernel n'a pas encore fini l'initialisation, attend jusqu'à 5s.
-        """
-        for attempt in range(5):
-            try:
-                self._nuru = _kernel.get("nuru_core")
-                logger.info("✅ NuruCore récupéré depuis le Kernel")
-                self._nuru.start_background_tasks()
-                logger.info("✅ Tâches background NuruCore démarrées")
-                return
-            except KeyError:
-                if attempt < 4:
-                    logger.debug("⏳ NuruCore pas encore enregistré (tentative %d/5)", attempt + 1)
-                    await asyncio.sleep(1.0)
-                else:
-                    logger.error("⚠️ NuruCore introuvable après 5s — abandon")
-                    raise
+        """Récupère NuruCore depuis le kernel ou le crée si besoin."""
+        try:
+            # Essayer de récupérer NuruCore existant
+            self._nuru = _kernel.get("nuru_core")
+            logger.info("✅ NuruCore récupéré depuis le Kernel")
+        except KeyError:
+            # V17 P9: si NuruCore n'existe pas encore, le créer maintenant
+            logger.info("⚙️ NuruCore non trouvé dans le kernel — création")
+            self._nuru = NuruCore()
+            logger.info("✅ NuruCore créé et enregistré dans le Kernel")
+        try:
+            self._nuru.start_background_tasks()
+            logger.info("✅ Tâches background NuruCore démarrées")
+        except Exception as e:
+            logger.error(f"⚠️ Échec démarrage tâches background: {e}")
+            raise
 
     def _on_init_done(self, future: asyncio.Future) -> None:
         """Callback quand l'init asynchrone est terminée."""
