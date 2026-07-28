@@ -130,8 +130,8 @@ class IngestionEngine:
             from src.core.prompt_guard import sanitize_path
             sanitize_path(filepath)
 
-            # Timeout critique de 120s par document (V10.1: 30s → 120s pour les gros fichiers comme NURU_V9.md)
-            async with asyncio.timeout(120):
+            # Timeout de 300s par document (V17: 120s → 300s pour les PDFs volumineux)
+            async with asyncio.timeout(300):
                 file_hash = self.compute_sha256(filepath)
                 if not file_hash:
                     return
@@ -231,7 +231,7 @@ class IngestionEngine:
                     logger.warning(f"⚠️ Extraction structurée échouée pour {os.path.basename(filepath)}: {e}")
 
         except asyncio.TimeoutError:
-            logger.error(f"⏱ Timeout sur {filepath} (>30s).")
+            logger.error(f"⏱ Timeout sur {filepath} (>300s).  Ignorer ou augmenter INDEX_TIMEOUT.")
         except Exception as e:
             logger.error(f"❌ Erreur critique {filepath}: {e}")
 
