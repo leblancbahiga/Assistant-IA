@@ -145,16 +145,20 @@ def generate_answer(chunk_text: str, source_name: str) -> str:
 
 def build_chatml(system: str, context_chunks: list[tuple[str, str]],
                  question: str, answer: str) -> str:
-    """Construit un exemple au format ChatML."""
-    parts = [f"<|im_start|>system\n{system}<|im_end|>"]
+    """Construit un exemple au format messages (support mask_prompt)."""
     user_lines = []
     for i, (content, source) in enumerate(context_chunks, 1):
         clean = clean_chunk(content)[:1200]
         user_lines.append(f"[Document {i}] (Source: {source})\n{clean}")
     user_lines.append(f"\nQuestion : {question}")
-    parts.append(f"<|im_start|>user\n{chr(10).join(user_lines)}<|im_end|>")
-    parts.append(f"<|im_start|>assistant\n{answer}<|im_end|>")
-    return "\n".join(parts)
+    user_msg = "\n".join(user_lines)
+    
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user_msg},
+        {"role": "assistant", "content": answer},
+    ]
+    return json.dumps({"messages": messages}, ensure_ascii=False)
 
 
 def main():
@@ -257,9 +261,9 @@ def main():
         path = out_dir / fname
         with open(path, "w", encoding="utf-8") as f:
             for ex in exs:
-                chatml = build_chatml(SYSTEM_PROMPT, ex["context"],
-                                      ex["question"], ex["answer"])
-                f.write(json.dumps({"text": chatml}, ensure_ascii=False) + "\n")
+                line = build_chatml(SYSTEM_PROMPT, ex["context"],
+                                   ex["question"], ex["answer"])
+                f.write(line + "\n")
         print(f"📝 {fname}: {len(exs)} exemples")
     
     # Stats

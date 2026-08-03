@@ -44,6 +44,7 @@ overrides = dict(
     steps_per_report=20,
     steps_per_eval=50,
     val_batches=2,
+    resume_adapter_file="data/adapters/rag/0000700_adapters.safetensors",
     seed=42,
 )
 
