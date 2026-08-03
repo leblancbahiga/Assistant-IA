@@ -26,6 +26,39 @@ from src.core.ram_budget import get_budget
 
 logger = logging.getLogger(__name__)
 
+# V17 Option A — résolution d'anaphore : pronoms qui renvoient à une entité
+# mentionnée précédemment ("son expérience" → "expérience de Leblanc Bahiga")
+_ANAPHORIC_PRONOUNS = re.compile(
+    r"\b(son|sa|ses|sa femme|il a|elle a|lui|cette personne|ce monsieur|"
+    r"cette dame|cet homme|ce professionnel|ce projet|ce document)\b",
+    re.IGNORECASE,
+)
+_ENTITY_RE = re.compile(r"\b[A-Z][a-zéèêëàâîïôûùç']{2,}(?:\s+[A-Z][a-zéèêëàâîïôûùç']{2,})+")
+
+
+def _resolve_entity(query: str, session_store, session_id: str) -> Optional[str]:
+    """Si la requête contient un pronom anaphorique, retourne l'entité
+    (nom propre) mentionnée précédemment dans la session, sinon None."""
+    if not _ANAPHORIC_PRONOUNS.search(query):
+        return None
+    try:
+        session = session_store.get_or_create(session_id)
+        history = list(session.messages)[-24:]
+    except Exception:
+        return None
+    texts = []
+    for msg in history:
+        c = getattr(msg, "content", None) or getattr(msg, "text", None) or ""
+        if isinstance(c, str):
+            texts.append(c)
+    # Chercher le dernier nom propre (séquence de mots capitalisés de 2+)
+    joined = "\n".join(texts)
+    entities = _ENTITY_RE.findall(joined)
+    if entities and any(len(e.split()) >= 2 for e in entities):
+        best = max(entities, key=len)
+        return best.strip()
+    return None
+
 
 def _get_kernel():
     """Résout NuruKernel lazy (sans import au module level)."""
@@ -94,7 +127,19 @@ class ReceiveQuestion(PipelineStep):
         except Exception as e:
             logger.debug("⚠️ TokenJuice: %s", e)
 
-        # 4. Émettre événement
+        # 4. V17 Option A — résolution d'anaphore : "son" → entité precedente
+        #    ("Quelle est son expérience ?" après avoir parlé de Leblanc → "son"
+        #    est résolu en "Leblanc Bahiga" pour la recherche RAG)
+        try:
+            session_store = _get_service("session_store")
+            resolved = _resolve_entity(ctx.query, session_store, ctx.session_id)
+            if resolved and resolved not in ctx.query:
+                ctx.query = f"{ctx.query} ({resolved})"
+                logger.info("🧭 Anaphore résolue: %s → '%s' ajoutée à la requête", resolved, ctx.query[:80])
+        except Exception as e:
+            logger.debug("⚠️ Résolution anaphore: %s", e)
+
+        # 5. Émettre événement
         eb = _get_opt("event_bus")
         if eb: await eb.emit("query.received", {"query": ctx.query[:80], "correlation_id": ctx.correlation_id})
 
