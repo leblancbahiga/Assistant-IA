@@ -22,6 +22,7 @@ import time
 from typing import Any, Optional
 
 from src.kernel.pipeline import PipelineContext, PipelineStep, StepResult
+from src.core.ram_budget import get_budget
 
 logger = logging.getLogger(__name__)
 
@@ -446,6 +447,8 @@ class Generate(PipelineStep):
         )
 
         start_gen = time.time()
+        # V17: signaler au DocWatcher que la generation est en cours (evite concurrency RAM)
+        get_budget().set_generating(True)
 
         try:
             if ctx.use_tot:
@@ -480,7 +483,10 @@ class Generate(PipelineStep):
 
         except Exception as e:
             logger.exception("❌ Generation error: %s", e)
+            get_budget().set_generating(False)
             return ctx, StepResult(error=f"Generation: {e}")
+
+        get_budget().set_generating(False)
 
         gen_time = time.time() - start_gen
         logger.info(
