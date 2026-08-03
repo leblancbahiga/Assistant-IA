@@ -150,10 +150,9 @@ class LocalLLM:
                 from mlx_lm import load
                 from mlx_lm.utils import load_adapters
                 model, tokenizer = load(resolved_path)
-                # V17: LoRA désactivé — dataset trop petit (~84 ex.), dégrade
-                # les réponses (biais documentaire) au lieu de les améliorer.
+                # V15 Phase 5 (Item 38) : Chargement LoRA sur le meme thread MLX
                 lora_loaded = False
-                if False and load_lora and self._lora_adapter_path:
+                if load_lora and self._lora_adapter_path:
                     adapter_dir = Path(self._lora_adapter_path)
                     if (adapter_dir / "adapters.safetensors").exists():
                         try:
@@ -323,14 +322,15 @@ class LocalLLM:
                         from src.french_tokenizer_fix import _fix_tokenization as _fr_fix
                         _fr_has = _fr_fix  # reference pour usage
                         # V17 P12: ajuster max_tokens selon RAM disponible
+                        # V17.2: plafonds releves pour ne pas couper les citations
                         try:
                             import psutil
                             _vm = psutil.virtual_memory()
                             _ram_gb = _vm.available / (1024**3)
                             if _ram_gb < 1.0:
-                                _max_tok = min(config.local_max_tokens, 128)
+                                _max_tok = min(config.local_max_tokens, 384)
                             elif _ram_gb < 2.0:
-                                _max_tok = min(config.local_max_tokens, 256)
+                                _max_tok = min(config.local_max_tokens, 640)
                             else:
                                 _max_tok = config.local_max_tokens
                         except Exception:
