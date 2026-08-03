@@ -10,8 +10,8 @@ Zone de chat avec bulles alignées :
 import logging
 import time
 
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, Signal
+from PySide6.QtGui import QFont, QTextCursor, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QLabel, QSizePolicy,
     QHBoxLayout, QFrame, QTextBrowser, QGraphicsOpacityEffect,
@@ -216,9 +216,13 @@ class ConversationSurface(QWidget):
       - Messages NURU → gauche
     """
 
+    # V17.2 (audit F-6) : signal émis quand un fichier est déposé
+    file_dropped = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("ConversationSurface")
+        self.setAcceptDrops(True)  # V17.2 : drag & drop activé
         self.setStyleSheet(f"""
             #ConversationSurface {{
                 background-color: rgba(8, 14, 28, 0.55);
@@ -298,6 +302,21 @@ class ConversationSurface(QWidget):
         # Glue spaces entre tokens pour providers qui strippent
         # les espaces en début de token (openrouter deepseek, etc.)
         self._glue_spaces: bool = True
+
+    # ── V17.2 (audit F-6) : Drag & drop de fichiers ──
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """Accepte le drag si des fichiers locaux sont présents."""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        """Émet file_dropped pour chaque fichier déposé."""
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            if path:
+                self.file_dropped.emit(path)
+        event.acceptProposedAction()
 
     # ── Messages normaux ──
 

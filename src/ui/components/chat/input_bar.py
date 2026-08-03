@@ -15,6 +15,8 @@ class ChatInputBar(QWidget):
     """Barre de saisie intégrable dans ChatPage."""
 
     send_requested = Signal(str)  # émet le texte à envoyer
+    attach_requested = Signal()   # V17.2 (audit F-6) : clic sur 📎
+    voice_requested = Signal()    # V17.2 (audit F-7) : clic sur 🎤
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -39,20 +41,22 @@ class ChatInputBar(QWidget):
         self._input.returnPressed.connect(self._on_send)
         layout.addWidget(self._input, stretch=1)
 
-        # Bouton pièce jointe
+        # Bouton pièce jointe — V17.2 (audit F-6) : connecté (il était mort)
         self._attach = QPushButton("📎")
         self._attach.setObjectName("InputAttach")
         self._attach.setFixedSize(40, 40)
         self._attach.setToolTip("Joindre un fichier")
         self._attach.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._attach.clicked.connect(self.attach_requested.emit)
         layout.addWidget(self._attach)
 
-        # Bouton micro
+        # Bouton micro — V17.2 (audit F-7) : connecté (il était mort)
         self._mic = QPushButton("🎤")
         self._mic.setObjectName("InputMic")
         self._mic.setFixedSize(40, 40)
         self._mic.setToolTip("Mode vocal")
         self._mic.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mic.clicked.connect(self.voice_requested.emit)
         layout.addWidget(self._mic)
 
         # Bouton envoi

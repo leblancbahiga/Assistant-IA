@@ -426,11 +426,34 @@ class RAGEngine:
                     )
                 """)
             # FTS5 pour BM25 (recherche par mots-clés)
+            # V17.2: tokenizer 'unicode61 remove_diacritics' (français) au lieu de
+            # 'porter' (stemmer ANGLAIS cassé sur le français — audit F-3)
             conn.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-                    content, source, tokenize='porter'
+                    content, source, tokenize='unicode61 remove_diacritics 2'
                 )
             """)
+            # Migration one-shot : si l'index existant a été créé avec 'porter',
+            # le reconstruire avec le tokenizer français (audit F-3)
+            try:
+                _row = conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE name='chunks_fts'"
+                ).fetchone()
+                if _row and "porter" in _row[0]:
+                    conn.execute("ALTER TABLE chunks_fts RENAME TO chunks_fts_porter_old")
+                    conn.execute("""
+                        CREATE VIRTUAL TABLE chunks_fts USING fts5(
+                            content, source, tokenize='unicode61 remove_diacritics 2'
+                        )
+                    """)
+                    conn.execute(
+                        "INSERT INTO chunks_fts(content, source) "
+                        "SELECT content, source FROM chunks_fts_porter_old"
+                    )
+                    conn.execute("DROP TABLE chunks_fts_porter_old")
+                    logger.info("🇫🇷 Migration FTS5 porter→unicode61 (français) effectuée")
+            except Exception as e:
+                logger.warning(f"⚠️ Migration FTS5 française ignorée: {e}")
             # Table de suivi des fichiers indexés
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS indexed_files (

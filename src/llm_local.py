@@ -4,6 +4,7 @@ import logging
 import gc
 import asyncio
 import concurrent.futures
+import re
 import time
 from pathlib import Path
 from typing import AsyncGenerator, Optional
@@ -317,7 +318,11 @@ class LocalLLM:
                         # V17: accumulation des token IDs pour decoder par lots
                         # (le decodeur gere les espaces correctement avec plus de contexte)
                         token_ids: list[int] = []
-                        decoded_so_far = ""
+                        # V17.2 (audit F-4): buffer brut + regex compilées UNE fois
+                        # (fini l'import re + re.sub par token = O(N²))
+                        _raw_buf: list[str] = []
+                        _RE_CTRL = re.compile(r"<\|[^|]+\|>")
+                        _RE_ELLIPSIS = re.compile(r"\s*\[\.\.\.\]")
                         # V17 P11: correcteur leger des composés français (bon jour → Bonjour)
                         from src.french_tokenizer_fix import _fix_tokenization as _fr_fix
                         _fr_has = _fr_fix  # reference pour usage
@@ -347,23 +352,32 @@ class LocalLLM:
                         ):
                             token_ids.append(response.token)
 
-                            # Decoder le lot a chaque token et produire le diff
-                            full_text = tokenizer.decode(token_ids)
-                            new_text = full_text[len(decoded_so_far):]
+                            # V17.2 (audit F-4): décodage incrémental O(N) au lieu de O(N²)
+                            # Les tokens BPE sont atomiques → decode([token]) == delta correct
+                            new_text = tokenizer.decode([response.token], skip_special_tokens=False)
                             if new_text:
-                                decoded_so_far = full_text
-                                # V17: retirer les balises de controle residuelles (<|end|>, <|assistant|>, etc.)
-                                import re
-                                new_text = re.sub(r"<\|[^|]+\|>", "", new_text)
-                                # V17.2: retirer le marqueur '[...]' (artefact du dataset LoRA)
-                                new_text = re.sub(r"\s*\[\.\.\.\]", "", new_text)
-                                # V17 P11: appliquer le correcteur francais leger (composes)
-                                new_text = _fr_has(new_text)
-                                if new_text:
-                                    queue.put_nowait(new_text)
+                                _raw_buf.append(new_text)
+                                # Flush batch : toutes les 8 tokens ou à la fin de phrase
+                                if len(_raw_buf) >= 8 or new_text[-1] in ".!?\n":
+                                    chunk = "".join(_raw_buf)
+                                    _raw_buf.clear()
+                                    chunk = _RE_CTRL.sub("", chunk)
+                                    chunk = _RE_ELLIPSIS.sub("", chunk)
+                                    chunk = _fr_has(chunk)
+                                    if chunk:
+                                        queue.put_nowait(chunk)
 
                             n_gen += 1
                             last_response = response
+
+                        # Flush final du buffer
+                        if _raw_buf:
+                            chunk = "".join(_raw_buf)
+                            chunk = _RE_CTRL.sub("", chunk)
+                            chunk = _RE_ELLIPSIS.sub("", chunk)
+                            chunk = _fr_has(chunk)
+                            if chunk:
+                                queue.put_nowait(chunk)
 
                         # ── Stats de benchmark ──
                         if last_response is not None:

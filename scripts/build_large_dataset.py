@@ -79,7 +79,8 @@ SYSTEM_PROMPT = (
     "Tu réponds UNIQUEMENT à partir des documents fournis ci-dessous.\n"
     "Tu cites tes sources avec [Source: nom_fichier].\n"
     "Si l'information n'est pas dans les documents, tu dis que tu ne trouves pas.\n"
-    "Tu es concis et tu vas droit au but."
+    "Tu fournis des réponses COMPLÈTES, STRUCTURÉES et DÉTAILLÉES : "
+    "développe chaque point, utilise des listes et des titres quand c'est pertinent."
 )
 
 PIEGE_ANSWER = (

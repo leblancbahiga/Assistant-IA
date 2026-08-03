@@ -44,6 +44,8 @@ class ChatPage(QWidget):
         # Zone de messages
         if self._surface is not None:
             layout.addWidget(self._surface, stretch=1)
+            # V17.2 (audit F-6) : drag & drop de fichiers
+            self._surface.file_dropped.connect(self._on_file_dropped)
         else:
             placeholder = QWidget()
             placeholder.setObjectName("ChatPlaceholder")
@@ -53,6 +55,9 @@ class ChatPage(QWidget):
         # Barre de saisie
         self._input_bar = ChatInputBar(self)
         self._input_bar.send_requested.connect(self._on_send)
+        # V17.2 (audit F-6/F-7) : boutons 📎 et 🎤 enfin branchés
+        self._input_bar.attach_requested.connect(self._on_attach)
+        self._input_bar.voice_requested.connect(self._on_voice)
         layout.addWidget(self._input_bar)
 
         # Wiring engine si disponible
@@ -88,6 +93,62 @@ class ChatPage(QWidget):
             self._surface.add_message(text, is_user=True)
             self._surface.start_stream()  # bulle vide pour la réponse NURU
         self._engine.send_message(text)
+
+    def _on_attach(self) -> None:
+        """V17.2 (audit F-6) : ouvre un sélecteur de fichiers et lance l'ingestion."""
+        from PySide6.QtWidgets import QFileDialog
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Joindre des fichiers", "",
+            "Documents (*.pdf *.docx *.txt *.md *.csv *.xlsx *.json);;"
+            "Images (*.png *.jpg *.jpeg);;Tous les fichiers (*)"
+        )
+        if not paths or self._engine is None:
+            return
+        # Indexer chaque fichier via l'ingestion du backend
+        nuru = getattr(self._engine, "_nuru", None)
+        for p in paths:
+            if nuru is not None and hasattr(nuru, "ingestion"):
+                try:
+                    loop = getattr(self._engine, "_loop", None)
+                    if loop:
+                        import asyncio
+                        asyncio.run_coroutine_threadsafe(
+                            nuru.ingestion.index_file(p), loop
+                        )
+                except Exception as e:
+                    logger.warning(f"⚠️ Ingestion {p}: {e}")
+        # Feedback visuel
+        if self._surface is not None:
+            noms = ", ".join(p.split("/")[-1] for p in paths[:3])
+            self._surface.add_message(
+                f"📎 Fichier(s) joint(s) : {noms}\n(Indexation en arrière-plan…)",
+                is_user=True,
+            )
+
+    def _on_file_dropped(self, path: str) -> None:
+        """V17.2 (audit F-6) : un fichier a été déposé → ingestion."""
+        if self._engine is None:
+            return
+        nuru = getattr(self._engine, "_nuru", None)
+        loop = getattr(self._engine, "_loop", None)
+        if nuru is not None and hasattr(nuru, "ingestion") and loop:
+            try:
+                import asyncio
+                asyncio.run_coroutine_threadsafe(
+                    nuru.ingestion.index_file(path), loop
+                )
+                logger.info(f"📎 Fichier déposé indexé: {path}")
+            except Exception as e:
+                logger.warning(f"⚠️ Ingestion déposée {path}: {e}")
+
+    def _on_voice(self) -> None:
+        """V17.2 (audit F-7) : bascule la session vocale."""
+        if self._engine is None:
+            return
+        if getattr(self._engine, "_voice_running", False):
+            self._engine.stop_voice_session()
+        else:
+            self._engine.start_voice_session()
 
     def _on_response_complete(self, full_text: str) -> None:
         """Finalise la réponse NURU dans la surface."""
