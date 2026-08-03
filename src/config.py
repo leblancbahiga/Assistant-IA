@@ -69,7 +69,7 @@ class Config(BaseSettings):
     rag_keyword_rejection: bool = True  # V17: filtre anti-hors-sujet (keyword rejection)
     local_max_tokens: int = 1024     # V17.2: 512→1024 (le LoRA iter800 gere mieux; 512 couchait les citations)
     cloud_max_tokens: int = 4096      # V16: sortie cloud (2000→4096 pour réponses RAG détaillées)
-    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"  # V17.2: EN-only mais en cache; reranker multilingue pas dispo. Poids reduit dans rag_engine.
 
     # ── Seuils RAM (audit V10.3k — Option C) ───────────────────────────
     # Hardcodés historiquement (1500 + 2000 + 2.0 + 1.0) inadaptés à M1 8 Go

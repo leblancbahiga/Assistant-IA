@@ -948,12 +948,14 @@ class RAGEngine:
                 try:
                     self.reranker.load_model()
                     reranked = await self.reranker.rerank(query, combined_results, top_k=effective_k) or []
-                    # V17: Blend RRF (40%) + Reranker (60%) — le Cross-Encoder est plus fiable
+                    # V17: Blend RRF (80%) + Reranker (20%) — le Cross-Encoder est
+                    # ms-marco (anglais) → scores degrades sur le français. Le RRF
+                    # (embedder multilingue + BM25) est plus fiable en FR.
                     if reranked:
                         blended = []
                         for content, source, score in reranked:
                             rrf_score = rrf_score_map.get(content, 0.0)
-                            blended_score = 0.40 * rrf_score + 0.60 * min(score, 1.0)
+                            blended_score = 0.80 * rrf_score + 0.20 * min(score, 1.0)
                             blended.append((content, source, blended_score))
                         reranked = blended
                 finally:
@@ -1021,6 +1023,25 @@ class RAGEngine:
             })
         result.sources = source_list
         result.documents_found = len(set(s["name"] for s in source_list))
+
+        # V17.2: Boost CV identité sur l'ORDRE FINAL (après reranking) — les
+        # questions d'identité doivent mettre le CV en tête du contexte.
+        _is_identity_q = ("qui est" in query.lower()) or (
+            "son " in query.lower() or "sa " in query.lower() or "ses " in query.lower()
+        )
+        if _is_identity_q and reranked:
+            _CV_MARKERS = ("cv", "curriculum", "vitae", "profil", "biograph", "mudarhi", "bahiga")
+            _cv_list = []
+            _other_list = []
+            for _item in reranked:
+                _src = _item[1].lower()
+                if any(m in _src for m in _CV_MARKERS):
+                    _cv_list.append(_item)
+                else:
+                    _other_list.append(_item)
+            if _cv_list:
+                reranked = _cv_list + _other_list
+                logger.info("🧑‍🌾 Boost CV (ordre final): %d source(s) CV en tête", len(_cv_list))
 
         context = self._format_context(reranked)
         # V8+ : En-tête de confiance dans le contexte — TOUJOURS présent

@@ -36,7 +36,7 @@ MIN_RAM_FOR_HEAVY_SEARCH_MB = getattr(
 RRF_K = 60                              # Constante RRF standard
 MAX_RRF_STRATEGIES = 5                  # Max théorique : vectoriel + FTS + metadata + grep + HyDE
 EARLY_STOP_SCORE = 0.75                 # Score FTS/Vectoriel > 0.75 → skip grep/HyDE
-DEDUP_COSINE_THRESHOLD = 0.90           # Seuil de déduplication sémantique
+DEDUP_COSINE_THRESHOLD = 0.50           # V17.2: 0.90→0.50 (Jaccard) — collabse les lettres quasi-identiques
 MAX_GREP_RESULTS = 3                    # Résultats grep max
 MAX_HYDE_RESULTS = 5                    # Résultats HyDE max
 RAM_CHECK_INTERVAL_S = 10.0             # Vérification RAM au plus toutes les 10s
@@ -160,15 +160,17 @@ def reciprocal_rank_fusion(
     if not scores or total_max_possible <= 0:
         return []
 
-    # V17: normaliser [0, 1] par le score max possible pour un top-1 parfait
-    # dans TOUTES les strategies (evite ecrasement du seuil de confiance)
-    max_theoretical = active_weights_sum * (1.0 / (k + 1))
-    normalizer = max(max_theoretical, total_max_possible / len(strategy_results))
+    # V17.2: normalisation min-max par le MEILLEUR score RRF reel du lot,
+    # PAS par un plafond theorique (qui saturait tout a ~1.0 → plus de
+    # discrimination). Le meilleur chunk = 1.0, les autres s'etalent.
+    best_rrf = max(scores.values())
+    if best_rrf <= 0:
+        return []
     fused = [
         SearchResult(
             content=content_map[key],
             source=key[1],
-            score=min(rrf_score / normalizer, 1.0),
+            score=rrf_score / best_rrf,
             raw_score=raw_scores.get(key, 0.0),
             strategy='rrf',
             rank=0,
