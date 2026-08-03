@@ -121,7 +121,11 @@ class LocalLLM:
                 "Chargement LLM refuse par RAMBudgetManager "
                 f"(swap {budget.probe().swap_percent:.0f}%) -- eviction en cours"
             )
-            budget.evict(priority_below=Priority.CACHE)
+            # V17.2 : évincer AUSSI l'embedder (priorité 2) — sinon le pic
+            # embedder(400Mo)+LLM(2.5Go) sature le swap et le LLM thrash
+            # (8 tokens en 19s observé). L'embedder se recharge à la prochaine
+            # requête RAG.
+            budget.evict(priority_below=Priority.EMBEDDER)
             # Vérification finale après éviction
             if not budget.can_load("llm"):
                 swap_pct = budget.probe().swap_percent

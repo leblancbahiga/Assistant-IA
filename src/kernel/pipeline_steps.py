@@ -424,8 +424,11 @@ class BuildContext(PipelineStep):
             ctx.use_tot = True
             logger.info("🌳 ToT activée")
 
-        # 5. Mode CoT (Chain of Thought) — si pas ToT
-        if not ctx.use_tot and ctx.intent in ("COMPLEX", "RAG", "GENERAL"):
+        # 5. Mode CoT (Chain of Thought) — V17.2 : réservé à COMPLEX
+        # (le CoT sur RAG factuel double les tokens et rallonge inutilement
+        # la réponse — audits _3/_4/_5 recommandent de désactiver les modes
+        # lourds par défaut sur M1 8Go)
+        if not ctx.use_tot and ctx.intent == "COMPLEX":
             try:
                 from src.learning.chain_of_thought import should_use_cot, format_cot_prompt
                 if should_use_cot(ctx.query, ctx.intent):
