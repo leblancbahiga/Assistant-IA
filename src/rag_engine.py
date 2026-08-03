@@ -1047,24 +1047,41 @@ class RAGEngine:
         result.sources = source_list
         result.documents_found = len(set(s["name"] for s in source_list))
 
-        # V17.2: Boost CV identité sur l'ORDRE FINAL (après reranking) — les
-        # questions d'identité doivent mettre le CV en tête du contexte.
+        # V17.2: Boost CV identité sur l'ORDRE FINAL — V17.3 : ciblé sur le NOM
+        # demandé. Bug corrigé : le marker "mudarhi"/"bahiga" boostait le CV de
+        # Leblanc pour TOUTE question d'identité (même "Qui est Toussaint
+        # Omombo" → réponse sur Leblanc). Désormais, seuls les CV contenant le
+        # nom propre de la requête sont boostés.
         _is_identity_q = ("qui est" in query.lower()) or (
             "son " in query.lower() or "sa " in query.lower() or "ses " in query.lower()
         )
         if _is_identity_q and reranked:
-            _CV_MARKERS = ("cv", "curriculum", "vitae", "profil", "biograph", "mudarhi", "bahiga")
-            _cv_list = []
-            _other_list = []
-            for _item in reranked:
-                _src = _item[1].lower()
-                if any(m in _src for m in _CV_MARKERS):
-                    _cv_list.append(_item)
-                else:
-                    _other_list.append(_item)
-            if _cv_list:
-                reranked = _cv_list + _other_list
-                logger.info("🧑‍🌾 Boost CV (ordre final): %d source(s) CV en tête", len(_cv_list))
+            # Extraire le nom demandé : "qui est X ?" → X
+            _m = re.search(r"qui est\s+(.+)", query, re.IGNORECASE)
+            _name = _m.group(1).strip(" ?.!?") if _m else ""
+            _name_tokens = [
+                w.lower() for w in re.findall(r"[a-zà-ÿ]+", _name) if len(w) >= 3
+            ]
+            if _name_tokens:
+                _cv_list = []
+                _other_list = []
+                for _item in reranked:
+                    _src = _item[1].lower()
+                    _content = _item[0].lower()
+                    _is_cv = any(m in _src for m in ("cv", "curriculum", "vitae"))
+                    _has_name = any(
+                        n in _src or n in _content for n in _name_tokens
+                    )
+                    if _is_cv and _has_name:
+                        _cv_list.append(_item)
+                    else:
+                        _other_list.append(_item)
+                if _cv_list:
+                    reranked = _cv_list + _other_list
+                    logger.info(
+                        "🧑‍🌾 Boost CV ciblé '%s': %d source(s) en tête",
+                        _name.strip()[:40], len(_cv_list),
+                    )
 
         context = self._format_context(reranked)
         # V8+ : En-tête de confiance dans le contexte — TOUJOURS présent

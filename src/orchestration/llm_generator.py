@@ -107,13 +107,27 @@ class LLMGenerator:
         cloud_temp = 0.1 if rag_context.strip() else 0.7
         user_message = original_query or query
 
+        # V17.2 : si la RAM est critique (swap > 85% ou RAM libre < 1 Go),
+        # forcer le cloud — le LLM local thrash à 0.4 tok/s (7 tokens en 21s
+        # observé). `should_force_cloud()` remplace le `ram_too_low` inutilisé.
+        try:
+            from src.core.ram_budget import get_budget
+            force_cloud = get_budget().should_force_cloud()
+        except Exception:
+            force_cloud = False
+        if force_cloud:
+            logger.warning(
+                "☁️ RAM critique (swap/ram) — bascule cloud forcée "
+                "(le LLM local thrash sur M1 8Go)"
+            )
+
         # ── Intent-based cloud routing (no RAM/swap decisions) ──
         # Cloud UNIQUEMENT pour COMPLEX (raisonnement) + WEB (recherche)
         # Local pour tout le reste (GENERAL, RAG, SIMPLE, etc.)
         use_cloud_first = (
             (intent in ("COMPLEX", "WEB"))
             and ctx.is_online
-        )
+        ) or force_cloud
 
         # "verify" hybrid strategy needs cloud (confidence verification)
         if hybrid == "verify" and ctx.is_online:

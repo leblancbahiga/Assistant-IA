@@ -372,11 +372,13 @@ class RAMBudgetManager:
     def should_force_cloud(self) -> bool:
         """Vérifie si la RAM est trop basse pour utiliser le LLM local.
 
-        Returns:
-            True si RAM libre < 500 Mo OU (RAM < 1 Go ET swap > 95%)
+        V17.2 : seuils abaissés — le swap à 84% suffit à faire thrash le
+        LLM local (0.4 tok/s observé). Forcer cloud si :
+        - RAM libre < 1.0 Go, OU
+        - swap > 85% (même si RAM libre > 1 Go — le décodage MLX thrash)
         """
         state = self.probe()
-        return state.free_ram_gb < 0.5 or (state.free_ram_gb < 1.0 and state.swap_percent > 95)
+        return state.free_ram_gb < 1.0 or state.swap_percent > 85
 
     # ─── Nettoyage systèmes ──────────────────────────────────────────
 
