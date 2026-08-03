@@ -355,6 +355,8 @@ class LocalLLM:
                                 # V17: retirer les balises de controle residuelles (<|end|>, <|assistant|>, etc.)
                                 import re
                                 new_text = re.sub(r"<\|[^|]+\|>", "", new_text)
+                                # V17.2: retirer le marqueur '[...]' (artefact du dataset LoRA)
+                                new_text = re.sub(r"\s*\[\.\.\.\]", "", new_text)
                                 # V17 P11: appliquer le correcteur francais leger (composes)
                                 new_text = _fr_has(new_text)
                                 if new_text:

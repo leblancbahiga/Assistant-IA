@@ -130,13 +130,12 @@ def expand_sujets(chunk_text: str) -> list[str]:
 
 
 def generate_answer(chunk_text: str, source_name: str) -> str:
-    """Génère une réponse à partir du chunk."""
+    """Génère une réponse à partir du chunk — complète, sans marqueur de troncature."""
     text = chunk_text.strip()
-    if len(text) > 800:
+    # V17.2: reponse complete (jusqu'a 5 phrases), PAS de marqueur '[...]'
+    if len(text) > 2000:
         sentences = re.split(r'(?<=[.!?])\s+', text)
-        answer = ' '.join(sentences[:3])
-        if len(sentences) > 3:
-            answer += ' [...]'
+        answer = ' '.join(sentences[:5])
     else:
         answer = text
     source_clean = source_name.replace('_', ' ').replace('-', ' ')
