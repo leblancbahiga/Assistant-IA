@@ -81,21 +81,65 @@ EXAMPLE = {
 
 
 def load_chunks(max_chunks: int = 60) -> list[dict]:
+    """Extrait des DOCUMENTS SUBSTANTIELS en regroupant les chunks par source.
+
+    Le problème : les chunks FTS font ~120 mots en médiane — trop courts pour
+    générer une réponse de 300-800 mots. On regroupe donc les chunks d'une même
+    source pour reconstituer un document de 1500-3000+ caractères, et on filtre
+    le bruit (fichiers de debug, code, audit markdown, etc.).
+    """
+    # Extensions de documents réels (PDF/DOCX/XLSX) — exclut code/markdown debug
+    DOC_EXTS = (".pdf", ".docx", ".doc", ".xlsx", ".csv", ".txt")
+    NOISE_KEYWORDS = (
+        "audit_kernel", "deps_debug", "reindex_checkpoint", "workspace.xml",
+        ".venv/", "node_modules", "package.json", "requirements.txt",
+        "test_", ".pyc", "backup_", "NURU-V5", "nuru_brain",
+    )
+
     conn = sqlite3.connect(INDEX_DB)
     rows = conn.execute(
         "SELECT cfts.content, ch.source, ch.section_title "
         "FROM chunks_fts cfts "
         "JOIN chunk_hierarchy ch ON cfts.rowid = ch.chunk_id "
-        "WHERE ch.source IS NOT NULL AND length(cfts.content) > 80 "
-        "ORDER BY RANDOM() LIMIT ?",
-        (max_chunks,),
+        "WHERE ch.source IS NOT NULL AND length(cfts.content) > 50 "
+        "ORDER BY ch.source, cfts.rowid",
     ).fetchall()
     conn.close()
-    return [
-        {"content": c.strip(), "source": s, "section": t or ""}
-        for c, s, t in rows
-        if c and c.strip()
-    ]
+
+    # Grouper par source
+    grouped: dict[str, list[str]] = {}
+    sections: dict[str, str] = {}
+    for content, source, section in rows:
+        sl = source.lower()
+        # Filtrer le bruit
+        if any(n in sl for n in NOISE_KEYWORDS):
+            continue
+        if not source.lower().endswith(DOC_EXTS) and "." not in source:
+            continue
+        grouped.setdefault(source, []).append(content.strip())
+        if section and source not in sections:
+            sections[source] = section
+
+    # Construire les "documents" : concaténer les chunks d'une même source
+    docs = []
+    for source, chunks in grouped.items():
+        if len(chunks) < 2:
+            continue  # trop peu de matière
+        full = "\n\n".join(chunks)
+        if len(full) < 800:
+            continue  # document trop court
+        # Limiter à 3000 chars par document (garde la taille raisonnable)
+        if len(full) > 3000:
+            full = full[:3000] + "\n[… fin du document tronquée …]"
+        docs.append({
+            "content": full,
+            "source": source,
+            "section": sections.get(source, ""),
+        })
+        if len(docs) >= max_chunks:
+            break
+
+    return docs
 
 
 def main():
@@ -152,7 +196,7 @@ def main():
 
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OUT_FILE.write_text("\n".join(parts), encoding="utf-8")
-    print(f"✅ {len(chunks)} chunks extraits")
+    print(f"✅ {len(chunks)} documents substantiels extraits (chunks groupés par source)")
     print(f"📄 Fichier prêt : {OUT_FILE}")
     print("   → Copie son contenu dans une IA (Claude/ChatGPT/DeepSeek).")
     print("   → Place les lignes JSON générées dans data/adapters/rag/train.jsonl (+ valid.jsonl).")
