@@ -19,24 +19,24 @@ overrides = dict(
     adapter_path="data/adapters/rag",
     train=True,
     fine_tune_type="lora",
-    mask_prompt=True,              # ← CRITIQUE: ne pas apprendre a predire le prompt
-    num_layers=8,                  # ← passe de 4 a 8 pour plus de capacite
+    mask_prompt=True,              # ne pas apprendre a predire le prompt
+    num_layers=4,                  # stable M1 8Go (audits seq 2048 + skill layers 4)
     batch_size=1,
-    grad_accumulation_steps=4,     # ← stabilise les gradients (batch effectif=4)
+    grad_accumulation_steps=4,     # batch effectif=4 (gradients stables)
     iters=2000,
-    learning_rate=5e-5,
-    max_seq_length=1024,
-    grad_checkpoint=True,          # ← economise la RAM
-    clear_cache_threshold=1024,    # ← evite la fragmentation Metal
+    learning_rate=3e-5,            # V17.3: 5e-5→3e-5 (audit _4 : plus stable)
+    max_seq_length=2048,           # V17.3: 1024→2048 (audits : reponses longues 300-500 mots)
+    grad_checkpoint=True,          # economise la RAM
+    clear_cache_threshold=1024,    # evite la fragmentation Metal
     lora_parameters={
-        "rank": 8,
-        "alpha": 16,
+        "rank": 16,                # V17.3: 8→16 (audits : capture mieux le langage)
+        "alpha": 32,               # V17.3: 16→32 (alpha = 2*rank)
         "dropout": 0.05,
-        "scale": 16.0,
+        "scale": 32.0,
     },
     lr_schedule={
         "name": "cosine_decay",
-        "arguments": [5e-5, 2000],
+        "arguments": [3e-5, 2000],
         "warmup": 30,
         "warmup_init": 0.0,
     },
@@ -44,7 +44,6 @@ overrides = dict(
     steps_per_report=20,
     steps_per_eval=50,
     val_batches=2,
-    resume_adapter_file="data/adapters/rag/0000700_adapters.safetensors",
     seed=42,
 )
 
