@@ -9,7 +9,7 @@ heavy_search_min_ram_mb: 1000
 hybrid_enabled: true
 hybrid_mode: local_first
 learning_enabled: true
-lora_adapter_enabled: true
+lora_adapter_enabled: false
 local_model: mlx-community/Phi-4-mini-instruct-4bit
 local_model_fallback: mlx-community/Phi-4-mini-instruct-4bit
 nuru_brain_enabled: true
