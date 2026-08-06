@@ -12,6 +12,9 @@ Sortie: data/adapters/rag/train.jsonl + valid.jsonl (écrasés)
 import json, os, sys, time, random
 from pathlib import Path
 
+# Ajouter la racine du projet au path (sinon 'from src...' échoue)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 random.seed(42)
 OUT_DIR = Path("data/adapters/rag")
 CHECKPOINT = OUT_DIR / "_long_answers_progress.json"
@@ -69,16 +72,26 @@ def extract_user_parts(user_content: str):
 
 
 def generate_long_answer(cloud, context: str, question: str) -> str:
-    """Appelle le cloud pour une réponse longue et structurée."""
+    """Appelle le cloud pour une réponse longue et structurée.
+
+    V17.3 : retries ×3 avec backoff — le provider free est instable après
+    ~20 appels consécutifs (timeouts/SSL). En cas d'échec répété, retourne "".
+    """
     prompt = PROMPT_TEMPLATE.format(
         context=context[:3500], question=question
     )
-    try:
-        resp = cloud.generate(prompt, timeout=25.0)
-        if resp and len(resp.strip()) >= 100:
-            return resp.strip()
-    except Exception as e:
-        print(f"  ⚠️ cloud error: {e}")
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = cloud.generate(prompt, timeout=45.0)
+            if resp and len(resp.strip()) >= 200:
+                return resp.strip()
+            print(f"  ↪️ réponse trop courte ({len(resp or '')} chars), retry")
+        except Exception as e:
+            last_err = e
+            print(f"  ↪️ retry {attempt+1}: {type(e).__name__}")
+            time.sleep(2 * (attempt + 1))  # backoff
+    print(f"  ⚠️ cloud error après 3 tentatives: {last_err}")
     return ""
 
 

@@ -22,8 +22,8 @@ overrides = dict(
     mask_prompt=True,              # ne pas apprendre a predire le prompt
     num_layers=4,                  # stable M1 8Go (audits seq 2048 + skill layers 4)
     batch_size=1,
-    grad_accumulation_steps=4,     # batch effectif=4 (gradients stables)
-    iters=2000,
+    grad_accumulation_steps=1,     # V17.3: 4→1 (66s/iter sinon → 36h pour 2000 iters!)
+    iters=1000,                    # V17.3: 2000→1000 (~4h au lieu de 36h)
     learning_rate=3e-5,            # V17.3: 5e-5→3e-5 (audit _4 : plus stable)
     max_seq_length=2048,           # V17.3: 1024→2048 (audits : reponses longues 300-500 mots)
     grad_checkpoint=True,          # economise la RAM
@@ -36,7 +36,7 @@ overrides = dict(
     },
     lr_schedule={
         "name": "cosine_decay",
-        "arguments": [3e-5, 2000],
+        "arguments": [3e-5, 1000],
         "warmup": 30,
         "warmup_init": 0.0,
     },
