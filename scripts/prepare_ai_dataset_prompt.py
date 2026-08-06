@@ -19,9 +19,10 @@ OUT_FILE = Path("data/ai_dataset_task.txt")
 
 SYSTEM_PROMPT = (
     "Tu es NURU, assistant IA expert en agronomie et chaînes de valeur agricoles.\n"
-    "Tu réponds UNIQUEMENT à partir des documents fournis ci-dessous.\n"
-    "Tu cites tes sources avec [Source: nom_fichier].\n"
-    "Si l'information n'est pas dans les documents, tu dis que tu ne trouves pas.\n"
+    "Tu réponds en te basant en PRIORITÉ sur les documents fournis ci-dessous.\n"
+    "Tu cites tes sources avec [Source: nom_fichier] quand tu utilises le document.\n"
+    "Si l'information n'est pas dans les documents, réponds honnêtement avec tes "
+    "connaissances ou dis-le clairement.\n"
     "Tu fournis des réponses COMPLÈTES, STRUCTURÉES et DÉTAILLÉES : "
     "développe chaque point, utilise des listes et des titres quand c'est pertinent."
 )
@@ -34,12 +35,27 @@ agricole local (NURU, modèle Phi-4-mini). Tu produis des paires question/répon
 à partir des documents ci-dessous.
 
 ## Contexte
-NURU est un assistant RAG qui répond UNIQUEMENT à partir des documents personnels
+NURU est un assistant RAG qui répond à partir des documents personnels
 de l'utilisateur (rapports FAO, études BEACCOM, CV, propositions de projets
-agricoles en RDC). Le dataset sert à entraîner un adaptateur LoRA apprendre :
-citer les sources, refuser hors-contexte, produire des réponses RICHES et STRUCTURÉES.
+agricoles en RDC). Le dataset sert à entraîner un adaptateur LoRA à :
+citer les sources, répondre avec précision à partir des documents, produire
+des réponses RICHES et STRUCTURÉES. Les réponses répondent TOUJOURS
+directement à la question — jamais de commentaire sur le contexte ou la réponse.
 
 ## RÈGLES DE QUALITÉ (critiques)
+0. INTERDICTION ABSOLUE DE META-DISCOURS : la réponse assistant répond DIRECTEMENT
+   à la question. JAMAIS de phrases qui parlent de la réponse, du contexte ou du
+   processus au lieu de répondre. Interdit, entre autres :
+   - « L'extrait fournit des éléments précis pour répondre à la question, mais… »
+   - « La réponse doit rester limitée au contenu fourni… »
+   - « J'ai limité la recherche au contenu de l'extrait… »
+   - « Il ne serait donc pas fiable d'utiliser des connaissances générales… »
+   - « Le contexte fournit également des éléments précis… »
+   Chaque réponse commence DIRECTEMENT par l'information demandée
+   (ex: « Le projet BEACCOM vise… », « L'expérience de Leblanc comprend… »).
+   Une réponse piège se limite à : « Je ne trouve pas cette information dans
+   les documents fournis. » — sans justification ni développement.
+
 1. RÉPONSES LONGUES et STRUCTURÉES (300 à 800 mots) :
    - Introduction (1-2 phrases)
    - 2 à 4 SECTIONS avec titres en gras (##)
@@ -53,13 +69,16 @@ citer les sources, refuser hors-contexte, produire des réponses RICHES et STRUC
    Exemple : "Le projet PASA-NK vise la sécurité alimentaire [Source: rapport.pdf]."
    N'invente JAMAIS une information hors contexte.
 
-3. FIDÉLITÉ : réponds UNIQUEMENT avec ce qui est dans les documents fournis.
+3. FIDÉLITÉ : base-toi sur les documents fournis en priorité. Si l'information
+   n'y est pas, réponds honnêtement avec tes connaissances ou indique-le —
+   sans commentaire meta-discursif sur le processus de réponse.
 
 4. QUESTIONS PIÈGES (15 à 18% du total) :
    - Le contexte est celui d'un document A (ex: rapport sur le riz).
    - La question porte sur un sujet B ABSENT de ce contexte.
-   - Réponse = refus clair :
-     "Je ne trouve pas l'information demandée dans les documents fournis."
+   - Réponse = refus bref ET direct :
+     « Je ne trouve pas cette information dans les documents fournis. »
+     — une seule phrase, SANS justification, SANS développement.
 
 ## FORM DE SORTIE EXACT (JSON Lines, un objet par ligne, clé "messages")
 Chaque ligne est un objet JSON :
@@ -187,8 +206,10 @@ def main():
     parts.append(
         f"\nProduis un dataset de qualité à partir des {len(chunks)} documents ci-dessus :\n"
         "- Génère 100 à 300 paires POSITIVES (question + réponse longue sourcée de 300-800 mots).\n"
-        "- Génère 15 à 18% de questions PIÈGES (contexte A + question B absente → refus).\n"
+        "- Génère 15 à 18% de questions PIÈGES (contexte A + question B absente → refus bref).\n"
         "- Varie les questions : objectifs, défis, résultats, acteurs, processus, chiffres, localisation.\n"
+        "- INTERDIT : tout meta-discours (commenter le contexte, la réponse ou le "
+        "processus). Chaque réponse commence par l'information demandée.\n"
         f"- Utilise ce SYSTEM_PROMPT en tête de CHAQUE exemple :\n{SYSTEM_PROMPT}\n"
         "- Respecte STRICTEMENT le format JSON Lines {\"messages\": [...]}.\n"
         "- Écris UNIQUEMENT les lignes JSON valides, sans texte autour ni ```json.\n"
