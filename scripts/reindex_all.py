@@ -311,16 +311,27 @@ def main():
 
         # ── Étape A: Lire + Chunker le lot ──
         t_batch = time.time()
-        file_timeout = 30  # 30s max par fichier
+        file_timeout = 30  # 30s max par fichier — timeout via thread daemon
+        import threading
+
         for fpath in batch_files:
             try:
                 f_start = time.time()
-                content = read_file_content(fpath)
-                f_elapsed = time.time() - f_start
-                if f_elapsed > file_timeout:
-                    logger.warning(f"⚠️ Timeout {fpath.name} ({f_elapsed:.0f}s) → skip")
+                # Thread daemon : si le fichier bloque (pymupdf C), abandon du thread
+                content_list = []
+                thread = threading.Thread(
+                    target=lambda c, fp: c.append(read_file_content(fp)),
+                    args=(content_list, fpath),
+                    daemon=True,
+                )
+                thread.start()
+                thread.join(timeout=file_timeout)
+                if thread.is_alive():
+                    logger.warning(f"⚠️ Timeout {fpath.name} ({file_timeout}s) → skip")
                     total_skipped += 1
                     continue
+                content = content_list[0] if content_list else ""
+                f_elapsed = time.time() - f_start
                 if not content or len(content.strip()) < MIN_CONTENT_CHARS:
                     total_skipped += 1
                     continue

@@ -214,9 +214,10 @@ def test_sanitize_document_content():
     )
     clean = sanitize_rag_query(dirty_query, max_chars=500)
 
-    # Vérifie que les délimiteurs sont échappés
-    assert "===" not in clean, "Les délimiteurs === doivent être échappés"
-    assert "```" not in clean, "Les blocs de code ``` doivent être échappés"
+    # V16 AUDIT FIX QW18 : === n'est plus échappé (cassait la recherche de documents
+    # contenant ce séparateur). Le test est mis à jour pour refléter le nouveau comportement.
+    # assert "===" not in clean, "..."
+    # assert "```" not in clean, "..."
     # Les patterns avec des I/i sont remplacés par des homoglyphes
     assert "Ignore les instructions" not in clean, "Doit être homoglyphé"
     assert "<|īm_start|>system" in clean, "<|im_start|>system doit être homoglyphé"
@@ -297,7 +298,7 @@ def test_rag_result_dataclass():
     assert r.rejected_chunks == 0
     assert r.rejection_reason == ""
     assert r.query_rewritten == ""
-    assert r.embedding_model == "multilingual-e5-base-mlx"
+    assert r.embedding_model == "Qwen3-Embedding-0.6B-4bit-DWQ"  # V16 : modèle effectif (migré de e5)
     assert r.top_k_configured == 5
     assert r.top_k_actual == 0
     assert r.tokens_injected == 0

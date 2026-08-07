@@ -84,8 +84,11 @@ class PlanResult:
     rag_available: bool = False
     rag_documents_found: int = 0
     rag_confidence: str = "NONE"
+    rag_context: str = ""           # V17 P0-A : évite double retrieve
+    rag_result: Any = None          # V17 P0-A : résultat RAG brut (pour _execute)
     memory_available: bool = False
     memory_recalled: int = 0
+    memory_context: str = ""        # V17 P0-B : évite double mémoire
 
 
 @dataclass
@@ -444,6 +447,8 @@ class AgentOrchestrator:
                     plan.rag_available = bool(context and context.strip())
                     plan.rag_documents_found = getattr(result, 'documents_found', 0)
                     plan.rag_confidence = getattr(result, 'confidence_label', "NONE")
+                    plan.rag_context = context or ""           # V17 P0-A
+                    plan.rag_result = result                   # V17 P0-A
                 except Exception as e:
                     logger.debug("RAG retrieve failed during plan: %s", e)
                     plan.rag_available = False
@@ -452,10 +457,11 @@ class AgentOrchestrator:
         mem = self.memory_manager
         if mem is not None:
             try:
-                memory_context = mem.get_full_context(query)
+                memory_context = await mem.get_full_context(query)
                 if memory_context and memory_context.strip():
                     plan.memory_available = True
                     plan.memory_recalled = len(memory_context.split("\n"))
+                    plan.memory_context = memory_context   # V17 P0-B : évite double mémoire
             except Exception as e:
                 logger.debug("Memory recall failed during plan: %s", e)
                 plan.memory_available = False
@@ -521,30 +527,14 @@ class AgentOrchestrator:
             "sources_count": 0,
         }
 
-        # Collecte RAG
-        if plan.rag_available:
-            rag = self.rag_engine
-            if rag is not None:
-                try:
-                    context, rag_result = await rag.retrieve(query)
-                    result["rag_context"] = context or ""
-                    result["sources_count"] = (
-                        rag_result.documents_found
-                        if hasattr(rag_result, "documents_found")
-                        else 0
-                    )
-                except Exception as e:
-                    logger.debug("RAG retrieve failed during execute: %s", e)
+        # RAG — réutiliser le contexte stocké par _plan() (V17 P0-A)
+        if plan.rag_available and plan.rag_context:
+            result["rag_context"] = plan.rag_context
+            result["sources_count"] = plan.rag_documents_found
 
-        # Collecte mémoire utilisateur
-        mem = self.memory_manager
-        if mem is not None:
-            try:
-                profile = mem.get_user_profile()
-                if profile:
-                    result["memory_context"] = str(profile)
-            except Exception as e:
-                logger.debug("Memory profile failed during execute: %s", e)
+        # Mémoire — réutiliser le contexte stocké par _plan() (V17 P0-B)
+        if plan.memory_context:
+            result["memory_context"] = plan.memory_context
 
         return result
 

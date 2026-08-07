@@ -34,7 +34,10 @@ class CloudLLM:
         provider = self.provider
         model = model or self.model
 
-        if provider == "groq":
+        if provider == "opencode_zen":
+            url = config.opencode_zen_base_url + "/chat/completions"
+            api_key = config.opencode_zen_key
+        elif provider == "groq":
             url = "https://api.groq.com/openai/v1/chat/completions"
             api_key = config.groq_key
         elif provider == "deepseek":
@@ -43,6 +46,30 @@ class CloudLLM:
         elif provider == "openrouter":
             url = "https://openrouter.ai/api/v1/chat/completions"
             api_key = config.openrouter_key
+        elif provider == "qwen":
+            url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            api_key = config.qwen_key
+        elif provider == "openai":
+            url = "https://api.openai.com/v1/chat/completions"
+            api_key = config.openai_key
+        elif provider == "gemini":
+            url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+            api_key = config.gemini_key
+        elif provider == "together":
+            url = "https://api.together.xyz/v1/chat/completions"
+            api_key = config.together_key
+        elif provider == "mistral":
+            url = "https://api.mistral.ai/v1/chat/completions"
+            api_key = config.mistral_key
+        elif provider == "xai":
+            url = "https://api.x.ai/v1/chat/completions"
+            api_key = config.xai_key
+        elif provider == "nvidia":
+            url = "https://integrate.api.nvidia.com/v1/chat/completions"
+            api_key = config.nvidia_key
+        elif provider == "ollama":
+            url = "http://localhost:11434/v1/chat/completions"
+            api_key = ""  # Pas de clé pour Ollama local
         else:
             raise ValueError(f"Provider Cloud inconnu pour generate() synchrone : {provider}")
 
@@ -188,7 +215,10 @@ class CloudLLM:
 
     async def _do_stream(self, prompt: str, provider: str, model: str, system_prompt: Optional[str] = None, temperature: float = 0.7) -> AsyncGenerator[str, None]:
         """Exécute l'appel réseau réel pour un provider donné (Groq, Gemini, Deepseek, OpenRouter)."""
-        if provider == "groq":
+        if provider == "opencode_zen":
+            url = config.opencode_zen_base_url + "/chat/completions"
+            api_key = config.opencode_zen_key
+        elif provider == "groq":
             url = "https://api.groq.com/openai/v1/chat/completions"
             api_key = config.groq_key
         elif provider == "gemini":
@@ -201,6 +231,27 @@ class CloudLLM:
         elif provider == "openrouter":
             url = "https://openrouter.ai/api/v1/chat/completions"
             api_key = config.openrouter_key
+        elif provider == "qwen":
+            url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            api_key = config.qwen_key
+        elif provider == "openai":
+            url = "https://api.openai.com/v1/chat/completions"
+            api_key = config.openai_key
+        elif provider == "together":
+            url = "https://api.together.xyz/v1/chat/completions"
+            api_key = config.together_key
+        elif provider == "mistral":
+            url = "https://api.mistral.ai/v1/chat/completions"
+            api_key = config.mistral_key
+        elif provider == "xai":
+            url = "https://api.x.ai/v1/chat/completions"
+            api_key = config.xai_key
+        elif provider == "nvidia":
+            url = "https://integrate.api.nvidia.com/v1/chat/completions"
+            api_key = config.nvidia_key
+        elif provider == "ollama":
+            url = "http://localhost:11434/v1/chat/completions"
+            api_key = ""
         else:
             raise ValueError(f"Provider Cloud inconnu : {provider}")
             
@@ -218,7 +269,7 @@ class CloudLLM:
             headers["HTTP-Referer"] = "https://github.com/nuru-assistant"
             headers["X-Title"] = "NURU V3"
             
-        max_tokens = 2000  # V10: augmenté de 1000 à 2000 pour éviter troncatures RAG
+        max_tokens = config.cloud_max_tokens  # V16: augmenté pour réponses RAG détaillées
 
         messages = []
         if system_prompt:
@@ -233,7 +284,7 @@ class CloudLLM:
             "max_tokens": max_tokens
         }
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as response:
                 if response.status_code != 200:
                     error_text = await response.aread()
@@ -246,9 +297,27 @@ class CloudLLM:
                     if line.startswith("data: "):
                         try:
                             data = json.loads(line[6:])
-                            delta = data["choices"][0]["delta"]
-                            if "content" in delta:
-                                yield delta["content"]
+                            choices = data.get("choices", [])
+                            if not choices:
+                                continue
+                            choice = choices[0]
+                            # V16 FIX : certain providers renvoient le message complet
+                            # dans `message` (non-streaming) au lieu de `delta` (streaming).
+                            # On tente delta d'abord, puis message en fallback.
+                            if "delta" in choice:
+                                delta = choice["delta"]
+                            elif "message" in choice:
+                                delta = choice["message"]
+                            elif "content" in choice:           # V17 P0-E : content directement dans choice
+                                content = choice["content"]
+                                if content is not None:
+                                    yield content
+                                continue
+                            else:
+                                continue
+                            content = delta.get("content")
+                            if content is not None:
+                                yield content
                         except (json.JSONDecodeError, KeyError, IndexError) as e:
                             logger.debug(f"Erreur parsing stream cloud : {e}")
                             continue

@@ -36,7 +36,7 @@ MIN_RAM_FOR_HEAVY_SEARCH_MB = getattr(
 RRF_K = 60                              # Constante RRF standard
 MAX_RRF_STRATEGIES = 5                  # Max théorique : vectoriel + FTS + metadata + grep + HyDE
 EARLY_STOP_SCORE = 0.75                 # Score FTS/Vectoriel > 0.75 → skip grep/HyDE
-DEDUP_COSINE_THRESHOLD = 0.90           # Seuil de déduplication sémantique
+DEDUP_COSINE_THRESHOLD = 0.50           # V17.2: 0.90→0.50 (Jaccard) — collabse les lettres quasi-identiques
 MAX_GREP_RESULTS = 3                    # Résultats grep max
 MAX_HYDE_RESULTS = 5                    # Résultats HyDE max
 RAM_CHECK_INTERVAL_S = 10.0             # Vérification RAM au plus toutes les 10s
@@ -108,11 +108,11 @@ def check_ram_available() -> tuple[bool, int]:
 # V15 Phase 0B : normalisation débiaisée + poids par stratégie
 # ──────────────────────────────────────────
 
-# Poids relatifs des stratégies RRF (vectoriel > FTS > metadata > HyDE > grep)
+# Poids relatifs des stratégies RRF — V17: ratio 0.55/0.25/0.15 vectoriel/fts/meta
 STRATEGY_WEIGHTS: dict[str, float] = {
     "vectoriel": 1.0,
-    "fts": 0.8,
-    "metadata": 0.7,
+    "fts": 0.45,
+    "metadata": 0.27,
     "hyde": 0.6,
     "grep": 0.5,
 }
@@ -138,31 +138,40 @@ def reciprocal_rank_fusion(
 
     scores: dict[tuple[str, str], float] = defaultdict(float)
     content_map: dict[tuple[str, str], str] = {}
+    raw_scores: dict[tuple[str, str], float] = defaultdict(float)  # V16+: preserve max raw score
 
     total_max_possible = 0.0
+    active_weights_sum = 0.0
 
     for results, label in zip(strategy_results, strategy_labels):
         weight = STRATEGY_WEIGHTS.get(label, 0.5)
-        # Contribution max possible de cette stratégie avec son nb réel de résultats
+        active_weights_sum += weight
         for rank in range(1, len(results) + 1):
             total_max_possible += weight * (1.0 / (k + rank))
 
         for rank, r in enumerate(results, start=1):
             key = (r.content[:400], r.source)
             scores[key] += weight * (1.0 / (k + rank))
-            # Garder le contenu le plus long si conflit
+            if key not in raw_scores or r.raw_score > raw_scores[key]:
+                raw_scores[key] = r.raw_score
             if key not in content_map or len(r.content) > len(content_map[key]):
                 content_map[key] = r.content
 
     if not scores or total_max_possible <= 0:
         return []
 
-    # Normaliser [0, 1] par la somme des max possibles
+    # V17.2: normalisation min-max par le MEILLEUR score RRF reel du lot,
+    # PAS par un plafond theorique (qui saturait tout a ~1.0 → plus de
+    # discrimination). Le meilleur chunk = 1.0, les autres s'etalent.
+    best_rrf = max(scores.values())
+    if best_rrf <= 0:
+        return []
     fused = [
         SearchResult(
             content=content_map[key],
             source=key[1],
-            score=min(rrf_score / total_max_possible, 1.0),
+            score=rrf_score / best_rrf,
+            raw_score=raw_scores.get(key, 0.0),
             strategy='rrf',
             rank=0,
         )
@@ -429,6 +438,7 @@ class MultiSearchOrchestrator:
                     content=content,
                     source=source,
                     score=float(score),
+                    raw_score=float(score),
                     strategy='vectoriel',
                     rank=i,
                 ))
@@ -472,6 +482,7 @@ class MultiSearchOrchestrator:
                     content=content,
                     source=source,
                     score=float(score),
+                    raw_score=float(score),
                     strategy='fts',
                     rank=i,
                 ))
@@ -496,6 +507,7 @@ class MultiSearchOrchestrator:
                     content=f"[{item.get('doc_type', 'doc')}] {json_data[:500]}",
                     source=item.get("source", ""),
                     score=max(0.0, 0.5 - i * 0.1),  # Score décroissant
+                    raw_score=max(0.0, 0.5 - i * 0.1),
                     strategy='metadata',
                     rank=i,
                 ))
@@ -519,6 +531,7 @@ class MultiSearchOrchestrator:
                     content=r.get("content", "")[:2000],
                     source=r.get("filename", r.get("path", "")),
                     score=float(r.get("score", 0.5)),
+                    raw_score=float(r.get("score", 0.5)),
                     strategy='grep',
                     rank=i,
                 ))

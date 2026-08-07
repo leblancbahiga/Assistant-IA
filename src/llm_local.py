@@ -1,25 +1,29 @@
 import mlx.core as mx
-from mlx_lm import load, stream_generate
-from mlx_lm.utils import load_adapters
-from mlx_lm.sample_utils import make_sampler, make_repetition_penalty, make_logits_processors
 import psutil
 import logging
 import gc
 import asyncio
+import concurrent.futures
+import re
 import time
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 from src.config import config
-from src.core.model_manager import ModelManager  # : Gestion RAM centralisée
+from src.core.model_manager import ModelManager
 from src.core.ram_budget import get_budget, Priority
-from src.cache.kv_cache import KVPersistentCache
+# V16 AUDIT FIX QW14 : V12 kv_cache supprimé (code mort — MLX n'expose pas KV)
 
 logger = logging.getLogger(__name__)
+
+# V16 FIX: Timeout etendu pour chargement modele M1 8Go (swap RAM unifiee)
+# 180s = 3 min max pour charger poids 4-bit via MLX + swap
+MODEL_LOAD_TIMEOUT_SECONDS = 180.0
+
 
 class LocalLLM:
     """Gestionnaire de LLM locaux (MLX) avec Warmup et RAM Guard.
 
-    Utilise ModelManager en interne pour le cycle de vie mémoire.
+    Utilise ModelManager en interne pour le cycle de vie memoire.
     """
 
     def __init__(self):
@@ -27,27 +31,31 @@ class LocalLLM:
         self._tokenizer = None
         self._current_model_id = None
         self._last_temperature = 0.7
-        # V15 P2 #27 : Délégation au ModelManager avec keep-alive réduit à 5s
-        self._model_manager = ModelManager(keep_alive_seconds=5)
+        # V15 P2 #27 : Delegation au ModelManager avec keep-alive (120s pour M1 8Go)
+        self._model_manager = ModelManager(keep_alive_seconds=120)
         # V10 Audit: Lock thread-safe pour generate_stream()
         self._gen_lock = asyncio.Lock()
-        # V15 Phase 0B — P0 #31 : cache de prompt pour les requêtes répétées
-        self._prompt_cache: dict[int, object] = {}
         # Statistiques de benchmark
         self.bench: dict[str, list[float]] = {"prompt_ms": [], "tok_s": []}
-        # V15 P2 #27 : Tâche de déchargement différé
+        # V15 P2 #27 : Tache de dechargement differe
         self._unload_task: Optional[asyncio.Task] = None
-        # V15 Phase 5 (Item 41) : KV Cache Persistant
-        self._kv_cache = KVPersistentCache(max_entries=10, max_total_mb=1024)
-        self._current_session_id: str = ""
+        # V16 AUDIT FIX QW14 : _current_session_id supprimé (KV cache mort)
         # V15 Phase 5 (Item 38) : LoRA adaptateur RAG
         self._lora_adapter_path: Optional[str] = None
+        self._lora_loaded: bool = False  # V17 FIX : état réel du chargement LoRA
+        # MLX single-thread executor: load + generate sur le meme thread
+        # Necessite absolue sous Metal (thread-local streams et caches KV)
+        self._mlx_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix='mlx'
+        )
 
     def _schedule_unload(self):
-        """Planifie le déchargement 5s après la fin de la génération.
+        """Planifie le dechargement différé après la fin de la génération.
 
-        V15 P2 #27 : keep_alive réduit de 300s à 5s pour libérer
-        la RAM Metal immédiatement après la réponse.
+        V16 FIX : keep_alive augmenté de 30s à 120s pour éviter rechargements
+        intempestifs sur M1 8Go (swap lourd → reload plus coûteux que keep-warm).
+        Le déchargement n'est pas une urgence RAM — l'embedder + reranker
+        consomment moins que le LLM local et le swap fait tampon.
         """
         self._cancel_unload()
 
@@ -55,7 +63,8 @@ class LocalLLM:
             try:
                 await asyncio.sleep(self._model_manager._keep_alive)
                 if self._model is not None:
-                    logger.info("⏰ Keep-alive expiré (5s). Déchargement auto.")
+                    logger.info("Keep-alive expire (%ss). Déchargement auto.",
+                                self._model_manager._keep_alive)
                     self.unload()
             except asyncio.CancelledError:
                 pass
@@ -66,19 +75,19 @@ class LocalLLM:
             pass
 
     def _cancel_unload(self):
-        """Annule le déchargement différé (nouvelle requête arrivée)."""
+        """Annule le dechargement differe (nouvelle requete arrivee)."""
         if self._unload_task is not None:
             self._unload_task.cancel()
             self._unload_task = None
 
     def _get_required_model(self, intent: str) -> str:
-        """Détermine quel modèle charger (1.5B ou 4B)."""
+        """Determine quel modele charger (1.5B ou 4B)."""
         ram_available_gb = psutil.virtual_memory().available / (1024**3)
         
-        # Si un modèle est déjà chargé, sa mémoire sera libérée s'il est différent,
-        # ou conservée s'il est identique. Donc on ajoute une estimation de sa taille à la RAM disponible.
+        # Si un modele est deja charge, sa memoire sera liberee s'il est different,
+        # ou conservee s'il est identique. Donc on ajoute une estimation de sa taille a la RAM disponible.
         if self._model is not None and self._current_model_id is not None:
-            # Correction 2B : Cast sécurisé en str pour éviter AttributeError sur None
+            # Correction 2B : Cast securise en str pour eviter AttributeError sur None
             model_id_safe = str(self._current_model_id).lower()
             estimated_model_ram = 2.5 if "4b" in model_id_safe else 1.0
             ram_available_gb += estimated_model_ram
@@ -87,90 +96,113 @@ class LocalLLM:
         if ram_available_gb < 0.3:
             raise RuntimeError(f"RAM critique ({ram_available_gb:.2f} Go).")
             
-        # Sélection du modèle local
-        # On force le 4B (Gemma 3) si on a au moins 0.5 Go de RAM (permet d'utiliser le swap M1)
-        if ram_available_gb < 0.5:
+        # Selection du modele local
+        # V16: seuil abaisse (0.5->0.2 Go) pour permettre le chargement meme en RAM tendue
+        # Le RAMBudgetManager reste la vrai garde-fou (hard_limit + swap_warning)
+        if ram_available_gb < 0.2:
             return config.local_model_fallback
         return config.local_model
 
-    def _load_model(self, model_id: str):
-        """Charge ou swappe le modèle en mémoire."""
+    async def _load_model(self, model_id: str, load_lora: bool = True):
+        """Charge ou swappe le modele en memoire.
+        
+        Args:
+            model_id: Identifiant du modele a charger
+            load_lora: Si True, charge aussi l'adaptateur LoRA (defaut: True).
+                       Desactive pour SIMPLE/GENERAL afin d'eviter le biais documentaire.
+        """
         if self._current_model_id == model_id and self._model is not None:
             return
 
-        # V15 Phase 5 (Item 40) : vérification budget RAM avant chargement
+        # V15 Phase 5 (Item 40) : verification budget RAM avant chargement
         budget = get_budget()
         if not budget.can_load("llm"):
             logger.warning(
-                "⏭️ Chargement LLM refusé par RAMBudgetManager "
-                f"(swap {budget.probe().swap_percent:.0f}%) — éviction en cours"
+                "Chargement LLM refuse par RAMBudgetManager "
+                f"(swap {budget.probe().swap_percent:.0f}%) -- eviction en cours"
             )
-            budget.evict(priority_below=Priority.CACHE)
+            # V17.2 : évincer AUSSI l'embedder (priorité 2) — sinon le pic
+            # embedder(400Mo)+LLM(2.5Go) sature le swap et le LLM thrash
+            # (8 tokens en 19s observé). L'embedder se recharge à la prochaine
+            # requête RAG.
+            budget.evict(priority_below=Priority.EMBEDDER)
+            # Vérification finale après éviction
+            if not budget.can_load("llm"):
+                swap_pct = budget.probe().swap_percent
+                raise RuntimeError(
+                    f"RAM insuffisante pour charger le LLM (swap={swap_pct:.0f}%). "
+                    "Fermez d'autres applications et réessayez."
+                )
+            logger.info("RAM libérée après éviction, chargement autorisé")
 
         try:
-            # Décharger proprement le modèle précédent s'il y en a un pour libérer la RAM Metal avant de charger le nouveau
+            # Decharger proprement le modele precedent s'il y en a un pour liberer la RAM Metal avant de charger le nouveau
             if self._model is not None:
-                logger.info(f"Déchargement du modèle précédent ({self._current_model_id}) pour libérer de la mémoire avant le chargement du nouveau.")
+                logger.info(f"Dechargement du modele precedent ({self._current_model_id}) pour liberer de la memoire avant le chargement du nouveau.")
                 self.unload()
 
-            # Résolution du chemin local
+            # Resolution du chemin local
             resolved_path = config.get_model_path(model_id)
-            logger.info(f"Chargement du modèle MLX depuis : {resolved_path}")
+            logger.info(f"Chargement du modele MLX depuis : {resolved_path}")
 
-            self._model, self._tokenizer = load(resolved_path)
+            # V16 FIX: Chargement avec timeout etendu (180s) pour M1 8Go + swap
+            # Execute le chargement synchrone MLX dans un executor pour ne pas bloquer
+            # l'event loop principal (PySide6 UI) pendant les 2-3 minutes de swap
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            def _sync_load():
+                from mlx_lm import load
+                from mlx_lm.utils import load_adapters
+                model, tokenizer = load(resolved_path)
+                # V15 Phase 5 (Item 38) : Chargement LoRA sur le meme thread MLX
+                lora_loaded = False
+                if load_lora and self._lora_adapter_path:
+                    adapter_dir = Path(self._lora_adapter_path)
+                    if (adapter_dir / "adapters.safetensors").exists():
+                        try:
+                            model = load_adapters(model, self._lora_adapter_path)
+                            lora_loaded = True
+                            logger.info("Adaptateur LoRA charge depuis %s", self._lora_adapter_path)
+                        except Exception as e:
+                            logger.warning("Echec chargement LoRA (%s) -- inference sans adaptateur", e)
+                return model, tokenizer, lora_loaded
+
+            try:
+                self._model, self._tokenizer, self._lora_loaded = await asyncio.wait_for(
+                    loop.run_in_executor(self._mlx_executor, _sync_load),
+                    timeout=MODEL_LOAD_TIMEOUT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                raise RuntimeError(
+                    f"Timeout critique : Le chargement des poids MLX a pris plus de "
+                    f"{MODEL_LOAD_TIMEOUT_SECONDS}s. Swap RAM sature sur M1 8Go. "
+                    f"Fermez d'autres applications et reessayez."
+                )
+            
             self._current_model_id = model_id
 
-            # V15 Phase 5 (Item 38) : Chargement adaptateur LoRA RAG si existant
-            if self._lora_adapter_path:
-                adapter_dir = Path(self._lora_adapter_path)
-                if (adapter_dir / "adapters.safetensors").exists():
-                    try:
-                        self._model = load_adapters(self._model, self._lora_adapter_path)
-                        logger.info("🧩 Adaptateur LoRA chargé depuis %s", self._lora_adapter_path)
-                    except Exception as e:
-                        logger.warning("⚠️ Échec chargement LoRA (%s) — inference sans adaptateur", e)
-                else:
-                    logger.info("ℹ️ Aucun adaptateur LoRA trouvé dans %s", self._lora_adapter_path)
-
-            # V15 Phase 5 (Item 40) : marquer comme chargé dans le budget RAM
+            # ── Notify RAMBudgetManager ──
+            # V15 Phase 5 (Item 40) : marquer comme charge dans le budget RAM
             budget.mark_loaded("llm")
             budget.touch("llm")
 
-            # V15 Phase 5 (Item 41) : restauration du KV cache si disponible
-            # pour éviter de recalculer le préfixe (system prompt + historique)
-            if self._current_session_id:
-                cached_kv = self._kv_cache.restore(
-                    self._model, self._current_session_id, model_id=model_id
-                )
-                if cached_kv is not None:
-                    logger.info(
-                        "♻️ KV cache restauré pour session %s — "
-                        "préfixe non recalculé",
-                        self._current_session_id,
-                    )
+            # V16 AUDIT FIX QW14 : restore KV cache supprimé (code mort MLX)
 
-            logger.info(f"Modèle chargé avec succès.")
+            logger.info(f"Modele charge avec succes.")
         except Exception as e:
-            logger.error(f"Erreur lors du chargement du modèle : {e}")
+            logger.error(f"Erreur lors du chargement du modele : {e}")
             raise
 
     def unload(self):
-        """Déchargement propre pour libérer la RAM Metal.
-        V10 Audit: ne délègue PAS à ModelManager (qui a sa propre référence),
-        supprime directement la référence locale pour garantir la libération mémoire.
+        """Dechargement propre pour liberer la RAM Metal.
+        V10 Audit: ne delegue PAS a ModelManager (qui a sa propre reference),
+        supprime directement la reference locale pour garantir la liberation memoire.
         """
         if self._model is not None:
-            logger.info("🧹 Déchargement du modèle local...")
+            logger.info("Dechargement du modele local...")
 
-            # V15 Phase 5 (Item 41) : sauvegarder le KV cache avant déchargement
-            if self._current_session_id and self._current_model_id:
-                self._kv_cache.save(
-                    model=self._model,
-                    session_id=self._current_session_id,
-                    prompt=self._current_session_id,  # placeholder — ID comme clé
-                    turn_number=0,
-                    model_id=self._current_model_id,
-                )
+            # V16 AUDIT FIX QW14 : save KV cache supprimé (code mort MLX)
 
             del self._model
             if self._tokenizer is not None:
@@ -178,162 +210,329 @@ class LocalLLM:
             self._model = None
             self._tokenizer = None
             self._current_model_id = None
-            # V15 Phase 5 (Item 40) : marquer comme déchargé
+            # V15 Phase 5 (Item 40) : marquer comme decharge
             get_budget().mark_unloaded("llm")
             gc.collect()
             try:
                 mx.clear_cache()
             except Exception:
                 pass
-            logger.info("✅ Modèle local déchargé, cache Metal vidé")
+            logger.info("Modele local decharge, cache Metal vide")
 
-    def set_session(self, session_id: str) -> None:
-        """Définit l'ID de session pour le KV cache persistant."""
-        self._current_session_id = session_id
+    # V16 AUDIT FIX QW14 : set_session supprimé (KV cache mort)
 
     def set_lora_adapter(self, path: str) -> None:
-        """Définit le chemin de l'adaptateur LoRA (rechargé au prochain load_model)."""
+        """Definit le chemin de l'adaptateur LoRA (recharge au prochain load_model)."""
         self._lora_adapter_path = path
-        logger.info("🧩 Adaptateur LoRA configuré: %s", path)
+        self._lora_loaded = False  # sera mis à True après load_model réussi
+        logger.info("Adaptateur LoRA configure: %s", path)
+
+    @property
+    def lora_active(self) -> bool:
+        """V17 FIX : état réel du LoRA — True si adaptateur chargé avec succès."""
+        return self._lora_loaded and self._lora_adapter_path is not None
 
     async def generate_stream(self, prompt: str, intent: str = "RAG") -> AsyncGenerator[str, None]:
-        """Génère une réponse via MLX en streaming.
+        """Genere une reponse via MLX en streaming sur le thread MLX dedie.
 
-        MLX Metal exige que load + generate soient sur le même thread.
-
-        V15 Phase 0B (P0 #31) — Optimisations mémoire :
-        - KV cache 8-bit (kv_bits=8) : réduit la consommation RAM GPU de ~50%
-          sans perte de qualité (préserve l'essentiel du signal attentionnel).
-        - prefill_step_size=512 : limite le pic mémoire lors du préremplissage
-          du prompt (essentiel sur M1 8 Go avec swap).
-        - Benchmark timing intégré dans self.bench{}.
-        - Spéculation propre (draft model) : non applicable à Phi-4-mini
-          (vocab_size=200k, aucun petit modèle compatible disponible).
-          À la place, KV cache quantifié + prefill économe.
-
-        Draft model speculative decoding feasibility :
-        - MLX supporte nativement speculative_generate_step avec draft_model
-        - Phi-4-mini utilise un tokenizer tiktoken (200019 tokens)
-        - Aucun modèle draft <500MB ne partage ce tokenizer
-        - Solutions alternatives pour V15.1+ :
-          a) KV cache quantization (actif)
-          b) Prompt lookup decoding (reuse tokens du prompt comme draft)
-          c) Layer-wise speculation (dernières couches du modèle comme draft)
+        MLX Metal exige que load + generate soient sur le meme thread.
+        L'executeur dedie (self._mlx_executor) garantit cette contrainte.
+        Les tokens sont renvoyes via asyncio.Queue depuis le thread MLX.
         """
-        # V10 Audit: Lock thread-safe — évite les races conditions si deux
-        # coroutines appellent generate_stream() simultanément
+        # V10 Audit: Lock thread-safe
         async with self._gen_lock:
             model_id = self._get_required_model(intent)
 
-            # Chargement synchrone sur l'event loop thread
-            # (MLX Metal GPU = thread-local, load et generate doivent cohabiter)
             try:
-                self._load_model(model_id)
+                # V17: pas de LoRA pour les intents conversationnels (evite biais documentaire)
+                use_lora = intent not in ("SIMPLE", "GENERAL")
+                await self._load_model(model_id, load_lora=use_lora)
             except Exception as e:
-                logger.error(f"Impossible de charger le modèle {model_id} : {e}")
+                logger.error(f"Impossible de charger le modele {model_id} : {e}")
                 raise
 
             try:
-                # Paramètres de sampling
-                if intent == "RAG":
-                    is_1_5b = "1.5B" in model_id
-                    temp = 0.35 if is_1_5b else 0.1
-                    top_p = 0.9
-                    rep_penalty = 1.10 if is_1_5b else 1.05
-                elif intent == "SIMPLE":
-                    is_1_5b = "1.5B" in model_id
-                    temp = 0.7 if is_1_5b else 0.6
-                    top_p = 0.90
-                    rep_penalty = 1.20 if is_1_5b else 1.05
-                else:
-                    temp = 0.4
-                    top_p = 0.85
-                    rep_penalty = 1.10
+                # Snapshots thread-safe pour le thread MLX dedie
+                model = self._model
+                tokenizer = self._tokenizer
 
-                self._last_temperature = temp
-
-                # V15 P0 #31 : paramètres MLX optimisés pour M1 8 Go
-                make_sampler_kwargs = dict(temp=temp, top_p=top_p)
-                # min_p=0.1 évite la gibberish aux très basses températures
-                if temp < 0.3:
-                    make_sampler_kwargs["min_p"] = 0.1
-                sampler = make_sampler(**make_sampler_kwargs)
-                logits_processors = [make_repetition_penalty(rep_penalty)]
-
-                # apply_chat_template
-                formatted_prompt = prompt
-                if self._tokenizer is not None and hasattr(self._tokenizer, 'apply_chat_template'):
-                    try:
-                        has_special_tokens = any(
-                            marker in prompt
-                            for marker in (
-                                '<|assistant|>', '<|im_start|>assistant',
-                                '<|im_end|>', '<|end|>', '<|user|>',
-                                '<|im_start|>user', '<|im_start|>system',
-                            )
-                        )
-                        if not has_special_tokens:
-                            system_markers = [
-                                "Tu es NURU", "Tu es", "Ta mission",
-                                "# PRIORITÉ", "# MODE RAG", "# MODE HYBRIDE",
-                                "## INSTRUCTION STRICTE",
-                            ]
-                            found_system = any(prompt.startswith(m) for m in system_markers)
-                            messages = [{"role": "user", "content": prompt}]
-                            formatted_prompt = self._tokenizer.apply_chat_template(
-                                messages, tokenize=False, add_generation_prompt=True,
-                            )
-                            logger.debug(f"apply_chat_template ({len(formatted_prompt)} chars)")
-                        else:
-                            logger.debug("Prompt déjà formaté — skip apply_chat_template")
-                    except Exception as e:
-                        logger.debug(f"apply_chat_template ignoré: {e}")
-                        formatted_prompt = prompt
-
-                # stream_generate DOIT tourner sur le même thread que le load
-                # (Metal GPU thread-local).
+                queue: asyncio.Queue = asyncio.Queue()
                 t0 = time.perf_counter()
-                n_tokens = 0
-                response = None
-                for response in stream_generate(
-                    self._model,
-                    self._tokenizer,
-                    formatted_prompt,
-                    max_tokens=config.rag_max_context_tokens,
-                    sampler=sampler,
-                    logits_processors=logits_processors,
-                    # V15 P0 #31 : KV cache 8-bit réduit la pression mémoire
-                    kv_bits=8,
-                    # Prefill progressif pour éviter le swap
-                    prefill_step_size=512,
-                ):
-                    yield response.text
-                    n_tokens += 1
-                    await asyncio.sleep(0)
 
-                # Benchmark stats (uniquement si au moins un token généré)
-                if n_tokens > 0:
-                    assert response is not None  # garanti par n_tokens > 0
-                    elapsed = time.perf_counter() - t0
-                    self.bench["prompt_ms"].append(response.prompt_tps)
-                    self.bench["tok_s"].append(n_tokens / elapsed)
-                    logger.debug(
-                        "LocalLLM bench : %.1f tok/s (%d tokens, %.1fs, intent=%s)",
-                        n_tokens / elapsed, n_tokens, elapsed, intent,
-                    )
+                def _sync_stream():
+                    """Run MLX stream_generate on the dedicated executor thread."""
+                    from mlx_lm import stream_generate
+                    from mlx_lm.sample_utils import make_sampler, make_repetition_penalty
+                    # V17 FIX : correcteur français via _fix_tokenization (appliqué plus bas)
+
+                    try:
+                        # Parametres de sampling — AUDIT V16/V17 B-3 : profils
+                        # differencies (temp plus haute + rep_penalty bas = reponses
+                        # plus longues SANS hallucinations supplementaires).
+                        SAMPLING_PROFILES = {
+                            "RAG":        {"temp": 0.55, "top_p": 0.92, "rep_penalty": 1.05, "min_p": 0.05},
+                            "SIMPLE":     {"temp": 0.80, "top_p": 0.95, "rep_penalty": 1.02, "min_p": 0.0},
+                            "GENERAL":    {"temp": 0.65, "top_p": 0.93, "rep_penalty": 1.05, "min_p": 0.05},
+                            "CODE":       {"temp": 0.25, "top_p": 0.90, "rep_penalty": 1.10, "min_p": 0.10},
+                            "CREATIVE":   {"temp": 1.00, "top_p": 0.98, "rep_penalty": 1.00, "min_p": 0.0},
+                        }
+                        _prof = SAMPLING_PROFILES.get(intent, SAMPLING_PROFILES["RAG"])
+                        temp = _prof["temp"]
+                        top_p = _prof["top_p"]
+                        rep_penalty = _prof["rep_penalty"]
+                        min_p = _prof["min_p"]
+
+                        make_sampler_kwargs = dict(temp=temp, top_p=top_p)
+                        if min_p > 0:
+                            make_sampler_kwargs["min_p"] = min_p
+                        sampler = make_sampler(**make_sampler_kwargs)
+                        logits_processors = [make_repetition_penalty(rep_penalty)]
+
+                        # apply_chat_template
+                        formatted_prompt = prompt
+                        if tokenizer is not None and hasattr(tokenizer, 'apply_chat_template'):
+                            try:
+                                # V17: markers corrects pour Phi-4-mini (pas de UNKNOWN_CHAR)
+                                has_special_tokens = any(
+                                    marker in prompt
+                                    for marker in (
+                                        '<|system|>', '<|user|>', '<|assistant|>', '<|end|>',
+                                    )
+                                )
+                                if not has_special_tokens:
+                                    messages = [{"role": "user", "content": prompt}]
+                                    formatted_prompt = tokenizer.apply_chat_template(
+                                        messages, tokenize=False, add_generation_prompt=True,
+                                    )
+                            except Exception as e:
+                                logger.warning(
+                                    "⚠️ apply_chat_template a échoué — prompt brut utilisé: %s",
+                                    e,
+                                )
+
+                        last_response = None
+                        n_gen = 0
+                        # V17: vide le cache Metal avant generation (evite GPU Timeout)
+                        try:
+                            import mlx.core as mx
+                            if mx.metal.is_available():
+                                mx.clear_cache()
+                        except Exception:
+                            pass
+                        # V17: accumulation des token IDs pour decoder par lots
+                        # (le decodeur gere les espaces correctement avec plus de contexte)
+                        token_ids: list[int] = []
+                        # V17.2 (audit F-4): buffer brut + regex compilées UNE fois
+                        # (fini l'import re + re.sub par token = O(N²))
+                        _raw_buf: list[str] = []
+                        _RE_CTRL = re.compile(r"<\|[^|]+\|>")
+                        _RE_ELLIPSIS = re.compile(r"\s*\[\.\.\.\]")
+                        # V17 P11: correcteur leger des composés français (bon jour → Bonjour)
+                        from src.french_tokenizer_fix import _fix_tokenization as _fr_fix
+                        _fr_has = _fr_fix  # reference pour usage
+                        # V17 P12: ajuster max_tokens selon RAM disponible
+                        # V17.2: plafonds releves pour ne pas couper les citations
+                        try:
+                            import psutil
+                            _vm = psutil.virtual_memory()
+                            _ram_gb = _vm.available / (1024**3)
+                            # AUDIT _2:117 — plafonds relevés (le modèle 4-bit tient
+                            # dans 2.5 Go; le throttling agressif coupait les citations).
+                            # Garde minimale conservée pour éviter le thrash M1 (<1 Go:
+                            # should_force_cloud() bascule déjà en cloud, ceci est le
+                            # dernier filet).
+                            if _ram_gb < 1.0:
+                                _max_tok = min(config.local_max_tokens, 1024)
+                            elif _ram_gb < 2.0:
+                                _max_tok = min(config.local_max_tokens, 1536)
+                            else:
+                                _max_tok = config.local_max_tokens
+                        except Exception:
+                            _max_tok = config.local_max_tokens
+                        for response in stream_generate(
+                            model,
+                            tokenizer,
+                            formatted_prompt,
+                            max_tokens=_max_tok,
+                            sampler=sampler,
+                            logits_processors=logits_processors,
+                            kv_bits=8,
+                            prefill_step_size=512,
+                        ):
+                            token_ids.append(response.token)
+
+                            # V17.2 (audit F-4): décodage incrémental O(N) au lieu de O(N²)
+                            # Les tokens BPE sont atomiques → decode([token]) == delta correct
+                            new_text = tokenizer.decode([response.token], skip_special_tokens=False)
+                            if new_text:
+                                _raw_buf.append(new_text)
+                                # Flush batch : toutes les 8 tokens ou à la fin de phrase
+                                if len(_raw_buf) >= 8 or new_text[-1] in ".!?\n":
+                                    chunk = "".join(_raw_buf)
+                                    _raw_buf.clear()
+                                    chunk = _RE_CTRL.sub("", chunk)
+                                    chunk = _RE_ELLIPSIS.sub("", chunk)
+                                    chunk = _fr_has(chunk)
+                                    if chunk:
+                                        queue.put_nowait(chunk)
+
+                            n_gen += 1
+                            last_response = response
+
+                        # Flush final du buffer
+                        if _raw_buf:
+                            chunk = "".join(_raw_buf)
+                            chunk = _RE_CTRL.sub("", chunk)
+                            chunk = _RE_ELLIPSIS.sub("", chunk)
+                            chunk = _fr_has(chunk)
+                            if chunk:
+                                queue.put_nowait(chunk)
+
+                        # ── Stats de benchmark ──
+                        if last_response is not None:
+                            queue.put_nowait({
+                                "_bench": True,
+                                "prompt_tps": last_response.prompt_tps,
+                                "n_tokens": n_gen,
+                                "temperature": temp,
+                            })
+
+                    except Exception as e:
+                        queue.put_nowait({"_error": str(e)})
+                    finally:
+                        queue.put_nowait(None)  # sentinel
+
+                loop = asyncio.get_event_loop()
+                loop.run_in_executor(self._mlx_executor, _sync_stream)
+
+                n_tokens = 0
+                while True:
+                    item = await queue.get()
+                    if item is None:
+                        break
+                    if isinstance(item, dict):
+                        if "_error" in item:
+                            raise RuntimeError(item["_error"])
+                        if "_bench" in item:
+                            elapsed = time.perf_counter() - t0
+                            self._last_temperature = item.get("temperature", 0.7)
+                            prompt_tps = item["prompt_tps"]
+                            tok_count = item["n_tokens"]
+                            if tok_count > 0:
+                                self.bench["prompt_ms"].append(prompt_tps)
+                                self.bench["tok_s"].append(tok_count / elapsed)
+                                logger.debug(
+                                    "LocalLLM bench : %.1f tok/s (%d tokens, %.1fs, intent=%s)",
+                                    tok_count / elapsed, tok_count, elapsed, intent,
+                                )
+                        continue
+                    yield item
+                    n_tokens += 1
+                    # V16 FIX : éviter busy-wait 100% CPU (asyncio.sleep(0) reschedule immédiat)
+                    if n_tokens % 10 == 0:
+                        await asyncio.sleep(0)  # Tous les 10 tokens seulement
 
                 self._schedule_unload()
 
             except Exception as e:
-                logger.error(f"Erreur durant l'inférence MLX : {e}")
-                self.unload()  # V10.2: Nettoyage mémoire GPU en cas d'erreur (prévention fuite MLX)
+                logger.error(f"Erreur durant l'inference MLX : {e}")
+                self.unload()  # V10.2: Nettoyage memoire GPU
                 raise
 
+    async def generate(
+        self,
+        prompt: str,
+        intent: str = "RAG",
+        temperature: float = 0.7,
+    ) -> str:
+        """Genere une reponse complete (non-streaming) pour Self-Consistency.
+
+        Args:
+            prompt: Prompt complet formate
+            intent: Type d'intention (RAG, SIMPLE, COMPLEX)
+            temperature: Temperature d'echantillonnage
+
+        Returns:
+            Reponse complete en string
+        """
+        model_id = self._get_required_model(intent)
+        await self._load_model(model_id)
+
+        model = self._model
+        tokenizer = self._tokenizer
+
+        def _sync_generate():
+            from mlx_lm import generate as mlx_generate
+            from mlx_lm.sample_utils import make_sampler, make_repetition_penalty
+
+            is_1_5b = "1.5B" in model_id
+            if intent == "RAG":
+                temp = temperature
+                top_p = 0.9
+                rep_penalty = 1.10 if is_1_5b else 1.15
+            elif intent == "SIMPLE":
+                temp = temperature
+                top_p = 0.90
+                rep_penalty = 1.20 if is_1_5b else 1.05
+            else:
+                temp = temperature
+                top_p = 0.85
+                rep_penalty = 1.10
+
+            make_sampler_kwargs = dict(temp=temp, top_p=top_p)
+            if temp < 0.3:
+                make_sampler_kwargs["min_p"] = 0.1
+            sampler = make_sampler(**make_sampler_kwargs)
+            logits_processors = [make_repetition_penalty(rep_penalty)]
+
+            # apply_chat_template si necessaire
+            formatted_prompt = prompt
+            if tokenizer is not None and hasattr(tokenizer, 'apply_chat_template'):
+                try:
+                    has_special_tokens = any(
+                        marker in prompt
+                        for marker in (
+                            '<|system|>', '<|user|>', '<|assistant|>', '<|end|>',
+                        )
+                    )
+                    if not has_special_tokens:
+                        messages = [{"role": "user", "content": prompt}]
+                        formatted_prompt = tokenizer.apply_chat_template(
+                            messages, tokenize=False, add_generation_prompt=True,
+                        )
+                except Exception:
+                    pass
+
+            response = mlx_generate(
+                model, tokenizer, formatted_prompt,
+                max_tokens=config.local_max_tokens,
+                sampler=sampler,
+                logits_processors=logits_processors,
+                kv_bits=8,
+                prefill_step_size=512,
+            )
+            return response
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(self._mlx_executor, _sync_generate)
+        self._schedule_unload()
+        return result
+
     def warmup(self):
-        """Charge le modèle approprié silencieusement pour éviter le cold start."""
+        """Charge le modele approprie silencieusement pour eviter le cold start."""
         logger.info("Warmup du LLM...")
         try:
             model_id = self._get_required_model("SIMPLE")
             self._load_model(model_id)
         except Exception as e:
-            logger.error(f"Échec du warmup : {e}")
+            logger.error(f"Echec du warmup : {e}")
+
+    def close(self):
+        """Libère les ressources : décharge le modèle + shutdown executor.
+        
+        V16 AUDIT FIX QW4 : shutdown du ThreadPoolExecutor pour éviter
+        la fuite de threads à chaque hot-reload (-200 Mo/threads orphelins).
+        """
+        self.unload()
+        self._mlx_executor.shutdown(wait=False, cancel_futures=True)
+        logger.info("🔌 LocalLLM fermé : modèle déchargé, executor shutdown.")

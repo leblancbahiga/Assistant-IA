@@ -223,6 +223,13 @@ class PresenceOrb(QWidget):
         if len(self._particles) != target_count:
             self._particles = self._create_particles(state)
 
+        # V16 AUDIT FIX QW8 : réduire FPS en IDLE/SLEEP (10 FPS vs 20 FPS)
+        # Économise 1-2% GPU sur M1 en continu
+        if state in (OrbState.IDLE, OrbState.SLEEP):
+            self._pulse_timer.setInterval(100)  # 10 FPS
+        else:
+            self._pulse_timer.setInterval(50)   # 20 FPS
+
     def _create_particles(self, state: OrbState) -> list:
         count = STATE_PARTICLE_COUNT.get(state, 20)
         return [OrbParticle(i, count) for i in range(count)]

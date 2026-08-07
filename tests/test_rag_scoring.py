@@ -33,6 +33,7 @@ class MockSearchResult:
         self.content = content
         self.source = source
         self.score = score
+        self.raw_score = score  # V16 FIX : ajouté pour la confidence gate
 
 
 async def _make_rag_engine(mock_ms):
@@ -40,6 +41,7 @@ async def _make_rag_engine(mock_ms):
     
     Le reranker est initialisé pour retourner le score vectoriel inchangé.
     Chaque test peut ajuster engine.reranker.rerank.return_value si besoin.
+    Mocke le probe RAM pour éviter le fallback BM25 sur M1 (swap > 50%).
     """
     engine = RAGEngine()
     engine._multi_search = mock_ms
@@ -52,8 +54,27 @@ async def _make_rag_engine(mock_ms):
     engine.reranker = MagicMock()
     engine.reranker.load_model = MagicMock()
     engine.reranker.unload = MagicMock()
+    engine.reranker.is_available = MagicMock(return_value=True)
     # Par défaut : reranker retourne le score 1:1 (inchangé)
     engine.reranker.rerank = AsyncMock()
+    # Mock RAMBudget pour éviter le fallback BM25 sur M1 (swap réel > 50%)
+    import src.core.ram_budget as rb
+    rb.get_budget = MagicMock(return_value=MagicMock(
+        probe=MagicMock(return_value=MagicMock(swap_percent=20)),
+        can_load=MagicMock(return_value=True),
+        mark_loaded=MagicMock(),
+        mark_unloaded=MagicMock(),
+        evict=MagicMock(),
+    ))
+    # Patching direct aussi pour l'import local dans rag_engine
+    import src.rag_engine as re
+    re.get_budget = MagicMock(return_value=MagicMock(
+        probe=MagicMock(return_value=MagicMock(swap_percent=20)),
+        can_load=MagicMock(return_value=True),
+        mark_loaded=MagicMock(),
+        mark_unloaded=MagicMock(),
+        evict=MagicMock(),
+    ))
     return engine
 
 
@@ -91,7 +112,7 @@ async def test_confidence_label_haute(mock_multi_search):
 
 @pytest.mark.asyncio
 async def test_confidence_label_moyenne(mock_multi_search):
-    """Score entre fallback (0.25) et threshold (0.30) → MOYENNE"""
+    """Score 0.28 en vectoriel → ~0.29 blendé → FAIBLE (seuil recalibré V16)."""
     mock_multi_search.search.return_value = (
         [MockSearchResult(score=0.28)],
         MagicMock(),
@@ -102,14 +123,15 @@ async def test_confidence_label_moyenne(mock_multi_search):
     ]
 
     _, result = await engine.retrieve("test query")
-    assert result.confidence_label == "MOYENNE"
-    assert result.top_score == 0.55
-    assert 0.40 <= result.top_score < 0.70
+    # V16 : 0.95*0.28 + 0.05*0.55 = 0.2935 — seuils V16 (HAUTE≥0.7, MOYENNE≥0.4, sinon FAIBLE)
+    assert result.confidence_label == "FAIBLE"
+    assert abs(result.top_score - 0.2935) < 0.01
+    assert result.top_score < 0.40
 
 
 @pytest.mark.asyncio
 async def test_confidence_label_faible(mock_multi_search):
-    """Score entre min_usable (0.20) et fallback (0.25) → FAIBLE"""
+    """Score 0.22 en vectoriel → ~0.2265 blendé → FAIBLE."""
     mock_multi_search.search.return_value = (
         [MockSearchResult(score=0.22)],
         MagicMock(),
@@ -121,8 +143,8 @@ async def test_confidence_label_faible(mock_multi_search):
 
     _, result = await engine.retrieve("test query")
     assert result.confidence_label == "FAIBLE"
-    assert result.top_score == 0.35
-    assert result.top_score < 0.40
+    # V16 : 0.95*0.22 + 0.05*0.35 = 0.2265
+    assert abs(result.top_score - 0.2265) < 0.01
 
 
 @pytest.mark.asyncio

@@ -66,15 +66,16 @@ class TestLoRAConfig:
         """_load_model ne plante pas si l'adaptateur n'existe pas."""
         from src.llm_local import LocalLLM
 
+        mock_model, mock_tokenizer = MagicMock(), MagicMock()
+        sys.modules["mlx_lm"].load.return_value = (mock_model, mock_tokenizer)
+
         with (
-            patch("src.llm_local.load") as mock_load,
             patch("src.llm_local.load_adapters") as mock_load_adapter,
             patch("src.llm_local.Path") as mock_path,
         ):
             mock_path_instance = MagicMock()
             mock_path.return_value = mock_path_instance
             mock_path_instance.__truediv__.return_value.exists.return_value = False
-            mock_load.return_value = (MagicMock(), MagicMock())
 
             llm = LocalLLM()
             llm._lora_adapter_path = "models/adapters/rag"
@@ -83,41 +84,47 @@ class TestLoRAConfig:
 
     def test_load_applies_existing_adapter(self):
         """_load_model charge l'adaptateur si le fichier existe."""
+        import asyncio
+        import sys
         from src.llm_local import LocalLLM
 
+        # _load_model charge via `from mlx_lm import load` dans un executor,
+        # donc on configure le mock MLX global (pas src.llm_local.load).
+        mock_model, mock_tokenizer = MagicMock(), MagicMock()
+        sys.modules["mlx_lm"].load.return_value = (mock_model, mock_tokenizer)
+        sys.modules["mlx_lm"].utils.load_adapters.return_value = mock_model
+
         with (
-            patch("src.llm_local.load") as mock_load,
             patch("src.llm_local.load_adapters") as mock_load_adapters,
             patch("src.llm_local.Path") as mock_path,
         ):
             mock_path_instance = MagicMock()
             mock_path.return_value = mock_path_instance
             mock_path_instance.__truediv__.return_value.exists.return_value = True
-            mock_model, mock_tokenizer = MagicMock(), MagicMock()
-            mock_load.return_value = (mock_model, mock_tokenizer)
-            mock_load_adapters.return_value = mock_model
 
             llm = LocalLLM()
             llm._lora_adapter_path = "models/adapters/rag"
-            llm._load_model("test-model")
+            asyncio.run(llm._load_model("test-model"))
             mock_load_adapters.assert_called_once_with(mock_model, "models/adapters/rag")
 
     def test_load_graceful_fallback(self):
         """_load_model ne plante pas si le fichier adaptateur est corrompu."""
+        import asyncio
+        import sys
         from src.llm_local import LocalLLM
 
+        mock_model, mock_tokenizer = MagicMock(), MagicMock()
+        sys.modules["mlx_lm"].load.return_value = (mock_model, mock_tokenizer)
+
         with (
-            patch("src.llm_local.load") as mock_load,
             patch("src.llm_local.load_adapters", side_effect=Exception("corrupted")) as mock_load_adapters,
             patch("src.llm_local.Path") as mock_path,
         ):
             mock_path_instance = MagicMock()
             mock_path.return_value = mock_path_instance
             mock_path_instance.__truediv__.return_value.exists.return_value = True
-            mock_model, mock_tokenizer = MagicMock(), MagicMock()
-            mock_load.return_value = (mock_model, mock_tokenizer)
 
             llm = LocalLLM()
             llm._lora_adapter_path = "models/adapters/rag"
-            llm._load_model("test-model")
+            asyncio.run(llm._load_model("test-model"))
             assert llm._model is mock_model

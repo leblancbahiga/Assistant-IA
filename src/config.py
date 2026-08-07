@@ -44,10 +44,20 @@ class Config(BaseSettings):
     local_model: str = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
     local_model_fallback: str = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
 
+    # V17 FIX : adaptateur LoRA RAG (entraîné mais jamais branché à l'inférence)
+    lora_adapter_path: str = "data/adapters/rag"   # dossier contenant adapters.safetensors
+    lora_adapter_enabled: bool = True               # coupe-circuit rapide, True si l'adaptateur existe
+
+    # V17 P#3 : AgentLoop délégué à src/agent/orchestrator.py
+    # Désactivé par défaut — le module est documenté comme "dormant". 
+    # Activer pour déléguer les requêtes COMPLEX à l'agent 4-phase (Plan→Execute→Verify→Synthesize).
+    agent_loop_enabled: bool = False
+
     # ── Cloud ──
-    cloud_model: str = "llama-3.3-70b-versatile"
-    cloud_provider: str = "groq"
+    cloud_model: str = "deepseek-v4-flash-free"
+    cloud_provider: str = "opencode_zen"
     cloud_fallback: str = "openrouter/deepseek/deepseek-v4-flash"
+    opencode_zen_base_url: str = "https://opencode.ai/zen/v1"
 
     # ── RAG ──
     rag_k: int = 5
@@ -56,7 +66,10 @@ class Config(BaseSettings):
     rag_min_usable_score: float = 0.20  # V10.2: seuil vidage contexte (ex-hardcodé RAG_MIN_USABLE)
     rag_router_min_score: float = 0.15  # V10.2: seuil routeur pour considérer RAG trouvé
     rag_max_context_tokens: int = 1500
-    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rag_keyword_rejection: bool = True  # V17: filtre anti-hors-sujet (keyword rejection)
+    local_max_tokens: int = 2048     # AUDIT _5:117 — 1024→2048 (réponses complètes, citations non coupées)
+    cloud_max_tokens: int = 4096      # V16: sortie cloud (2000→4096 pour réponses RAG détaillées)
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"  # V17.2: EN-only mais en cache; reranker multilingue pas dispo. Poids reduit dans rag_engine.
 
     # ── Seuils RAM (audit V10.3k — Option C) ───────────────────────────
     # Hardcodés historiquement (1500 + 2000 + 2.0 + 1.0) inadaptés à M1 8 Go
@@ -114,6 +127,34 @@ class Config(BaseSettings):
     @property
     def groq_key(self) -> Optional[str]:
         return keyring.get_password("com.nuru.assistant", "groq")
+
+    @property
+    def opencode_zen_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "opencode_zen")
+
+    @property
+    def qwen_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "qwen")
+
+    @property
+    def openai_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "openai")
+
+    @property
+    def together_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "together")
+
+    @property
+    def mistral_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "mistral")
+
+    @property
+    def xai_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "xai")
+
+    @property
+    def nvidia_key(self) -> Optional[str]:
+        return keyring.get_password("com.nuru.assistant", "nvidia")
 
     @property
     def gemini_key(self) -> Optional[str]:

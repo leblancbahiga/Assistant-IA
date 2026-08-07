@@ -38,11 +38,34 @@ API_KEYS = [
     ("groq",        "Groq Cloud"),
     ("deepseek",    "DeepSeek"),
     ("openrouter",  "OpenRouter"),
+    ("opencode_zen","OpenCode Zen"),
     ("gemini",      "Google Gemini"),
+    ("openai",      "OpenAI"),
+    ("qwen",        "Qwen (DashScope)"),
+    ("together",    "Together AI"),
+    ("mistral",     "Mistral AI"),
+    ("xai",         "xAI (Grok)"),
+    ("nvidia",      "NVIDIA NIM"),
     ("brave",       "Brave Search"),
     ("tavily",      "Tavily Search"),
-    ("nvidia",      "NVIDIA"),
 ]
+
+# Table des fournisseurs : nom → (base_url, modèle_par_défaut, besoin_clé)
+PROVIDER_REGISTRY = {
+    "opencode_zen": ("https://opencode.ai/zen/v1", "deepseek-v4-flash-free", True),
+    "groq":         ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", True),
+    "openrouter":   ("https://openrouter.ai/api/v1", "deepseek/deepseek-v4-flash", True),
+    "deepseek":     ("https://api.deepseek.com", "deepseek-chat", True),
+    "qwen":         ("https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus", True),
+    "openai":       ("https://api.openai.com/v1", "gpt-4o-mini", True),
+    "gemini":       ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.0-flash", True),
+    "together":     ("https://api.together.xyz/v1", "mistralai/Mixtral-8x22B-Instruct-v0.1", True),
+    "mistral":      ("https://api.mistral.ai/v1", "mistral-small-latest", True),
+    "xai":          ("https://api.x.ai/v1", "grok-2", True),
+    "nvidia":       ("https://integrate.api.nvidia.com/v1", "nvidia/llama-3.1-nemotron-70b-instruct", True),
+    "ollama":       ("http://localhost:11434/v1", "llama3", False),
+    "local":        ("", "phi-4-mini", False),
+}
 
 NURU_VERSION = "V12"
 
@@ -253,17 +276,51 @@ class PreferencesDialog(QDialog):
     def _build_models(self):
         card = SectionCard("IA & MODÈLES")
 
+        # Provider principal
         self._provider_combo = QComboBox()
-        self._provider_combo.addItems(["groq", "openrouter", "deepseek", "local"])
+        # Tous les providers, en commençant par le principal configuré
+        providers = sorted(PROVIDER_REGISTRY.keys())
+        self._provider_combo.addItems(providers)
         idx = self._provider_combo.findText(config.cloud_provider)
         if idx >= 0:
             self._provider_combo.setCurrentIndex(idx)
+        self._provider_combo.currentTextChanged.connect(self._on_provider_changed)
         self._provider_combo.setStyleSheet(self._combo_style())
         card.add_row("Fournisseur cloud", self._provider_combo)
+
+        # Label info URL
+        self._provider_url = QLabel("")
+        self._provider_url.setStyleSheet(f"""
+            color: {Color.TEXT_MUTED}; font-size: 7.5pt;
+            padding-left: 140px; background: transparent;
+        """)
+        card.add_row("", self._provider_url)
+        self._update_provider_url(config.cloud_provider)
 
         self._cloud_model = QLineEdit(config.cloud_model)
         self._cloud_model.setStyleSheet(self._input_style())
         card.add_row("Modèle cloud", self._cloud_model)
+
+        # Fallback fournisseur
+        self._fallback_combo = QComboBox()
+        # Extraire la partie provider du fallback actuel (format "provider/model")
+        current_fallback = config.cloud_fallback
+        fallback_parts = current_fallback.split("/", 1)
+        fallback_provider = fallback_parts[0] if len(fallback_parts) > 0 else "openrouter"
+        fallback_providers = [p for p in providers if p != config.cloud_provider and p != "local"]
+        self._fallback_combo.addItems(fallback_providers)
+        idx_fb = self._fallback_combo.findText(fallback_provider)
+        if idx_fb >= 0:
+            self._fallback_combo.setCurrentIndex(idx_fb)
+        self._fallback_combo.currentTextChanged.connect(self._on_fallback_changed)
+        self._fallback_combo.setStyleSheet(self._combo_style())
+        card.add_row("Fallback (si indispo)", self._fallback_combo)
+
+        self._fallback_model = QLineEdit(
+            fallback_parts[1] if len(fallback_parts) > 1 else "deepseek/deepseek-v4-flash"
+        )
+        self._fallback_model.setStyleSheet(self._input_style())
+        card.add_row("Modèle fallback", self._fallback_model)
 
         self._local_model = QLineEdit(config.local_model)
         self._local_model.setStyleSheet(self._input_style())
@@ -448,25 +505,60 @@ class PreferencesDialog(QDialog):
         cl.addWidget(card)
 
     def _on_scan_now(self):
-        """Lance une analyse des dossiers cochés (en arrière-plan)."""
+        """Lance une analyse des dossiers cochés via le script dédié."""
         dirs = [cb.text() for cb in self._index_checks if cb.isChecked()]
         if not dirs:
             self._set_status("❌ Aucun dossier sélectionné")
             return
-        self._set_status("🔍 Indexation lancée en arrière-plan...")
-        # L'indexation asynchrone continue via IngestionEngine.auto_index_loop
+        self._set_status("🔍 Indexation lancée en arrière-plan (scripts/reindex_v17.py)...")
+        # Lancer le script de ré-indexation via QProcess (non-bloquant)
+        self._run_reindex_script()
 
     def _on_reindex_all(self):
         """Vide l'index existant et relance une analyse complète."""
         from src.ingestion import reset_index
         reset_index()
-        self._set_status("🔄 Index réinitialisé — redémarre NURU pour réindexer")
+        self._set_status("🔄 Index vidé, réindexation complète en cours...")
+        self._run_reindex_script(force_full=True)
 
     def _on_reset_index(self):
         """Vide l'index sans relancer d'analyse."""
         from src.ingestion import reset_index
         reset_index()
-        self._set_status("🗑️ Index vidé — redémarre NURU")
+        self._set_status("🗑️ Index vidé. Utilisez « Analyser maintenant » pour réindexer")
+
+    def _run_reindex_script(self, force_full: bool = False) -> None:
+        """Lance scripts/reindex_v17.py via QProcess en arrière-plan."""
+        import shlex
+        try:
+            from PySide6.QtCore import QProcess
+        except ImportError:
+            self._set_status("❌ QProcess non disponible — relance manuelle via terminal")
+            return
+        
+        self._reindex_process = QProcess(self)
+        self._reindex_process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        
+        script_path = Path(__file__).parents[2] / "scripts" / "reindex_v17.py"
+        if not script_path.exists():
+            self._set_status(f"❌ Script introuvable: {script_path}")
+            return
+        
+        venv_python = Path(__file__).parents[2] / ".venv" / "bin" / "python3"
+        python = str(venv_python) if venv_python.exists() else "python3"
+        
+        self._reindex_process.finished.connect(
+            lambda exit_code, status: self._set_status(
+                f"✅ Indexation terminée (exit {exit_code})"
+                if exit_code == 0
+                else f"❌ Indexation échouée (exit {exit_code})"
+            )
+        )
+        self._reindex_process.started.connect(
+            lambda: self._set_status("🔍 Ré-indexation en cours...")
+        )
+        
+        self._reindex_process.start(python, [str(script_path)])
 
     def _set_status(self, msg: str):
         """Affiche un message dans le footer."""
@@ -496,6 +588,38 @@ class PreferencesDialog(QDialog):
             }}
             QPushButton:hover {{ background: rgba(255,77,106,0.25); }}
         """
+
+    # ── Helpers fournisseurs ──
+
+    def _update_provider_url(self, provider: str) -> None:
+        info = PROVIDER_REGISTRY.get(provider)
+        if info:
+            url = info[0]
+            needs_key = info[2]
+            txt = f"🔗 {url}"
+            if needs_key:
+                stored = keyring.get_password("com.nuru.assistant", provider)
+                txt += " 🔑✅" if stored else " 🔑❌"
+            self._provider_url.setText(txt)
+
+    def _on_provider_changed(self, provider: str) -> None:
+        self._update_provider_url(provider)
+        # Suggérer un modèle par défaut si le champ est vide
+        info = PROVIDER_REGISTRY.get(provider)
+        if info and not self._cloud_model.text().strip():
+            self._cloud_model.setText(info[1])
+        # Mettre à jour la liste des fallbacks (exclure le provider courant)
+        providers = sorted(PROVIDER_REGISTRY.keys())
+        fallback_candidates = [p for p in providers if p != provider and p != "local"]
+        self._fallback_combo.clear()
+        self._fallback_combo.addItems(fallback_candidates)
+
+    def _on_fallback_changed(self, provider: str) -> None:
+        info = PROVIDER_REGISTRY.get(provider)
+        if info and not self._fallback_model.text().strip():
+            self._fallback_model.setText(info[1])
+
+    # ── Stockage ──
 
     def _build_storage(self):
         card = SectionCard("STOCKAGE & CHEMINS")
@@ -636,9 +760,18 @@ class PreferencesDialog(QDialog):
         config.cloud_provider = self._provider_combo.currentText()
         config.cloud_model = self._cloud_model.text().strip()
         config.local_model = self._local_model.text().strip()
+        # Construire cloud_fallback au format "provider/model"
+        fb_provider = self._fallback_combo.currentText()
+        fb_model = self._fallback_model.text().strip()
+        config.cloud_fallback = f"{fb_provider}/{fb_model}" if fb_model else fb_provider
         config._save_yaml_key("cloud_provider")
         config._save_yaml_key("cloud_model")
+        config._save_yaml_key("cloud_fallback")
         config._save_yaml_key("local_model")
+
+        # V17 FIX : rebuild les routes avec le nouveau provider/model
+        from src.core.events import EventBus
+        EventBus().emit_sync("api_keys_updated", {})
 
     def _save_apikeys(self):
         for key_id, inp in self._api_inputs.items():
@@ -646,6 +779,9 @@ class PreferencesDialog(QDialog):
             if text and text != "••••••••":
                 keyring.set_password("com.nuru.assistant", key_id, text)
                 logger.info(f"Clé API {key_id} sauvegardée dans le trousseau")
+        # V17 FIX : notifier NuruCore pour rebuild les routes ModelRouter
+        from src.core.events import EventBus
+        EventBus().emit_sync("api_keys_updated", {})
 
     def _save_rag(self):
         config.rag_k = self._rag_k_spin.value()

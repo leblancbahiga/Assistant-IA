@@ -14,9 +14,10 @@ Outils exposés :
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from src.tools.registry import ToolDefinition, ToolParameter, ToolRegistry, ToolExecutor, ToolResult
 
@@ -63,7 +64,16 @@ def _handle_memory_recall(**kwargs) -> ToolResult:
             error="MemoryManager non disponible",
         )
     try:
-        results = mgr.retriever.recall_combined(query=query, top_k=top_k)
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # On est dans un contexte async, planifier la coroutine
+            future = asyncio.run_coroutine_threadsafe(
+                mgr.retriever.recall_combined(query=query, top_k=top_k),
+                loop,
+            )
+            results = future.result(timeout=30)
+        else:
+            results = asyncio.run(mgr.retriever.recall_combined(query=query, top_k=top_k))
         return ToolResult(
             tool_name="memory_recall", success=True,
             output=json.dumps(results, indent=2, ensure_ascii=False, default=str),

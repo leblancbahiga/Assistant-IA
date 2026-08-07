@@ -194,15 +194,39 @@ def _extract_json(text: str) -> Optional[dict]:
 
 
 async def extract_generic_cloud(text: str, filename: str = "") -> Optional[DocumentMetadata]:
-    """Extraction générique via Groq — pour tout type de document."""
+    """Extraction générique via LLM Cloud — utilise le provider configuré (OpenCode Zen, Groq, etc.)."""
     try:
         import httpx
         import asyncio
         from src.config import config
 
-        groq_key = config.groq_key
-        if not groq_key:
-            logger.warning("Clé Groq non disponible pour extraction générique")
+        # Déterminer URL et clé selon le provider configuré
+        provider = config.cloud_provider
+        if provider == "groq":
+            api_key = config.groq_key
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            model = "llama-3.1-8b-instant"
+        elif provider == "opencode_zen":
+            api_key = config.opencode_zen_key
+            if not api_key:
+                logger.warning("Clé OpenCode Zen non disponible pour extraction générique")
+                return None
+            url = config.opencode_zen_base_url + "/chat/completions"
+            model = config.cloud_model
+        elif provider == "deepseek":
+            api_key = config.deepseek_key
+            url = "https://api.deepseek.com/v1/chat/completions"
+            model = "deepseek-chat"
+        elif provider == "openrouter":
+            api_key = config.openrouter_key
+            url = "https://openrouter.ai/api/v1/chat/completions"
+            model = config.cloud_model
+        else:
+            logger.warning(f"Provider cloud non supporté pour extraction: {provider}")
+            return None
+
+        if not api_key:
+            logger.warning(f"Clé API manquante pour {provider}")
             return None
 
         # Troncature pour la fenêtre cloud
@@ -210,13 +234,15 @@ async def extract_generic_cloud(text: str, filename: str = "") -> Optional[Docum
         if len(text) > max_chars:
             text = text[:max_chars]
 
-        url = "https://api.groq.com/openai/v1/chat/completions"
+        # V17: max_tokens adapté au provider (modèles reasoning nécessitent plus)
+        extraction_max_tokens = 2000 if provider == "opencode_zen" else 800
+
         headers = {
-            "Authorization": f"Bearer {groq_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "llama-3.1-8b-instant",
+            "model": model,
             "messages": [
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT
                  + "\n\nFormat JSON attendu : {\"title\": str, \"summary\": str, "
@@ -225,11 +251,11 @@ async def extract_generic_cloud(text: str, filename: str = "") -> Optional[Docum
                 {"role": "user", "content": f"Document : {filename}\n\n{text[:15000]}"},
             ],
             "temperature": 0.1,
-            "max_tokens": 800,
+            "max_tokens": extraction_max_tokens,
             "response_format": {"type": "json_object"},
         }
 
-        logger.info("Extraction générique via Groq (llama-3.1-8b-instant)...")
+        logger.info(f"Extraction générique via {provider} ({model})...")
         async with httpx.AsyncClient(timeout=60.0) as client:
             for attempt in range(3):
                 resp = await client.post(url, headers=headers, json=payload)

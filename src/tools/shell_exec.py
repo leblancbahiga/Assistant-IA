@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shlex
 import subprocess
 import threading
 import time
@@ -267,6 +268,16 @@ class ShellSandbox:
                 suggested_level=5,
             )
 
+        # Vérification métacaractères shell (pipes, chaînages, redirections)
+        shell_meta, meta_reason = self._check_shell_metachars(command)
+        if shell_meta:
+            return ValidationResult(
+                allowed=False,
+                reason=meta_reason,
+                risk_category=CommandCategory.DESTRUCTIVE,
+                suggested_level=5,
+            )
+
         # Vérification patterns destructeurs
         destructive, reason = self._check_destructive_pattern(command)
         if destructive:
@@ -334,6 +345,33 @@ class ShellSandbox:
         for blocked in BLOCKED_COMMANDS:
             if blocked.lower() in cmd_lower:
                 return True, f"Commande bloquée: motif interdit '{blocked}'"
+
+        return False, ""
+
+    def _check_shell_metachars(self, command: str) -> tuple[bool, str]:
+        """Vérifie la présence de métacaractères shell dangereux.
+
+        Bloque pipes (|), chaînages (&&, ||, ;), redirections (>, <, >>).
+
+        Avec ``shell=False`` (recommandation de sécurité), ces caractères
+        ne sont pas interprétés par le shell — mais on les bloque en amont
+        pour éviter toute ambiguïté.
+
+        Args:
+            command: Commande à inspecter.
+
+        Returns:
+            Tuple (présence, raison). Si non présent, raison vide.
+        """
+        # Pipes et chaînages
+        for meta in ("|", "&&", "||", ";", "`", "$("):
+            if meta in command:
+                return True, f"Métacaractère shell interdit: '{meta}'"
+
+        # Redirections (mais pas "2>&1" ou "2>1" qui sont des nombres)
+        for meta in (">", "<", ">>"):
+            if meta in command:
+                return True, f"Redirection shell interdite: '{meta}'"
 
         return False, ""
 
@@ -600,9 +638,13 @@ class ShellSandbox:
             # Créer le workspace si nécessaire
             os.makedirs(effective_cwd, exist_ok=True)
 
+            # Sécurité : parser la commande via shlex (pas de shell=True)
+            # shell=True permettait le contournement via pipes/chaînages
+            cmd_parts = shlex.split(command)
+
             result = subprocess.run(
-                command,
-                shell=True,
+                cmd_parts,
+                shell=False,
                 cwd=effective_cwd,
                 env=env,
                 timeout=effective_timeout,

@@ -33,6 +33,7 @@ class DynamicPromptBuilder:
         context_budget: Optional[Any] = None,
         session_max_context: int = 8,
         model_family: str = "phi",
+        confidence_label: str | None = None,  # V16 FIX
     ):
         """Build le prompt complet — copie exacte de orchestrator._build_prompt() lignes 471-570.
 
@@ -84,11 +85,15 @@ class DynamicPromptBuilder:
                 intent=intent,
                 facts=memory_store.get_recent_facts(limit=20) if memory_store else [],
                 procedures=memory_store.get_procedures() if memory_store else [],
+                confidence_label=confidence_label,  # V16 FIX
             )
         else:
             from src.identity_manager import IdentityManager
             identity = IdentityManager.load()
-            system_prompt = f"Tu es NURU, assistant personnel de {identity['user_name']}."
+            system_prompt = (
+                f"Tu es NURU, assistant personnel de {identity['user_name']}."
+                " Tu réponds TOUJOURS en français, de manière naturelle et fluide."
+            )
 
         # V10.3f : Injection contexte conversationnel de session
         if session_id:
@@ -145,23 +150,23 @@ class DynamicPromptBuilder:
             full_prompt += (
                 f"\n\n## QUESTION (connaissances générales)\n"
                 f"Réponds avec tes connaissances. Si tu n'es pas certain, dis-le.\n\n"
-                f"{safe_query}<|end|>\n<|assistant|>\n"
+                f"{safe_query}"
             )
         elif intent == "RAG" and full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
             full_prompt += (
-                f"\n\n## INSTRUCTION STRICTE — RAG UNIQUEMENT\n"
-                f"Tu dois répondre UNIQUEMENT à partir du CONTEXTE ci-dessus "
-                f"(entre <<DOC_CONTENT_START>> et <<DOC_CONTENT_END>>).\n"
-                f"- N'utilise PAS tes connaissances internes.\n"
-                f"- Si l'information n'est pas dans le contexte, dis \""
-                f"Je ne trouve pas cette information dans les documents.\"\n"
-                f"- N'invente RIEN. Ne complète PAS.\n"
-                f"- Cite la source avec [Source: nom_du_fichier].\n\n"
-                f"{safe_query}<|end|>\n<|assistant|>\n"
+                f"\n\n## INSTRUCTION — CONTEXTE DISPONIBLE\n"
+                f"Le CONTEXTE ci-dessus contient des documents de l'utilisateur.\n"
+                f"- Réponds en t'appuyant sur ce CONTEXTE en priorité.\n"
+                f"- Cite [Source: nom] après chaque information tirée du contexte.\n"
+                f"- Si l'information demandée n'apparaît pas dans le contexte, "
+                f"réponds en une phrase que tu ne la trouves pas dans les documents fournis "
+                f"— n'invente jamais de détails, de postes ou de chiffres.\n"
+                f"- Ne répète jamais deux fois la même phrase.\n\n"
+                f"{safe_query}"
             )
         else:
             # AUDIT V10.3 — utiliser safe_query
-            full_prompt += f"{safe_query}<|end|>\n<|assistant|>\n"
+            full_prompt += f"{safe_query}"
         return system_prompt, full_prompt
 
     def _format_with_model_tags(
@@ -180,10 +185,7 @@ class DynamicPromptBuilder:
         """
         parts = []
         if include_system:
-            parts.append(f"<|system|>\n{system}\n")
-            if model_family == "phi":
-                parts[-1] += "<|end|>\n"
-            parts.append("<|user|>\n")
+            parts.append(f"{system}\n")
 
         if rag.strip():
             parts.append(f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag.strip()}\n")

@@ -62,13 +62,13 @@ class SleepCycleManager:
         """Démarre la surveillance d'inactivité."""
         self._running = True
         self._last_activity = time.time()
-        logger.info("Sleep cycle monitoring started")
+        logger.debug("Sleep cycle monitoring started")
 
     def stop_monitoring(self) -> None:
         """Arrête la surveillance."""
         self._running = False
         self._phase = SleepPhase.AWAKE
-        logger.info("Sleep cycle monitoring stopped")
+        logger.debug("Sleep cycle monitoring stopped")
 
     def user_activity_detected(self) -> None:
         """Signal d'activité utilisateur → réveil immédiat."""
@@ -121,7 +121,7 @@ class SleepCycleManager:
         old = self._phase
         self._phase = phase
         self._phase_start = time.time()
-        logger.info(f"💤 Cycle sommeil: {old.value} → {phase.value}")
+        logger.debug(f"💤 Cycle sommeil: {old.value} → {phase.value}")
         if self._on_phase_change:
             self._on_phase_change(phase)
 

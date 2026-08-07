@@ -18,6 +18,8 @@ _MODULES = {
     "DynamicPromptBuilder": "src.routing.prompt_builder",
     "SemanticRouter": "src.routing.semantic_router",
     "SemanticRoute": "src.routing.semantic_router",
+    "RouterV16": "src.routing.v16.router_v16",
+    "RouteDecision": "src.routing.v16.router_v16",
 }
 
 

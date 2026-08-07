@@ -1,14 +1,12 @@
-"""LoRA training pour NURU — version optimisée M1 8 Go.
+#!/usr/bin/env python3
+"""Train LoRA adapter on the generated RAG Q/A dataset.
 
-Hyperparamètres définitifs (synthèse 3 experts + warmup + dropout) :
-  - iters=400 (5 epochs sur 84 exemples)
-  - max_seq_length=1024 (pas de troncature RAG)
-  - num_layers=8 (pénétration comportementale)
-  - lr=5e-5 + cosine decay + warmup 30 iters (apprentissage stable)
-  - lora_parameters={rank=8, alpha=16, dropout=0.05, scale=16.0}
+Usage: python scripts/lora_train.py
+Expected runtime: ~4h on M1 8GB for 2000 iters.
 """
+
 import os, sys, time, logging
-from types import SimpleNamespace
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # ── Fix sys.path : projet avant Hermes agent ──
 project_sp = "/Users/leblancbahiga/Downloads/Assistant IA/.venv/lib/python3.13/site-packages"
@@ -22,50 +20,46 @@ if project_sp in sys.path and sys.path.index(project_sp) > 1:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("lora_train")
 
+from types import SimpleNamespace
+from mlx_lm.lora import CONFIG_DEFAULTS, run
+
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
 def main():
     t_start = time.time()
-    logger.info("🚀 Démarrage LoRA training — Phi-4-mini × 84 exemples RAG optimisé")
+    logger.info("🚀 Démarrage LoRA training — Phi-4-mini × RAG optimisé")
 
-    from mlx_lm.lora import CONFIG_DEFAULTS, run
-
-    # Synthèse des 3 propositions expert + warmup + dropout
     overrides = dict(
         model="mlx-community/Phi-4-mini-instruct-4bit",
         data="data/adapters/rag",
         adapter_path="data/adapters/rag",
         train=True,
         fine_tune_type="lora",
-
-        # Hyperparamètres d'apprentissage
-        batch_size=1,            # Intouchable sur M1 8 Go
-        iters=400,               # 5 epochs (84 ex × 5 = 420, arrondi)
-        learning_rate=5e-5,      # LR effectif = 1e-4 après scale×alpha/r
-
-        # Architecture LoRA
-        num_layers=8,            # Pénètre la logique du modèle sans OOM
+        mask_prompt=True,              # ne pas apprendre a predire le prompt
+        num_layers=4,                  # stable M1 8Go (audits seq 2048 + skill layers 4)
+        batch_size=1,
+        grad_accumulation_steps=1,     # V17.3: 4→1 (66s/iter sinon → 36h pour 2000 iters!)
+        iters=1000,                    # V17.3: 2000→1000 (~4h au lieu de 36h)
+        learning_rate=3e-5,            # V17.3: 5e-5→3e-5 (audit _4 : plus stable)
+        max_seq_length=2048,           # V17.3: 1024→2048 (audits : reponses longues 300-500 mots)
+        grad_checkpoint=True,          # economise la RAM
+        clear_cache_threshold=1024,    # evite la fragmentation Metal
         lora_parameters={
-            "rank": 8,
-            "alpha": 16.0,
-            "dropout": 0.05,     # Régularisation sur petit dataset
-            "scale": 16.0,
+            "rank": 16,                # V17.3: 8→16 (audits : capture mieux le langage)
+            "alpha": 32,               # V17.3: 16→32 (alpha = 2*rank)
+            "dropout": 0.05,
+            "scale": 32.0,
         },
-
-        # Contexte RAG
-        max_seq_length=1024,     # Pas de troncature des chunks
-
-        # LR scheduler : warmup 30 iters + cosine decay
         lr_schedule={
             "name": "cosine_decay",
-            "arguments": [5e-5, 400],
+            "arguments": [3e-5, 1000],
             "warmup": 30,
             "warmup_init": 0.0,
         },
-
-        # Monitoring
+        save_every=100,
         steps_per_report=20,
         steps_per_eval=50,
         val_batches=2,
-        save_every=100,
         seed=42,
     )
     args = SimpleNamespace(**{**CONFIG_DEFAULTS, **overrides})
@@ -79,8 +73,9 @@ def main():
     if args.lr_schedule:
         logger.info(f"📈 Schedule: {args.lr_schedule['name']} "
                     f"with {args.lr_schedule.get('warmup', 0)} warmup steps")
+    logger.info(f"   RAM: grad_checkpoint={args.grad_checkpoint}, "
+                f"clear_cache={args.clear_cache_threshold}")
 
-    os.environ["TOKENIZERS_PARALLELISM"] = "true"
     run(args)
 
     dt = time.time() - t_start
