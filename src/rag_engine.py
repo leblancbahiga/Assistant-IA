@@ -894,14 +894,21 @@ class RAGEngine:
         ENABLE_KEYWORD_REJECTION = getattr(config, "rag_keyword_rejection", True)
         
         if ENABLE_KEYWORD_REJECTION and combined_results:
-            query_keywords = set(
-                w.lower() for w in re.findall(r'\w+', query)
+            query_keywords_raw = [
+                w for w in re.findall(r'\w+', query)
                 if len(w) > 2 and w.lower() not in {
                     'de', 'la', 'le', 'les', 'du', 'des', 'un', 'une', 'et', 'ou',
                     'est', 'sont', 'dans', 'sur', 'par', 'pour', 'avec', 'que', 'qui',
                     'parle', 'moi', 'peux', 'tu', 'je', 'ne', 'pas', 'the', 'a', 'an',
                 }
-            )
+            ]
+            # Mots-clés en minuscule pour le matching + set des noms propres
+            # (mots capitalisés dans la requête, ex: "Leblanc", "Bahiga")
+            query_keywords = set(w.lower() for w in query_keywords_raw)
+            proper_keywords = {
+                w.lower() for w in query_keywords_raw
+                if w[0].isupper() and not w.isupper()
+            }
             should_reject = False
             rejection_reason = ""
 
@@ -912,11 +919,22 @@ class RAGEngine:
 
             # Règle 2: Aucun mot-clé dans le TOP résultat boosté
             # V17: seuil de correspondance relevé de 30% → 50%
+            # V17.4 FIX: le seuil 50% rejetait les requêtes pertinentes
+            # contenant un NOM PROPRE (ex: "expérience professionnelle de
+            # Leblanc Bahiga" → seuls "leblanc"+"bahiga" matchent, 2/5=40%
+            # < 50% → faux rejet alors que le CV est indexé). Un mot-clé
+            # capitalisé (nom propre) présent dans un chunk compte double:
+            # "Leblanc Bahiga" = 4/5 ≥ 50% → la requête passe.
             if not should_reject and query_keywords:
                 found_relevant = False
                 for rank, (top_content, top_source, _) in enumerate(combined_results[:3]):
                     top_text = (top_content + " " + top_source).lower()
-                    keyword_matches = sum(1 for kw in query_keywords if kw in top_text)
+                    base_matches = sum(1 for kw in query_keywords if kw in top_text)
+                    proper_matches = sum(
+                        1 for kw in proper_keywords if kw in top_text
+                    )
+                    # Noms propres comptés double (présence du nom = sujet réel)
+                    keyword_matches = base_matches + proper_matches
                     if keyword_matches >= max(1, len(query_keywords) * 0.5):
                         found_relevant = True
                         break

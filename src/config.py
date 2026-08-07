@@ -67,7 +67,7 @@ class Config(BaseSettings):
     rag_router_min_score: float = 0.15  # V10.2: seuil routeur pour considérer RAG trouvé
     rag_max_context_tokens: int = 1500
     rag_keyword_rejection: bool = True  # V17: filtre anti-hors-sujet (keyword rejection)
-    local_max_tokens: int = 1024     # V17.2: 512→1024 (le LoRA iter800 gere mieux; 512 couchait les citations)
+    local_max_tokens: int = 2048     # AUDIT _5:117 — 1024→2048 (réponses complètes, citations non coupées)
     cloud_max_tokens: int = 4096      # V16: sortie cloud (2000→4096 pour réponses RAG détaillées)
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"  # V17.2: EN-only mais en cache; reranker multilingue pas dispo. Poids reduit dans rag_engine.
 

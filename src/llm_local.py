@@ -266,25 +266,25 @@ class LocalLLM:
                     # V17 FIX : correcteur français via _fix_tokenization (appliqué plus bas)
 
                     try:
-                        # Parametres de sampling
-                        if intent == "RAG":
-                            is_1_5b = "1.5B" in model_id
-                            temp = 0.35 if is_1_5b else 0.3
-                            top_p = 0.9
-                            rep_penalty = 1.10 if is_1_5b else 1.15
-                        elif intent == "SIMPLE":
-                            is_1_5b = "1.5B" in model_id
-                            temp = 0.7 if is_1_5b else 0.6
-                            top_p = 0.90
-                            rep_penalty = 1.20 if is_1_5b else 1.05
-                        else:
-                            temp = 0.4
-                            top_p = 0.85
-                            rep_penalty = 1.10
+                        # Parametres de sampling — AUDIT V16/V17 B-3 : profils
+                        # differencies (temp plus haute + rep_penalty bas = reponses
+                        # plus longues SANS hallucinations supplementaires).
+                        SAMPLING_PROFILES = {
+                            "RAG":        {"temp": 0.55, "top_p": 0.92, "rep_penalty": 1.05, "min_p": 0.05},
+                            "SIMPLE":     {"temp": 0.80, "top_p": 0.95, "rep_penalty": 1.02, "min_p": 0.0},
+                            "GENERAL":    {"temp": 0.65, "top_p": 0.93, "rep_penalty": 1.05, "min_p": 0.05},
+                            "CODE":       {"temp": 0.25, "top_p": 0.90, "rep_penalty": 1.10, "min_p": 0.10},
+                            "CREATIVE":   {"temp": 1.00, "top_p": 0.98, "rep_penalty": 1.00, "min_p": 0.0},
+                        }
+                        _prof = SAMPLING_PROFILES.get(intent, SAMPLING_PROFILES["RAG"])
+                        temp = _prof["temp"]
+                        top_p = _prof["top_p"]
+                        rep_penalty = _prof["rep_penalty"]
+                        min_p = _prof["min_p"]
 
                         make_sampler_kwargs = dict(temp=temp, top_p=top_p)
-                        if temp < 0.3:
-                            make_sampler_kwargs["min_p"] = 0.1
+                        if min_p > 0:
+                            make_sampler_kwargs["min_p"] = min_p
                         sampler = make_sampler(**make_sampler_kwargs)
                         logits_processors = [make_repetition_penalty(rep_penalty)]
 
@@ -336,10 +336,15 @@ class LocalLLM:
                             import psutil
                             _vm = psutil.virtual_memory()
                             _ram_gb = _vm.available / (1024**3)
+                            # AUDIT _2:117 — plafonds relevés (le modèle 4-bit tient
+                            # dans 2.5 Go; le throttling agressif coupait les citations).
+                            # Garde minimale conservée pour éviter le thrash M1 (<1 Go:
+                            # should_force_cloud() bascule déjà en cloud, ceci est le
+                            # dernier filet).
                             if _ram_gb < 1.0:
-                                _max_tok = min(config.local_max_tokens, 384)
+                                _max_tok = min(config.local_max_tokens, 1024)
                             elif _ram_gb < 2.0:
-                                _max_tok = min(config.local_max_tokens, 640)
+                                _max_tok = min(config.local_max_tokens, 1536)
                             else:
                                 _max_tok = config.local_max_tokens
                         except Exception:

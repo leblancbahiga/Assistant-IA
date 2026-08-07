@@ -6,19 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="3593a8dd-1a26-409b-af6b-c7b826474b13" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bugs_sol.md" beforeDir="false" afterPath="$PROJECT_DIR$/bugs_sol.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/indexes/reindex_checkpoint.json" beforeDir="false" afterPath="$PROJECT_DIR$/indexes/reindex_checkpoint.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run.sh" beforeDir="false" afterPath="$PROJECT_DIR$/run.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/conversation_engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/conversation_engine.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kernel/cache.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/cache.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kernel/metrics.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/metrics.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/nuru_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/nuru_core.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/main_window.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/main_window.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/navigation/nav_controller.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/navigation/nav_controller.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/documents_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/documents_page.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/home_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/home_page.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ui/pages/memory_page.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/pages/memory_page.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kernel/pipeline_steps.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/pipeline_steps.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/llm_local.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/llm_local.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/rag_engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/rag_engine.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routing/prompt_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/routing/prompt_builder.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

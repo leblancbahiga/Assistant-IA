@@ -156,12 +156,12 @@ class DynamicPromptBuilder:
             full_prompt += (
                 f"\n\n## INSTRUCTION — CONTEXTE DISPONIBLE\n"
                 f"Le CONTEXTE ci-dessus contient des documents de l'utilisateur.\n"
-                f"Utilise-le en priorité pour répondre.\n"
-                f"- Si le contexte contient l'information, base-toi dessus.\n"
-                f"- Si le contexte ne contient pas l'information, utilise tes connaissances.\n"
-                f"- Si l'utilisateur énonce une information à retenir, "
-                f"accuse réception et propose de la mémoriser.\n"
-                f"- Cite la source quand tu utilises le contexte. [Source: fichier]\n\n"
+                f"- Réponds en t'appuyant sur ce CONTEXTE en priorité.\n"
+                f"- Cite [Source: nom] après chaque information tirée du contexte.\n"
+                f"- Si l'information demandée n'apparaît pas dans le contexte, "
+                f"réponds en une phrase que tu ne la trouves pas dans les documents fournis "
+                f"— n'invente jamais de détails, de postes ou de chiffres.\n"
+                f"- Ne répète jamais deux fois la même phrase.\n\n"
                 f"{safe_query}"
             )
         else:
