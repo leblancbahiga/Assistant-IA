@@ -930,97 +930,67 @@ class NuruCore:
                             confidence_label: str | None = None) -> str:  # V16 FIX
         from src.identity_manager import IdentityManager
         identity = IdentityManager.load()
-        static_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-            user_name=identity["user_name"],
-            user_full_name=identity["user_full_name"],
-            user_profession=identity["user_profession"],
-            user_specialty=identity["user_specialty"],
-            user_organizations=identity["user_organizations"]
-        )
-        parts = [static_prompt]
-        
+        # V18-24 (revue GLM) : prompt COURT ~12 lignes axées RAG (identité + langue
+        # + 3 règles). Le template complet nettoyé (SYSTEM_PROMPT_TEMPLATE) reste
+        # pour le chemin legacy V4.5/V19 — pas pour le pipeline actif (TTFT/contexte).
+        parts = [
+            f"Tu es NURU V8+, l'assistant IA personnel de {identity['user_name']}.",
+            f"Tu es {identity['user_profession']}, spécialiste de {identity['user_specialty']}.",
+            "Tu réponds TOUJOURS en français, de manière naturelle et fluide.",
+        ]
         # Règles de réponse spécifiques à l'intention (surcouche au prompt de base)
         if intent == "RAG":
-            parts.append("""
-# RAPPEL RAG
-Le CONTEXTE ci-dessous (entre === DÉBUT DU CONTEXTE === et === FIN DU CONTEXTE ===)
-est la source principale. Applique les règles du MODE RAG STRICT ci-dessus.""".strip())
+            parts.append("""# RÈGLES RAG (3)
+1. Priorité aux documents : le CONTEXTE ci-dessous (entre === DÉBUT DU CONTEXTE ===
+   et === FIN DU CONTEXTE ===) est la source principale.
+2. MODE STRICT : utilise UNIQUEMENT les informations présentes dans les sources.
+   N'invente jamais une information absente. Cite systématiquement la source.
+3. Si l'information n'existe pas dans les documents : dis-le honnêtement,
+   ne comble pas avec tes connaissances générales.""".strip())
             # V16 FIX : Propager le niveau de confiance RAG au LLM
             if confidence_label:
                 if confidence_label == "ABSENT":
-                    parts.append("""
-⚠️ CONFIANCE DOCUMENT : AUCUN DOCUMENT PERTINENT TROUVÉ
+                    parts.append("""⚠️ CONFIANCE DOCUMENT : AUCUN DOCUMENT PERTINENT TROUVÉ
 Aucun document correspondant n'a été trouvé dans la base RAG pour cette requête.
 Ne tente PAS d'inventer des informations à partir de documents inexistants.
 Réponds honnêtement que tu ne trouves pas d'information pertinente dans les sources,
 et propose d'aider l'utilisateur à reformuler sa recherche.""".strip())
                 elif confidence_label == "FAIBLE":
-                    parts.append("""
-⚠️ CONFIANCE DOCUMENT : FAIBLE
+                    parts.append("""⚠️ CONFIANCE DOCUMENT : FAIBLE
 Les documents trouvés ont une faible pertinence par rapport à la requête.
 Vérifie attentivement chaque information avant de l'utiliser.
 Si les documents ne répondent pas correctement à la question, indique les limites.""".strip())
                 elif confidence_label == "MOYENNE":
-                    parts.append("""
-ℹ️ CONFIANCE DOCUMENT : MOYENNE
+                    parts.append("""ℹ️ CONFIANCE DOCUMENT : MOYENNE
 Les documents trouvés sont modérément pertinents. Peux servir de base de réponse
 mais vérifie les affirmations importantes contre le contexte.""".strip())
         elif intent == "COMPLEX":
-            parts.append("""
-# MODE RECHERCHE WEB
+            parts.append("""# MODE RECHERCHE WEB
 Le contexte ci-dessous contient des résultats de recherche Web. Applique le MODE HYBRIDE :
 utilise les résultats Web en priorité, complète avec tes connaissances si nécessaire.""".strip())
         elif intent == "GENERAL":
             # V10.1 : Connaissances générales — réponse libre, pas de RAG
-            parts.append("""
-# MODE CONNAISSANCES GÉNÉRALES
+            parts.append("""# MODE CONNAISSANCES GÉNÉRALES
 Tu réponds avec tes connaissances internes. Pas de documents à référencer.
 Si tu n'es pas certain de la réponse, indique-le honnêtement.""".strip())
         else: # SIMPLE (greetings, chit-chat)
-            parts.append("""
-# MODE CONVERSATION
+            parts.append("""# MODE CONVERSATION
 Réponds de manière naturelle et chaleureuse. Les règles sur les sources et le RAG
 ne s'appliquent pas pour les salutations et conversations simples.""".strip())
         
         if procedures.strip():
-            parts.append(f"\n## Règles de comportement personnalisées\n{procedures.strip()}")
+            parts.append(f"## Règles de comportement personnalisées\n{procedures.strip()}")
             
         if facts:
             facts_str = "\n".join(facts)
             if facts_str.strip():
-                parts.append(f"\n## Ce que tu sais sur {identity['user_name']}\n{facts_str.strip()}")
+                parts.append(f"## Ce que tu sais sur {identity['user_name']}\n{facts_str.strip()}")
 
-        # V12.1 — ANTI-HALLUCINATION : informations personnelles
-        parts.append(f"""
-# RÈGLE STRICTE : INFORMATIONS PERSONNELLES SUR L'UTILISATEUR
-Quand on te parle de {identity["user_name"]} (son identité, âge, vie, travail, projets, nationalité, résidence) :
+        # V12.1 — ANTI-HALLUCINATION : informations personnelles (compacté V18-24)
+        parts.append(f"""# RÈGLE STRICTE : INFORMATIONS PERSONNELLES SUR L'UTILISATEUR
+Quand on te parle de {identity["user_name"]} (identité, âge, vie, travail, projets, nationalité, résidence) :
 - Utilise UNIQUEMENT les faits listés dans ## Ce que tu sais sur {identity["user_name"]} ci-dessus.
-- N'INVENTE JAMAIS d'informations personnelles qui n'y figurent pas.
-- Si les faits sont insuffisants pour répondre, dis-le honnêtement : "Je ne dispose pas
-  de cette information dans ma mémoire à propos de {identity["user_name"]}."
-- Ne comble PAS les lacunes avec des suppositions, généralités ou stéréotypes.
-- Exemple à ne PAS suivre : "Sa couleur préférée est le bleu" → si ce fait n'est pas
-  dans ## Ce que tu sais sur {identity["user_name"]}, ne l'invente pas.
-""".strip())
-
-        # ── Phase 3 : Contexte augmenté ──
-        try:
-            kg_nodes = self.k('knowledge_graph').search_nodes("", limit=5)
-            if kg_nodes:
-                kg_block = "\n".join(f"- {n.label} ({n.entity_type})" for n in kg_nodes)
-                parts.append(f"\n## Connaissances reliées (Knowledge Graph)\n{kg_block}")
-        except Exception:
-            pass
-
-        try:
-            phase = self.k('sleep_cycle').current_phase
-            if phase.value != "awake":
-                from src.memory.sleep_cycle import SleepPhase
-                phase_names = {SleepPhase.AWAKE.value: "éveillé", SleepPhase.LIGHT.value: "sommeil léger",
-                              SleepPhase.DEEP.value: "sommeil profond", SleepPhase.REM.value: "sommeil paradoxal"}
-                parts.append(f"\n## Statut NURU\nÉtat : {phase_names.get(phase.value, phase.value)}")
-        except Exception:
-            pass
+- N'INVENTE JAMAIS d'informations personnelles qui n'y figurent pas ; dis-le honnêtement si insuffisant.""".strip())
         return "\n".join(parts)
 
 

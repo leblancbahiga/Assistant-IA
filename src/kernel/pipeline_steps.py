@@ -368,11 +368,19 @@ class BuildContext(PipelineStep):
                 ctx.full_prompt = full_prompt
                 logger.debug("💬 SIMPLE: prompt minimal (pas de RAG/session)")
             else:
+                # V18-24 : rebrancher le prompt système via NuruCore.build_system_prompt
+                # (snippet round 4 Q1 ✅ VALIDÉ) — au lieu de None (BUG V17)
+                nuru_core = _get_service("nuru_core")
+                if nuru_core and hasattr(nuru_core, "build_system_prompt"):
+                    system_prompt_builder = nuru_core.build_system_prompt
+                else:
+                    system_prompt_builder = None
+
                 system_prompt, full_prompt = prompt_builder.build_prompt(
                     ctx.intent, ctx.query, ctx.rag_context, ctx.web_context,
                     user_facts_str=ctx.user_facts_str,
                     session_id=ctx.session_id if ctx.intent != "SIMPLE" else None,
-                    system_prompt_builder=None,
+                    system_prompt_builder=system_prompt_builder,
                     memory_store=memory_store,
                     session_store=session_store,
                     context_budget=context_budget,
@@ -641,6 +649,57 @@ class Validate(PipelineStep):
                 )
                 if not result.valid and result.confidence < 0.3:
                     logger.warning("⚠️ Score évidence faible: %.2f — %s", result.confidence, result.reason)
+                    # V17.4 FIX : l'hallucination détectée doit être neutralisée,
+                    # pas seulement loggée. On régénère une fois avec un prompt
+                    # strict (citation obligatoire), sinon on renvoie un refus honnête.
+                    try:
+                        llm_gen = _get_service("llm_generator")
+                        has_real_context = bool(
+                            ctx.rag_context
+                            and "AUCUNE SOURCE" not in ctx.rag_context
+                        )
+                        if llm_gen is not None and has_real_context:
+                            strict_prompt = (
+                                "Réponds UNIQUEMENT à partir du contexte ci-dessous, "
+                                "en citant [Source: nom] après chaque fait. "
+                                "Si l'information n'y est pas, dis en une phrase que tu "
+                                "ne la trouves pas dans les documents — n'invente rien.\n\n"
+                                f"CONTEXTE:\n{ctx.rag_context[:3000]}\n\n"
+                                f"QUESTION: {ctx.query}"
+                            )
+                            retry_text = ""
+                            async for token in llm_gen.generate(
+                                strict_prompt, strict_prompt, ctx.query, "RAG", ctx,
+                                session_id=ctx.session_id,
+                            ):
+                                retry_text += token if isinstance(token, str) else ""
+                                # Streamer la correction vers l'UI en temps réel
+                                if ctx.stream_queue is not None and isinstance(token, str):
+                                    await ctx.stream_queue.put(token)
+                            if retry_text and len(retry_text) > 20:
+                                retry_result = verifier.verify(
+                                    retry_text, ctx.query, ctx.rag_context,
+                                )
+                                if retry_result.valid or retry_result.confidence >= 0.3:
+                                    ctx.response = retry_text
+                                    logger.info("🔁 Régénération stricte: évidence %.2f OK",
+                                                retry_result.confidence)
+                                else:
+                                    ctx.response = (
+                                        "Je ne trouve pas cette information dans les "
+                                        "documents fournis. [Source: AUCUNE SOURCE]"
+                                    )
+                            else:
+                                ctx.response = (
+                                    "Je ne trouve pas cette information dans les "
+                                    "documents fournis. [Source: AUCUNE SOURCE]"
+                                )
+                    except Exception as e:
+                        logger.debug("⚠️ Régénération stricte: %s", e)
+                        ctx.response = (
+                            "Je ne trouve pas cette information dans les "
+                            "documents fournis. [Source: AUCUNE SOURCE]"
+                        )
             except Exception as e:
                 logger.debug("⚠️ Evidence verifier: %s", e)
 
