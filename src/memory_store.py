@@ -24,10 +24,10 @@ class MemoryStore:
         self.embedder = Embedder()
         self._init_db()
         self._init_feedback_tables()  # V4.5 Phase 3 : Feedback + Knowledge Cards
-        self._memory_context = {} # Working Memory (RAM)
+        # V16 AUDIT FIX QW5 : remplacer dict brut par WorkingMemory avec TTL
+        from src.memory.working import WorkingMemory
+        self._working_memory = WorkingMemory(working_ttl=300.0, max_entries=200)
         self._cache_lock = asyncio.Lock()  # V10.2: protection race condition cache
-        self._mem_lock = asyncio.Lock()     # V10.2: protection race condition working memory
-
     def _get_conn(self):
         """Ouvre une nouvelle connexion (Thread-safe) avec WAL mode."""
         conn = sqlite3.connect(str(self.db_path), timeout=20)
@@ -101,7 +101,7 @@ class MemoryStore:
         # Semantic Cache (Vectorized)
         conn.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS semantic_cache USING vec0(
-                embedding FLOAT[768],
+                embedding FLOAT[1024],
                 query TEXT,
                 response TEXT,
                 hit_count INTEGER DEFAULT 0
@@ -573,3 +573,47 @@ class MemoryStore:
         conn.execute("UPDATE user_facts SET is_active = 0 WHERE id = ?", (fact_id,))
         conn.commit()
         conn.close()
+
+    def get_full_context(self, query: str = "") -> str:
+        """Retourne le contexte mémoire formaté pour injection RAG.
+
+        Combine les faits utilisateur actifs, les faits généraux récents,
+        et la mémoire de travail. Utilisé par RAGEngine.retrieve().
+        """
+        parts = []
+
+        # 1. Faits utilisateur actifs (tous types)
+        try:
+            user_facts = self.get_user_facts(limit=50)
+            if user_facts:
+                lines = []
+                for f in user_facts:
+                    tag = f["fact_type"].upper()
+                    lines.append(f"[{tag}] {f['content']}")
+                parts.append("=== INFORMATIONS UTILISATEUR ===\n" + "\n".join(lines))
+        except Exception as e:
+            logger.debug(f"get_full_context user_facts: {e}")
+
+        # 2. Faits généraux récents
+        try:
+            recent = self.get_recent_facts(limit=20)
+            if recent:
+                parts.append("=== FAITS GÉNÉRAUX ===\n" + "\n".join(recent))
+        except Exception as e:
+            logger.debug(f"get_full_context facts: {e}")
+
+        # 3. Mémoire de travail (working memory contextuel)
+        try:
+            if self._working_memory.count() > 0:
+                work_entries = [
+                    f"{k}: {v[:200]}" if isinstance(v, str) else f"{k}: {str(v)[:200]}"
+                    for k, v in self._working_memory.all().items()
+                ]
+                parts.append("=== MÉMOIRE DE TRAVAIL ===\n" + "\n".join(work_entries))
+        except Exception as e:
+            logger.debug(f"get_full_context working memory: {e}")
+
+        if not parts:
+            return ""
+
+        return "\n\n".join(parts)

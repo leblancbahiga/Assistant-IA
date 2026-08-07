@@ -96,6 +96,7 @@ async def hyde_search(
             content=content,
             source=source,
             score=float(score),
+            raw_score=float(score),
             strategy='hyde',
             rank=i,
         ))

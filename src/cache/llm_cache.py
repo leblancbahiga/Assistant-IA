@@ -137,7 +137,10 @@ class LLMCache:
 
     @staticmethod
     def _hash(query: str) -> str:
-        return hashlib.md5(query.encode("utf-8")).hexdigest()
+        # V16 AUDIT FIX QW13 : normaliser la requête avant hash
+        # Évite les misses de cache pour variations mineures (espaces, casse)
+        normalized = query.strip().lower()
+        return hashlib.md5(normalized.encode("utf-8")).hexdigest()
 
     def _trim_l1(self):
         """Élimine les entrées les plus anciennes si L1 dépasse maxsize."""

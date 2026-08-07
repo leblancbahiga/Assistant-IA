@@ -56,6 +56,17 @@ if HAS_WATCHDOG:
             if path in self._pending:
                 self._pending.discard(path)
                 try:
+                    # V17: ne pas indexer pendant la generation LLM (evite concurrency
+                    # RAM sur M1 8Go → crash Qt SIGSEGV)
+                    from src.core.ram_budget import get_budget
+                    budget = get_budget()
+                    max_wait = 120.0
+                    waited = 0.0
+                    while getattr(budget, "_generating", False) and waited < max_wait:
+                        await asyncio.sleep(2.0)
+                        waited += 2.0
+                    if waited >= max_wait:
+                        logger.warning(f"[DocWatcher] Génération trop longue — indexation forcée de {path}")
                     await self.index_callback(path)
                 except Exception as e:
                     logger.error(f"[DocWatcher] Indexation échouée: {path} — {e}")

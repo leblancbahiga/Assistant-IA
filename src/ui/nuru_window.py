@@ -224,7 +224,9 @@ class NuruWindow(QMainWindow):
         self.setWindowTitle("NURU v15")
         self.resize(WindowSizes.WINDOW_WIDTH, WindowSizes.WINDOW_HEIGHT)
         self.setMinimumSize(WindowSizes.WINDOW_MIN_WIDTH, WindowSizes.WINDOW_MIN_HEIGHT)
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        # V17 FIX : WA_TranslucentBackground supprimé — rendait les boutons
+        # de la barre de titre macOS (fermer/réduire/agrandir) inopérants.
+        # Le NuruCentralWidget paint toujours le fond gradient custom.
         try:
             self.setWindowIcon(QIcon("src/ui/assets/Gemini_Generated_Image_35cdt735cdt735cd_transparent.png"))
         except Exception:
@@ -371,6 +373,8 @@ class NuruWindow(QMainWindow):
             self._engine.response_metadata.connect(
                 self._on_engine_metadata, Qt.ConnectionType.UniqueConnection
             )
+            # V17 FIX : glue spaces seulement pour les providers cloud
+            self._conversation._glue_spaces = (self._engine.current_provider != "local")
             self._conversation.start_stream()
             self._engine.send_message(text)
         else:

@@ -5,8 +5,6 @@ import hashlib
 from pathlib import Path
 from typing import List, Optional
 import numpy as np
-import fitz  # PyMuPDF
-from docx import Document
 from src.config import config
 from src.rag_engine import RAGEngine
 from src.embedder import Embedder
@@ -20,8 +18,8 @@ SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".csv", ".json"}
 class IngestionEngine:
     """Moteur d'ingestion de documents pour le RAG V8+."""
     
-    def __init__(self):
-        self.rag = RAGEngine()
+    def __init__(self, rag_engine=None):
+        self.rag = rag_engine or RAGEngine()  # V16 FIX : accepter RAGEngine existant
         self.embedder = Embedder()
 
     def _parse_file(self, file_path: str) -> str:
@@ -34,16 +32,22 @@ class IngestionEngine:
         
         try:
             if ext == ".pdf":
-                with fitz.open(str(path)) as doc:
+                import fitz  # lazy — évite crash si PyMuPDF manquant
+                doc = fitz.open(str(path))
+                try:
+                    page_count = len(doc)
                     for page in doc:
                         text += page.get_text()
+                finally:
+                    doc.close()
                 # V6.1 : Si PyMuPDF n'a rien extrait → PDF scanné → OCR
-                if not text.strip() and len(doc) > 0:
+                if not text.strip() and page_count > 0:
                     from src.ocr import ocr_fallback
                     ocr_text = ocr_fallback(str(path), "")
                     if ocr_text:
                         text = ocr_text
             elif ext == ".docx":
+                from docx import Document  # lazy — évite crash si python-docx manquant
                 doc = Document(str(path))
                 # V12 : extraire aussi le contenu des tables AVEC en-têtes de colonnes
                 parts = [p.text for p in doc.paragraphs]
@@ -68,13 +72,34 @@ class IngestionEngine:
                             parts.append(row_text)
                 text = "\n".join(parts)
             elif ext in [".txt", ".md"]:
-                with open(path, "r", encoding="utf-8") as f:
-                    text = f.read()
+                # V16 FIX : fallback latin-1 si UTF-8 échoue (fichiers Windows)
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        text = f.read()
+                except UnicodeDecodeError:
+                    with open(path, "r", encoding="latin-1") as f:
+                        text = f.read()
+                        logger.info(f"  ↪ latin-1 fallback: {path.name}")
             elif ext == ".csv":
                 import csv
-                with open(path, "r", encoding="utf-8") as f:
-                    reader = csv.reader(f)
-                    text = "\n".join(["," .join(row) for row in reader])
+                import io
+                decoded = ""
+                # V16 FIX : fallback latin-1 + ignore les lignes malformées
+                try:
+                    raw = path.read_bytes()
+                    for enc in ("utf-8", "latin-1", "cp1252"):
+                        try:
+                            decoded = raw.decode(enc)
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    if not decoded:
+                        decoded = raw.decode("utf-8", errors="replace")
+                    reader = csv.reader(io.StringIO(decoded))
+                    text = "\n".join([",".join(row) for row in reader if any(cell.strip() for cell in row)])
+                except Exception as csv_err:
+                    logger.error(f"⚠️ CSV {path.name}: {csv_err}")
+                    text = decoded or ""
             elif ext == ".json":
                 with open(path, "r", encoding="utf-8") as f:
                     import json as j
@@ -105,8 +130,8 @@ class IngestionEngine:
             from src.core.prompt_guard import sanitize_path
             sanitize_path(filepath)
 
-            # Timeout critique de 120s par document (V10.1: 30s → 120s pour les gros fichiers comme NURU_V9.md)
-            async with asyncio.timeout(120):
+            # Timeout de 300s par document (V17: 120s → 300s pour les PDFs volumineux)
+            async with asyncio.timeout(300):
                 file_hash = self.compute_sha256(filepath)
                 if not file_hash:
                     return
@@ -206,7 +231,7 @@ class IngestionEngine:
                     logger.warning(f"⚠️ Extraction structurée échouée pour {os.path.basename(filepath)}: {e}")
 
         except asyncio.TimeoutError:
-            logger.error(f"⏱ Timeout sur {filepath} (>30s).")
+            logger.error(f"⏱ Timeout sur {filepath} (>300s).  Ignorer ou augmenter INDEX_TIMEOUT.")
         except Exception as e:
             logger.error(f"❌ Erreur critique {filepath}: {e}")
 

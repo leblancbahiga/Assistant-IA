@@ -124,7 +124,7 @@ def _escape_block_delimiters(text: str) -> str:
 
 
 # Cache de compilation regex (perf)
-_TRUNCATE_RE = re.compile(r"\s+")
+_TRUNCATE_RE = re.compile(r"[^\S\r\n]+")  # préserve les \n pour la structure RAG
 
 
 def sanitize_for_prompt_injection(user_input: str, max_chars: int = 1000) -> str:

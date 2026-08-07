@@ -9,7 +9,7 @@ import os
 import time
 from pathlib import Path
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QFrame, QScrollArea, QPushButton, QComboBox,
     QCheckBox, QSlider, QSpinBox, QLineEdit,
     QFileDialog, QMessageBox, QSizePolicy,

@@ -1,3 +1,10 @@
+"""NURU V15 — RAMMonitor : surveillance RAM continue et déchargement conditionnel.
+
+⚠️ V17 : OBSOLÈTE — Remplacé par RAMBudgetManager (src/core/ram_budget.py).
+    Les callbacks (clear_reranker, _maybe_unload_embedder) ont été migrés.
+    ram_monitor.start() n'est plus appelé dans NuruCore.
+    Fichier conservé pour compatibilité, sera supprimé en V18.
+"""
 import psutil
 import logging
 import gc

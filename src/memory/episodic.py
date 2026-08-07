@@ -8,6 +8,7 @@ par similarité.
 Inspiré de MemGPT/Letta (episodic memory) et MIRIX.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -88,14 +89,14 @@ class EpisodicMemory:
         logger.debug("Épisode ajouté : %s — %s", episode_id, summary[:60])
         return episode_id
 
-    def recall(
+    async def recall(
         self,
         query: str,
         top_k: int = 5,
         min_importance: float = 0.0,
         event_types: Optional[list[str]] = None,
     ) -> list[dict[str, Any]]:
-        """Recherche les épisodes les plus similaires à une requête.
+        """Recherche les épisodes les plus similaires à une requête (asynchrone).
 
         Args:
             query: Texte de recherche
@@ -106,7 +107,9 @@ class EpisodicMemory:
         Returns:
             Liste de dicts : {id, timestamp, event_type, summary, context, importance, score}
         """
-        query_emb = self._embed_query(query)
+        # L'embedding est CPU-bound (MLX) → exécuté dans un thread pour ne pas
+        # bloquer l'event loop. V17 Phase 2.
+        query_emb = await asyncio.to_thread(self._embed_query, query)
         conn = self.schema._get_conn()
         try:
             # Récupère les candidats (avec embedding) pour similarité cosinus
@@ -215,17 +218,9 @@ class EpisodicMemory:
         return emb.astype(np.float32).reshape(-1)
 
     def _embed_sync(self, text: str) -> np.ndarray:
-        """Version synchrone du calcul d'embedding."""
-        try:
-            import asyncio
-            return asyncio.run(self.embedder.embed(text, is_query=False))
-        except RuntimeError:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(self.embedder.embed(text, is_query=False))
-            finally:
-                loop.close()
+        """Version synchrone du calcul d'embedding (utilitaire partage)."""
+        from src.memory._embed_utils import embed_sync
+        return embed_sync(text, self.embedder)
 
     @staticmethod
     def _deserialize_embedding(blob) -> np.ndarray:

@@ -22,11 +22,15 @@ class CrossEncoderReranker:
     
     def __init__(
         self,
-        model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        model_name: str = "",
         top_k_retrieval: int = 15,
         top_k_rerank: int = 3,
         min_score_for_relevance: float = 0.0,
     ):
+        # V17.2: utiliser le modele config (multilingue) par defaut si non fourni
+        if not model_name:
+            from src.config import config
+            model_name = config.reranker_model
         self.model_name = model_name
         self.top_k_retrieval = top_k_retrieval
         self.top_k_rerank = top_k_rerank
@@ -50,6 +54,17 @@ class CrossEncoderReranker:
             
             device = 'mps' if torch.backends.mps.is_available() else 'cpu'
             logger.info(f"🧮 Chargement cross-encoder: {self.model_name} sur {device}")
+            
+            # V16 FIX : Forcer le mode offline HF + redirection des logs httpx vers WARNING
+            # pour éviter le bruit de 15s+ de requêtes HTTP à chaque chargement.
+            import os
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            # Réduire le log des requêtes HTTP (devient DEBUG)
+            logging.getLogger("httpx").setLevel(logging.WARNING)
+            logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+            logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+            logging.getLogger("urllib3").setLevel(logging.WARNING)
+            
             self._model = CrossEncoder(self.model_name, device=device)
             self._loaded = True
             logger.info("✅ Cross-encoder MiniLM chargé")

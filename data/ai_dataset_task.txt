@@ -1,0 +1,369 @@
+# TÂCHE : Générer un dataset d'entraînement LoRA de QUALITÉ pour NURU
+
+Tu es un expert en création de datasets pour le fine-tuning d'un assistant IA
+agricole local (NURU, modèle Phi-4-mini). Tu produis des paires question/réponse
+à partir des documents ci-dessous.
+
+## Contexte
+NURU est un assistant RAG qui répond à partir des documents personnels
+de l'utilisateur (rapports FAO, études BEACCOM, CV, propositions de projets
+agricoles en RDC). Le dataset sert à entraîner un adaptateur LoRA à :
+citer les sources, répondre avec précision à partir des documents, produire
+des réponses RICHES et STRUCTURÉES. Les réponses répondent TOUJOURS
+directement à la question — jamais de commentaire sur le contexte ou la réponse.
+
+## RÈGLES DE QUALITÉ (critiques)
+0. INTERDICTION ABSOLUE DE META-DISCOURS : la réponse assistant répond DIRECTEMENT
+   à la question. JAMAIS de phrases qui parlent de la réponse, du contexte ou du
+   processus au lieu de répondre. Interdit, entre autres :
+   - « L'extrait fournit des éléments précis pour répondre à la question, mais… »
+   - « La réponse doit rester limitée au contenu fourni… »
+   - « J'ai limité la recherche au contenu de l'extrait… »
+   - « Il ne serait donc pas fiable d'utiliser des connaissances générales… »
+   - « Le contexte fournit également des éléments précis… »
+   Chaque réponse commence DIRECTEMENT par l'information demandée
+   (ex: « Le projet BEACCOM vise… », « L'expérience de Leblanc comprend… »).
+   Une réponse piège se limite à : « Je ne trouve pas cette information dans
+   les documents fournis. » — sans justification ni développement.
+
+1. RÉPONSES LONGUES et STRUCTURÉES (300 à 800 mots) :
+   - Introduction (1-2 phrases)
+   - 2 à 4 SECTIONS avec titres en gras (##)
+   - LISTES À PUCES, tableaux ou paragraphes pour détailler
+   - EXEMPLES concrets issus du contexte
+   - Conclusion (1-2 phrases)
+   Jamais une réponse d'une seule phrase ou d'un paragraphe court.
+
+2. CITATIONS : après chaque information factuelle importante, cite :
+   [Source: nom_du_fichier]
+   Exemple : "Le projet PASA-NK vise la sécurité alimentaire [Source: rapport.pdf]."
+   N'invente JAMAIS une information hors contexte.
+
+3. FIDÉLITÉ : base-toi sur les documents fournis en priorité. Si l'information
+   n'y est pas, réponds honnêtement avec tes connaissances ou indique-le —
+   sans commentaire meta-discursif sur le processus de réponse.
+
+4. QUESTIONS PIÈGES (15 à 18% du total) :
+   - Le contexte est celui d'un document A (ex: rapport sur le riz).
+   - La question porte sur un sujet B ABSENT de ce contexte.
+   - Réponse = refus bref ET direct :
+     « Je ne trouve pas cette information dans les documents fournis. »
+     — une seule phrase, SANS justification, SANS développement.
+
+## FORM DE SORTIE EXACT (JSON Lines, un objet par ligne, clé "messages")
+Chaque ligne est un objet JSON :
+{"messages": [
+  {"role": "system", "content": "<SYSTEM_PROMPT ci-dessus>"},
+  {"role": "user", "content": "[Document N] (Source: fichier)
+<chunk>
+
+Question : <question>"},
+  {"role": "assistant", "content": "<réponse longue structurée avec [Source: ...]>"}
+]}
+Écris UNIQUEMENT des lignes JSON valides, sans texte autour, sans ```json.
+
+
+============================================================
+# 8 DOCUMENTS SOURCES (pour générer les paires)
+============================================================
+
+## [Document 1] — Source: 1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf
+Section: Résumé du document
+Document: 1 -  CURRICULUM VITAE-Omombo Mulamba Toussaint Josaphat-2024_033428.pdf
+• CURRICULUM VITAE: I. IDENTITE  
+Nom, post nom et prénom   OMOMBO MULAMBA Toussaint Josaphat  
+Nationalité   
+Congolaise (RD Congo)  
+Etat civil   
+Célibataire   
+Adresse physique   
+N° 21o, Hôpital Général/C, Q/Nkafu, C/Kadutu, V/Bukavu, RD 
+Congo  
+E-mail  
+omombom@yahoo.com , omombo.mulamba@uobukavu.ac.cd 
+                             josaphattomj@gmail.com  
+Téléphone 
++ 243 819 141 360 ; +243 973 161 651 
+  
+II. EDUCATION 
+o 2023 : Diplôme d’Etudes Spécialisées (Master) en Environnement et Gestion des 
+Ressou...
+• MAITRISES DES LANGUES: Français 
+Anglais 
+Kiswahili 
+Lingala 
+Parlé 
+Excellent 
+Très bien 
+Excellent 
+Très bien 
+Ecrire 
+Excellent 
+Très bien 
+Excellent 
+Très bien 
+Lecture & Compréhension 
+Excellent 
+Très bien 
+Excellent 
+Très bien 
+ 
+VIII. PUBLICATIONS/COMMUNICATIONS SCIENTIFIQUES 
+8.1. 
+Publications 
+Espoir MUGABO K.; MUGISHO YALIRE Didier; MUGANDA MATABARO Josué; OMOMBO 
+MULAMBA Toussa
+
+Omombo M.      Novembre 2024             Page 1 of 7
+
+I. IDENTITE  
+Nom, post nom et prénom   OMOMBO MULAMBA Toussaint Josaphat  
+Nationalité   
+Congolaise (RD Congo)  
+Etat civil   
+Célibataire   
+
+[… fin du chunk tronquée …]
+------------------------------------------------------------
+
+## [Document 2] — Source: 1.docx
+Section: 1.docx
+Leblanc, ton canevas est déjà solide et structuré, mais il peut être optimisé pour renforcer son impact technique, sa cohérence agronomique et sa pertinence pratique. Je vais te proposer deux choses :
+Améliorations à apporter au curriculum (contenu, pédagogie, intégration technique).
+Plan détaillé de mise en place d’un champ de démonstration aligné sur les matières enseignées.
+
+1. Améliorations à apporter au curriculum
+
+a) Contenu technique
+Inclure un module sur la gestion de l’eau en période de sécheresse plus poussé, avec des systèmes simples d’irrigation gravitaire, goutte-à-goutte à faible coût et récupération d’eau de pluie.
+Renforcer l’agroécologie et l’agroforesterie : ajouter un volet sur la sélection d’essences agroforestières locales (Faidherbia albida, Leucaena, moringa) et leur intégration dans les systèmes de cultures.
+Améliorer la composante semencière : inclure la production locale de semences potagères et céréalières, avec notions de sélection massale, conservation et test de germination.
+Intégrer un module sur la gestion intégrée de la fertilité des sols (GIFS) qui combine compost, engrais verts, rotations, cultures de couverture et microdosage d’engrais minéraux.
+
+[… fin du chunk tronquée …]
+------------------------------------------------------------
+
+## [Document 3] — Source: 1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx
+Section: Résumé du document
+Document: 1a_PROPOSITION TECHNIQUE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LCS.docx
+• AGRONOME CHARGÉ DE LA RECHERCHE PARTICIPATIVE: Liste détaillée des tâches assignées
+Chargé de Projet:
+Relèvement communautaire : Gestion du projet TUFAIDIKE WOTE pour le relèvement économique des communautés affectées par les conflits, en collaboration avec CARE International, la FAO et International Alert dans le territoire de Kalehe sous financement USAID.
+Développement économique : Identification et mise en place d'activités génératrices de revenus pour les communautés vulnérables riveraines du Parc National des Virunga dans le territoire...
+• INSTALLATION DES BOISEMENTS COMMUNAUTAIRES POUR LES POPULATIONS RIVERAINES DU PARC NATIONAL DE VIRUNGA: APPUI EN KIT AGRICOLE AUX MÉNAGES DÉPLACÉS DE KARUBA, NGUNGU ET KINIGI.
+
+Postes occupés: CHARGÉ DE PROJET, CHARGÉ DE LA RECHERCHE PARTICIPATIVE
+Activités effectuées:
+DISTRIBUTION DES KITS AGRICOLES (SEMENCES ET OUTILS ARATOIRES)
+
+Section III. Proposition technique - Formulaires types
+TECH-1	Formulaire de soumission d’une proposition technique
+TECH-2	Structure organisationnelle et expérience de la société de conseil
+
+TECH-3	C
+[… fin du chunk tronquée …]
+------------------------------------------------------------
+
+## [Document 4] — Source: 1b_PROPOSITION FINANCIERE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LC1S.docx
+Section: Résumé du document
+Document: 1b_PROPOSITION FINANCIERE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LC1S.docx
+
+Formulaire	FIN-1:	Formulaire	de	soumission	d’une
+proposition financière
+Goma, le 12 Février 2025
+Destinataire:
+
+BUREAU DU PROJET D’APPUI AU SECTEUR AGRICOLE DU NORD KIVU “PASA-NK”
+17, Av. de la Plage, Quartier Himbi, Com. Goma, Ville Goma, Nord Kivu, Rép. Démocratique du Congo.
+
+Attn:	Monsieur MASIRIKA MATUNGURU Joseph. Coordonnateur National de l’Unité de Coordination du Projet « PASA – NK ». Téléphone : (+243 ) 97 66 057 98
+
+Madame, Monsieur,
+
+Nous, soussignés, avons l’honneur de vous proposer nos services de conseil pour réaliser une étude d’analyse de la vulnérabilité des moyens d’existence aux changements climatiques conformément à votre appel à propositions daté du 9 Janvier 2025 et à notre proposition technique. Le montant de notre proposition financière ci-jointe s’élève à Quarante-trois mille neuf cent cinquante (USD). Ce montant ne comprend pas les taxes locales (telles que la taxe sur la valeur ajoutée ou la taxe sur les ventes, les charges sociales ou les impôts sur le revenu auxquels est assujetti le personnel étranger non résident, les droits, les redeva
+[… fin du chunk tronquée …]
+------------------------------------------------------------
+
+## [Document 5] — Source: 1b_PROPOSITION FINANCIERE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LC1S.pdf
+Section: Résumé du document
+Document: 1b_PROPOSITION FINANCIERE_BEACCOM_ ETUDE ANALYSE VULNERABILITE-CHANGEMENT-CLIM_COD1658-0158-CS-LC1S.pdf
+
+Section IV Proposition technique - Formulaires types
+
+Recrutement d’un cabinet/bureau d’étude pour réaliser une étude d’analyse de la vulnérabilité des moyens 
+d’existence aux changements climatiques, COD-1658-0158-CS-LCS  
+1
+
+Formulaire FIN-1: Formulaire de soumission d’une 
+proposition financière
+
+Goma, le 12 Février 2025
+
+Destinataire:
+
+BUREAU DU PROJET D’APPUI AU SECTEUR AGRICOLE DU NORD KIVU “PASA-NK” 
+17, Av. de la Plage, Quartier Himbi, Com. Goma, Ville Goma, Nord Kivu, Rép. Démocratique du 
+Congo.
+
+Attn:  
+Monsieur MASIRIKA MATUNGURU Joseph. Coordonnateur National de l’Unité de 
+Coordination du Projet « PASA – NK ». Téléphone : (+243 ) 97 66 057 98
+
+Madame, Monsieur,
+
+Nous, soussignés, avons l’honneur de vous proposer nos services de conseil pour réaliser une étude 
+d’analyse de la vulnérabilité des moyens d’existence aux changements climatiques 
+conformément à votre appel à propositions daté du 9 Janvier 2025 et à notre proposition technique. 
+Le montant de notre proposition financière ci-jointe s’élève à Quarante-trois mille neuf cent 
+cinquante (USD). Ce mon
+[… fin du chunk tronquée …]
+------------------------------------------------------------
+
+## [Document 6] — Source: 2 - CV_2024-10-11_Leblanc_BAHIGA Mudarhi.pdf
+Section: Résumé du document
+Document: 2 - CV_2024-10-11_Leblanc_BAHIGA Mudarhi.pdf
+• BAHIGA MUDARHI: INGÉNIEUR AGRONOME, EXPERT EN
+• CHAINES DE VALEUR AGRICOLES: Passionné par l'évolution de l'agriculture et fort de plus de 15 années
+d'expérience, je contribue activement à la création de solutions durables
+pour relever les défis de l'alimentation mondiale. Mon expertise couvre la
+recherche agronomique, la gestion de projets, le développement des
+chaînes de valeur et l'accompagnement des communautés rurales.
+• LANGUES: Swahili
+Maternel
+Français
+Niveau Professionnel
+Anglais
+Niveau Professionnel
+• ATOUTS: Leadership & Esprit d'équipe
+Capacité à mobiliser et à motiver
+les équipes pour atteindre des
+objectifs communs. Expérience en
+gestion de personnel et en
+collaboration avec des
+partenaires divers.
+Analyse & Résolution de
+problèmes
+Compétences en analyse de
+données, identification des
+tendances et des défis, et
+proposition de solutions adaptées
+aux besoins des agriculteurs et
+des communautés.
+• EXPÉRIENCES PROFESSIO
+
+Passionné par l'évolution de l'agriculture et fort de plus de 15 années
+d'expérience, je contribue activement à la création de solutions durables
+pour relever les défis de l'alimentation mondiale. M
+[… fin du chunk tronquée …]
+------------------------------------------------------------
+
+## [Document 7] — Source: 2. CONTRAT DE SERVICE ETUDES DE BASE FILIERE RIZ WALIKALE copy.pdf
+Section: Résumé du document
+Document: 2. CONTRAT DE SERVICE ETUDES DE BASE FILIERE RIZ WALIKALE copy.pdf
+• DATE ATTRIBUTION: 05/03/2025
+• DATE SIGNATURE: 05/03/2025
+DATE DE DEMARRAGE     10/03/2025
+• DUREE DU CONTRAT: 30 JOURS
+ 
+ 
+ 
+ 
+ 
+Mars 2025 
+ 
+CONTRAT DE SERVICE N°011/DRC/EA-RIKOLTO/PARTNER/2025 
+ 
+ 
+ÉTUDE DE BASE POUR LA FILIERE RIZ INCLUSIVE EN LIEN AVEC LA GESTION SAINE DE 
+L’ENVIRONNEMENT EN TERRITOIRE DE WALIKALE DANS LE CADRE DU PASA-NK.
+• RIKOLTO: ET 
+ 
+ 
+BEACCOM RDC - Bureau d’Études et Actions en Communication
+• RIKOLTO EN RD CONGO: 026, Avenue des Orchidées, Q. les Volcans, 
+Commune de Goma, Ville de Goma, au Nord Kivu 
+en République Démocratique du Congo 
+Téléphone : + 243 990956184 et + 243 834 920 732 
+E-mail : rdcongo@rikolto.org  
+ 
+ 
+BEACCOM RDC - Bureau d’Études et Actions en 
+Communication 
+Avenue du Lac, n° 182, Commune de Goma 
+Tél : +243 973 422 973 
+Email : beaccomrdc6@gmail.com  
+Province du Nord Kivu / RD Congo 
+ 
+FICHE D’IDENTIFICATION DU MARCHE 
+ 
+1
+• NUMERO CONTRAT: N°011/DRC/EA-R
+
+Nom de l’Acheteur                                          
+          Nom de Fournisseur
+
+(Nom du Maître d’Ouvrage)
+
+Adresse :
+
+MONTANT TOTAL : 44 950,00 USD HORS TAXES
+
+30 JOURS
+
+Mars 2025
+
+CONTRAT
+[… fin du chunk tronquée …]
+------------------------------------------------------------
+
+## [Document 8] — Source: 2.docx
+Section: 2.docx
+Tout d'abord, permettez-moi de saluer la qualité exceptionnelle de ce document. Il est holistique, contextuel et extrêmement bien pensé. L'approche intégrée (agriculture, VSLAs, nutrition, genre), la méthodologie pratique ("Learning by Doing") et l'alignement sur les standards nationaux (TVET/UVQF) sont des gages de pertinence et de durabilité.
+Cependant, même les meilleurs programmes peuvent être affinés. Voici mon analyse détaillée, suivie de propositions d'amélioration et d'un plan concret pour le champ de démonstration.
+
+Partie 1 : Analyse et Propositions d'Amélioration du Curriculum
+Le curriculum couvre remarquablement bien les bases du cycle de production agricole. Mes suggestions visent à renforcer la résilience du système, à diversifier davantage les sources de revenus et à approfondir certaines notions techniques clés.
+1. Renforcement de la Gestion de l'Eau et des Sols (Mois 1 & 3)
+Le curriculum mentionne les Zai pits et les courbes de niveau, ce qui est excellent. Pour aller plus loin face à des pluies imprévisibles :
+Suggestion d'amélioration :
+Introduire la notion de "récolte de l'eau" (Water Harvesting) : En plus des techniques de conservation in situ, former les parti
+[… fin du chunk tronquée …]
+------------------------------------------------------------
+
+============================================================
+# EXEMPLE DE FORMAT ATTENDU
+============================================================
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "Tu es NURU, assistant IA expert en agronomie et chaînes de valeur agricoles.\nTu réponds en te basant en PRIORITÉ sur les documents fournis ci-dessous.\nTu cites tes sources avec [Source: nom_fichier] quand tu utilises le document.\nSi l'information n'est pas dans les documents, réponds honnêtement avec tes connaissances ou dis-le clairement.\nTu fournis des réponses COMPLÈTES, STRUCTURÉES et DÉTAILLÉES : développe chaque point, utilise des listes et des titres quand c'est pertinent."
+    },
+    {
+      "role": "user",
+      "content": "[Document 1] (Source: rapport_beaccom.pdf)\nLe projet BEACCOM vise l'analyse de la vulnérabilité climatique au Nord-Kivu et propose des stratégies d'adaptation pour les communautés agricoles.\n\nQuestion : Quels sont les objectifs du projet BEACCOM ?"
+    },
+    {
+      "role": "assistant",
+      "content": "[Source: rapport_beaccom.pdf]\nLe projet BEACCOM vise plusieurs objectifs stratégiques pour améliorer la résilience des communautés agricoles au Nord-Kivu, en RDC.\n\n## 1. Analyse de la vulnérabilité climatique\nLe projet évalue l'impact des changements climatiques sur les moyens d'existence locaux, notamment les effets des sécheresses et inondations sur les récoltes.\n\n## 2. Stratégies d'adaptation\nLe projet introduit des variétés résistantes et la diversification des cultures pour réduire la dépendance à une seule culture.\n\n## 3. Renforcement des capacités\nLes communautés locales sont formées aux techniques agricoles durables.\n\nEn conclusion, le projet adopte une approche holistique pour sécuriser les moyens d'existence face au climat changeant."
+    }
+  ]
+}
+
+============================================================
+# CONSIGNE FINALE
+============================================================
+
+Produis un dataset de qualité à partir des 8 documents ci-dessus :
+- Génère 100 à 300 paires POSITIVES (question + réponse longue sourcée de 300-800 mots).
+- Génère 15 à 18% de questions PIÈGES (contexte A + question B absente → refus bref).
+- Varie les questions : objectifs, défis, résultats, acteurs, processus, chiffres, localisation.
+- INTERDIT : tout meta-discours (commenter le contexte, la réponse ou le processus). Chaque réponse commence par l'information demandée.
+- Utilise ce SYSTEM_PROMPT en tête de CHAQUE exemple :
+Tu es NURU, assistant IA expert en agronomie et chaînes de valeur agricoles.
+Tu réponds en te basant en PRIORITÉ sur les documents fournis ci-dessous.
+Tu cites tes sources avec [Source: nom_fichier] quand tu utilises le document.
+Si l'information n'est pas dans les documents, réponds honnêtement avec tes connaissances ou dis-le clairement.
+Tu fournis des réponses COMPLÈTES, STRUCTURÉES et DÉTAILLÉES : développe chaque point, utilise des listes et des titres quand c'est pertinent.
+- Respecte STRICTEMENT le format JSON Lines {"messages": [...]}.
+- Écris UNIQUEMENT les lignes JSON valides, sans texte autour ni ```json.

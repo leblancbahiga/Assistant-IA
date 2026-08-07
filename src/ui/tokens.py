@@ -147,6 +147,7 @@ class Radius:
     """Rayons harmonieux — glass-morphism friendly."""
 
     XS: int = 4
+    SMALL: int = 6  # alias SM (agents_page, tools_page)
     SM: int = 6
     MEDIUM: int = 10
     LARGE: int = 14

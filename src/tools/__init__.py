@@ -37,10 +37,23 @@ from src.tools.file_ops import (
 from src.tools.memory_tools import (
     register_memory_tools,
 )
-# AgentOrchestrator fusionné V15 — import direct depuis le module réel
-from src.agent.orchestrator import (
-    AgentOrchestrator, AgentTrace, PlanResult, VerifyResult,
-)
+# AgentOrchestrator ré-exporté via lazy imports (V16 FIX : pas de chargement au démarrage)
+def AgentOrchestrator(*args, **kwargs):
+    from src.agent.orchestrator import AgentOrchestrator as _c
+    return _c(*args, **kwargs)
+
+def AgentTrace(*args, **kwargs):
+    from src.agent.orchestrator import AgentTrace as _c
+    return _c(*args, **kwargs)
+
+def PlanResult(*args, **kwargs):
+    from src.agent.orchestrator import PlanResult as _c
+    return _c(*args, **kwargs)
+
+def VerifyResult(*args, **kwargs):
+    from src.agent.orchestrator import VerifyResult as _c
+    return _c(*args, **kwargs)
+
 from src.tools.agent_tools import (
     register_agent_tools,
 )

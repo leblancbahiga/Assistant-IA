@@ -218,12 +218,13 @@ class SessionStore:
 
     # ── Contexte pour injection prompt ───────────────────────────────────
 
-    def build_context(self, session_id: str, max_messages: int = 10) -> str:
+    def build_context(self, session_id: str, max_messages: int = 10, max_chars: int = 4000) -> str:
         """Construit un bloc de contexte conversationnel pour le prompt.
 
         Args:
             session_id: Identifiant de la session
             max_messages: Nombre maximum de messages (paires user/assistant)
+            max_chars: Taille maximum du bloc (defaut: 4000 chars)
 
         Returns:
             Chaîne formatée pour injection, ou chaîne vide si pas d'historique
@@ -234,11 +235,15 @@ class SessionStore:
 
         # Prendre les N derniers messages
         recent = session.messages[-max_messages:]
-        lines = [
-            m.format_for_prompt()
-            for m in recent
-        ]
-        context = "\n".join(lines)
+        parts = []
+        total = 0
+        for m in recent:
+            chunk = m.format_for_prompt()
+            if total + len(chunk) > max_chars:
+                chunk = chunk[: max_chars - total] + "…[tronqué]"
+            parts.append(chunk)
+            total += len(chunk)
+        context = "\n".join(parts)
 
         return (
             "## Historique de la conversation\n"

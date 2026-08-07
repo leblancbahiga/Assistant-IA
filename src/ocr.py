@@ -2,13 +2,25 @@
 
 Détecte les PDF sans texte extractible et applique Tesseract OCR.
 Dépendances optionnelles : pytesseract, pdf2image, Pillow.
+
+V16 FIX : Purge sys.path des résidus Hermes (conflit PIL Python 3.11/3.13).
 """
 import logging
+import sys
 import tempfile
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# ── V16 FIX : Purge des chemins Hermes de sys.path ──
+_HERMES_MARKERS = ('.hermes/hermes-agent',)
+sys.path = [p for p in sys.path if not any(m in p for m in _HERMES_MARKERS)]
+
+# ── V16 FIX : PIL decompression bomb — les documents scannés 300 DPI
+# dépassent la limite par défaut de 89M px. On lève le plafond.
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None  # Pas de limite (M1 8 Go : attention OOM)
 
 try:
     import pytesseract

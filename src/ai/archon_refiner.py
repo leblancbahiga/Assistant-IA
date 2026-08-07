@@ -141,9 +141,9 @@ class ArchonRefiner:
 
             if text.startswith("[Corrigé]"):
                 self._stats["corrected"] += 1
-                logger.info(
-                    f"🔮 ArchonRefiner: réponse corrigée "
-                    f"(durée={elapsed}ms, score_rag={rag_score:.2f})"
+                logger.debug(
+                f"🔮 ArchonRefiner: réponse corrigée "
+                f"(durée={elapsed}ms, score_rag={rag_score:.2f})"
                 )
                 return text[len("[Corrigé]"):].strip()
 

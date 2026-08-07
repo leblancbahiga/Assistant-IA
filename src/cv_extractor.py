@@ -324,7 +324,7 @@ async def extract_cv_local(text: str, filename: str = "") -> Optional[CVStructur
 
 
 async def extract_cv_cloud(text: str, filename: str = "") -> Optional[CVStructure]:
-    """Extraction via LLM cloud (Groq/OpenRouter).
+    """Extraction via LLM cloud (OpenCode Zen, Groq, DeepSeek, OpenRouter).
 
     Plus fiable que le local pour l'extraction structurée.
     """
@@ -333,9 +333,33 @@ async def extract_cv_cloud(text: str, filename: str = "") -> Optional[CVStructur
 
         from src.config import config
 
-        groq_key = config.groq_key
-        if not groq_key:
-            logger.error("Clé Groq non disponible pour extraction CV cloud")
+        # Déterminer URL et clé selon le provider configuré
+        provider = config.cloud_provider
+        if provider == "groq":
+            api_key = config.groq_key
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            model = "llama-3.1-8b-instant"
+        elif provider == "opencode_zen":
+            api_key = config.opencode_zen_key
+            if not api_key:
+                logger.error("Clé OpenCode Zen non disponible pour extraction CV")
+                return None
+            url = config.opencode_zen_base_url + "/chat/completions"
+            model = config.cloud_model
+        elif provider == "deepseek":
+            api_key = config.deepseek_key
+            url = "https://api.deepseek.com/v1/chat/completions"
+            model = "deepseek-chat"
+        elif provider == "openrouter":
+            api_key = config.openrouter_key
+            url = "https://openrouter.ai/api/v1/chat/completions"
+            model = config.cloud_model
+        else:
+            logger.warning(f"Provider cloud non supporté: {provider}")
+            return None
+
+        if not api_key:
+            logger.warning(f"Clé API manquante pour {provider}")
             return None
 
         # Troncature pour respecter la fenêtre de contexte cloud
@@ -343,23 +367,25 @@ async def extract_cv_cloud(text: str, filename: str = "") -> Optional[CVStructur
         if len(text) > max_chars:
             text = text[:max_chars]
 
-        url = "https://api.groq.com/openai/v1/chat/completions"
+        # V17: max_tokens adapté au provider (modèles reasoning nécessitent plus)
+        extraction_max_tokens = 3000 if provider == "opencode_zen" else 2000
+
         headers = {
-            "Authorization": f"Bearer {groq_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "llama-3.1-8b-instant",
+            "model": model,
             "messages": [
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
                 {"role": "user", "content": f"Texte du CV :\n{text}"},
             ],
             "temperature": 0.1,
-            "max_tokens": 2000,
+            "max_tokens": extraction_max_tokens,
             "response_format": {"type": "json_object"},
         }
 
-        logger.info("Extraction CV via Groq (llama-3.1-8b-instant)...")
+        logger.info(f"Extraction CV via {provider} ({model})...")
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()
@@ -375,7 +401,7 @@ async def extract_cv_cloud(text: str, filename: str = "") -> Optional[CVStructur
             data = _extract_json_from_response(content)
 
         if not data:
-            logger.warning("Impossible d'extraire le JSON de la réponse Groq")
+            logger.warning(f"Impossible d'extraire le JSON de la réponse {provider}")
             return None
 
         cv = _build_cv_structure(data, filename)
@@ -387,10 +413,10 @@ async def extract_cv_cloud(text: str, filename: str = "") -> Optional[CVStructur
         logger.error(f"httpx non disponible : {e}")
         return None
     except json.JSONDecodeError as e:
-        logger.error(f"JSON invalide depuis Groq (fallback échoué) : {e}")
+        logger.error(f"JSON invalide depuis {provider} (fallback échoué) : {e}")
         return None
     except Exception as e:
-        logger.error(f"Erreur extraction CV cloud : {e}")
+        logger.error(f"Erreur extraction CV cloud ({provider}): {e}")
         return None
 
 

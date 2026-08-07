@@ -1,20 +1,50 @@
-"""NURU V8+ — Orchestrateur asynchrone principal.
+"""NURU V8+ - Orchestrateur asynchrone principal.
 
-Point d'entrée du pipeline : reçoit une requête utilisateur,
-orchestre routage → RAG → génération → mémoire, et retourne
-un résultat structuré.
+Point d'entree du pipeline : recoit une requete utilisateur,
+orchestre routage | RAG | generation | memoire, et retourne
+un resultat structure.
+
+V17 : AgentOrchestrator (src/agent/orchestrator.py) desormais
+accessible via _agent_orchestrator. Active par config.agent_loop_enabled
+(False par defaut). Pour les requetes complexes type plan/action,
+le pipeline peut deleguer a l'agent loop 4-phase (Plan-Execute-Verify-Synthesize).
 """
+
+import re
 import asyncio
 import logging
-import re
 import time
 from dataclasses import dataclass, field
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Iterator, Optional
+
+
+# V17 FIX : yield respectant les frontieres de mots (pas de decoupage fixe a 50 chars)
+# Previent les artefacts "av ril" dans le streaming ToT / Self-Consistency.
+def _yield_by_words(text: str, target_chars: int = 80) -> Iterator[str]:
+    """Yield du texte en chunks respectant les frontieres de mots.
+
+    Decoupe a ~target_chars mais UNIQUEMENT sur un espace, jamais
+    au milieu d'un mot. Evite que le glue-space heuristic de l'UI
+    n'ajoute des espaces intempestifs dans les mots.
+    """
+    if not text:
+        return
+    words = re.findall(r'\S+\s*', text)
+    chunk = ""
+    for word in words:
+        if len(chunk) + len(word) > target_chars and chunk:
+            yield chunk
+            chunk = word
+        else:
+            chunk += word
+    if chunk:
+        yield chunk
+
 
 from src.config import config
 
 from src.core.query_context import QueryContext, EvidencePack
-from src.core.events import EventBus
+from src.kernel import NuruKernel
 from src.core.policies import PolicyEngine
 from src.core.response_guard import StrictRAGGuard
 from src.core.prompt_guard import (
@@ -32,8 +62,20 @@ from src.learning.trace_collector import TraceCollector
 from src.cache.llm_cache import LLMCache
 from src.orchestration import RAGOrchestrator, LLMGenerator
 from src.routing.prompt_builder import DynamicPromptBuilder
+from src.routing.v16.router_v16 import RouterV16
+# V16 FIX: SessionMemory unifié (remplace MemoryStore fragmenté)
+from src.core.session_memory import SessionMemory, get_session_memory
+# V16: Self-Consistency Engine
+from src.learning.self_consistency import SelfConsistencyEngine
+# V16: CoT + ToT
+from src.learning.chain_of_thought import (
+    should_use_cot, format_cot_prompt, extract_reasoning_and_answer, strip_reasoning_if_needed,
+)
 
 logger = logging.getLogger(__name__)
+
+# Phase 3 — Noyau central
+_kernel = NuruKernel()
 
 
 @dataclass
@@ -84,7 +126,7 @@ class NuruOrchestrator:
         cloud_llm,
         memory_store,
         policy_engine: Optional[PolicyEngine] = None,
-        event_bus: Optional[EventBus] = None,
+        event_bus=None,
         runtime_manager=None,
         web_search=None,
         context_budget=None,
@@ -96,7 +138,7 @@ class NuruOrchestrator:
         self.cloud_llm = cloud_llm
         self.memory_store = memory_store
         self.policy_engine = policy_engine or PolicyEngine()
-        self.event_bus = event_bus or EventBus()
+        self.event_bus = event_bus or _kernel.get('event_bus')
         self.runtime = runtime_manager
         self.web = web_search
         self.context_budget = context_budget
@@ -124,14 +166,36 @@ class NuruOrchestrator:
 
         # V10.3j — AUDIT BUG-FIX : `rag_pipeline` est référencé par ResearchArchon.
         # Avant ce fix, `self.rag_pipeline` n'était défini nulle part → crash au démarrage.
-        # Sémantique : rag_pipeline = point d'entrée du pipeline RAG (retrieve + chunks).
+        # Sémantique : _rag_engine_ref = point d'entrée du pipeline RAG (retrieve + chunks).
         # On l'aliase sur rag_engine car ce dernier est déjà DI-é depuis NuruCore.
-        self.rag_pipeline = rag_engine
+        # NOTE V16 AUDIT : renommé _rag_engine_ref pour ne pas confondre avec le
+        # RAGOrchestrator complet créé ligne 165 (Bug #2).
+        self._rag_engine_ref = rag_engine
 
-        # V10.3f : Sessions conversationnelles persistantes
+        # V16 — Production Router (V12 déprécié, conservé pour fallback)
+        # V17 FIX : enregistrer dans le Kernel plutôt qu'instanciation directe
+        kernel = NuruKernel()
+        if not kernel.has("v16_router"):
+            kernel.register("v16_router", RouterV16())
+        self.v16_router = kernel.get("v16_router")
+
+        # V16 FIX: SessionMemory unifié (remplace MemoryStore + SessionStore fragmentés)
+        from src.core.session_memory import get_session_memory
+        self.session_memory = get_session_memory(max_messages=6)
+        self._session_max_context = getattr(config, 'session_max_messages', 10)
+
+        # V16 FIX BUG #7 : SelfConsistencyEngine initialisé dans __init__ (pas lazy)
+        self._self_consistency = SelfConsistencyEngine(n_samples=3, temperature=0.7)
+
+        # AUDIT V16 FIX : tracking des tâches de fond pour shutdown propre (4.1)
+        self._bg_tasks: set[asyncio.Task] = set()
+
+        # AUDIT V16 FIX : shell tools ToT désactivés par défaut (sécurité 2.1)
+        self._enable_shell_tools = False
+        
+        # V10.3f : Sessions conversationnelles persistantes (gardé pour compat)
         from src.session.store import SessionStore
         self.session_store = SessionStore()
-        self._session_max_context = getattr(config, 'session_max_messages', 10)
 
         # V10.3h : ArchonRefiner — auto‑correction post‑génération
         from src.ai.archon_refiner import ArchonRefiner
@@ -140,11 +204,17 @@ class NuruOrchestrator:
             enabled=getattr(config, 'archon_enabled', True),
         )
 
+        # V17 : AgentOrchestrator lazy (src/agent/orchestrator.py)
+        # Activation via config.agent_loop_enabled (False par défaut).
+        # Mode plan→execute→verify→synthesize pour les requêtes complexes.
+        self._agent_orchestrator = None
+        self._agent_mode = getattr(config, 'agent_loop_enabled', False)
+
         # V10.3j : ResearchArchon — recherche multi‑agent pour COMPLEX
         from src.ai.archon_research import ResearchArchon
         self.research_archon = ResearchArchon(
             cloud_llm=self.cloud_llm,
-            rag_pipeline=self.rag_pipeline,
+            rag_pipeline=self._rag_engine_ref,  # V16 FIX BUG #2 : utilise _rag_engine_ref (simple engine)
             enabled=getattr(config, 'research_archon_enabled', True),
         )
 
@@ -163,7 +233,37 @@ class NuruOrchestrator:
             policy_engine=self.policy_engine,
             runtime=self.runtime,
             event_bus=self.event_bus,
+            session_store=self.session_store,
         )
+
+    def _get_agent_orchestrator(self):
+        """V17 : Lazy init AgentOrchestrator (singleton, deja cree si deja utilise)."""
+        if self._agent_orchestrator is None:
+            from src.agent.orchestrator import AgentOrchestrator
+            # AgentOrchestrator est un singleton — new() cree ou renvoie l'instance
+            self._agent_orchestrator = AgentOrchestrator(
+                rag_engine=self.rag_engine,
+            )
+            logger.info(
+                "AgentOrchestrator lazy init | "
+                "agent_mode=%s", self._agent_mode
+            )
+        return self._agent_orchestrator
+
+    async def _delegate_to_agent(self, query: str) -> str:
+        """V17 : Delegue une requete complexe a l'agent loop (Plan-Execute-Verify-Synthesize).
+
+        Retourne la reponse complete ou une chaine vide si echec.
+        """
+        agent = self._get_agent_orchestrator()
+        try:
+            result = await agent.run(query)
+            if isinstance(result, dict):
+                return result.get("synthesis", result.get("status", ""))
+            return str(result)
+        except Exception as e:
+            logger.warning("AgentOrchestrator echec, fallback pipeline normal: %s", e)
+            return ""
 
     async def process_query(
         self,
@@ -184,6 +284,9 @@ class NuruOrchestrator:
             query, session_id,
             is_online=is_online,
         )
+        # V17 Phase 2 : correlation ID pour traçabilité
+        logger.info(f"[{ctx.correlation_id}] Pipeline start | query_len={len(query)}")
+
         # V10.3f : Enregistrer la question dans l'historique session
         original_query = query
         query = self.token_juice.compress_query(query)
@@ -208,7 +311,6 @@ class NuruOrchestrator:
         route_result = await self.router.route_with_context(ctx, rag_context=rag_context, rag_result=rag_result)
         hybrid_strategy = getattr(route_result, 'hybrid_strategy', 'local_only')
         ctx = ctx.with_route(route_result.decision, hybrid_strategy=hybrid_strategy)
-        intent = self._route_to_intent(route_result.decision)
         await self.event_bus.emit("route.decided", {
             "decision": route_result.decision,
             "confidence": route_result.confidence,
@@ -220,22 +322,74 @@ class NuruOrchestrator:
             f"(conf: {route_result.confidence:.2f})"
         )
 
+        # ── 2b. V16 Production Router (shadow run terminé, V16 prend la main) ──
+        # V16 remplace V12 : scoring multi-niveaux (keyword + sémantique + contexte)
+        v16_active = False
+        try:
+            v16_decision = self.v16_router.route(query)
+            v16_active = True
+            
+            # Mapper V16 intents vers le format attendu en aval
+            v16_to_intent = {
+                "RAG": "RAG",
+                "WEB": "COMPLEX",
+                "GENERAL": "GENERAL",
+                "ACTION": "COMPLEX",
+                "MULTI_ROUTE": "COMPLEX",
+            }
+            intent = v16_to_intent.get(v16_decision.intent, "GENERAL")
+            
+            # Log V16 comme route principale
+            logger.info(
+                f"🧠 V16 Route: {query[:40]}... → {v16_decision.intent} "
+                f"(intent={intent}, conf={v16_decision.confidence:.2f})"
+            )
+            
+            # V12 en shadow pour comparaison (log si divergence)
+            if v16_decision.intent != self._route_to_intent(route_result.decision):
+                logger.debug(
+                    f"🔮 V12 shadow divergence: V16={v16_decision.intent} "
+                    f"V12={route_result.decision}"
+                )
+                
+        except Exception as e:
+            logger.warning(f"🔮 V16 route failed, fallback V12: {e}")
+            
+        if not v16_active:
+            intent = self._route_to_intent(route_result.decision)
+
+        # ── 2c. V17 AgentLoop delegation (pour requêtes complexes si activé) ──
+        if self._agent_mode and intent == "COMPLEX":
+            yield "[AgentLoop en cours…]\n"
+            agent_response = await self._delegate_to_agent(query)
+            if agent_response:
+                yield agent_response
+                logger.info(
+                    f"[{ctx.correlation_id}] AgentLoop OK | "
+                    f"len={len(agent_response)}"
+                )
+                return
+            # Si l'agent échoue, on continue le pipeline normal
+
         # ── 3. Cache sémantique (L1 RAM → L2 SQLite) ──
         if intent != "COMPLEX":
             cached, cached_diag = await self.llm_cache.get(query)
             if cached:
                 await self.event_bus.emit("cache_hit", {"query": query})
                 if use_tts and audio_engine:
-                    asyncio.create_task(audio_engine.speak(cached)).add_done_callback(
-                        lambda t: t.exception() if not t.cancelled() else None
+                    self._spawn_background(
+                        audio_engine.speak(cached),
+                        name="tts_cache_hit",
                     )
                 yield cached
+                return  # V16 FIX BUG #4 : return manquant — le pipeline continuait après cache hit
 
         # ── 4. Récupération contexte (RAGOrchestrator multi-sous-requêtes) ──
+        # V16 FIX BUG #3 : initialiser web_context avant le branchement
+        web_context = ""
         if self.response_guard.is_free:
             # Mode FREE : pas de RAG, pas de web search, conversation libre
             rag_context = ""
-            web_context = ""
             merged_result = rag_result  # pylint: disable=possibly-used-before-assignment
             intent = "SIMPLE"
             logger.info("🔓 Mode FREE: RAG + web contournés")
@@ -273,7 +427,7 @@ class NuruOrchestrator:
 
         # ── 5.5-5.6 FallbackGuard + Strict RAG ──
         strict_msg = await self.rag_pipeline.check_strict_blocks(
-            query, intent, rag_context, web_context if 'web_context' in dir() else "",
+            query, intent, rag_context, web_context,  # V16 FIX BUG #3 : 'web_context' in dir() supprimé — variable toujours définie
         )
         if strict_msg:
             await self.event_bus.emit("query.strict_refused", {"query": query})
@@ -296,6 +450,7 @@ class NuruOrchestrator:
             context_budget=self.context_budget,
             model_family=self._model_for_intent(intent),
             session_max_context=self._session_max_context,
+            confidence_label=getattr(rag_result, 'confidence_label', None) if rag_result else None,  # V16 FIX
         )
 
         # Action E : Budget token post-template — écrêtage final du prompt complet
@@ -303,14 +458,40 @@ class NuruOrchestrator:
         if len(full_prompt) > max_safe_chars:
             excess = len(full_prompt) - max_safe_chars
             logger.debug(f"🧃 TokenJuice: écrêtage post-template de {excess} chars")
-            # On tronque le contexte RAG (la partie la plus longue) d'abord
+            # V16 FIX : Troncature par la fin du RAG (préserve le début + la requête utilisateur)
             if rag_context and rag_context in full_prompt:
-                # Réduire le contexte RAG de l'excédent
-                trimmed_rag = rag_context[:len(rag_context) - excess - 100] + "\n[... tronqué pour budget token ...]"
+                trimmed_rag = rag_context[:len(rag_context) - excess - 100]
+                trimmed_rag += "\n[... tronqué pour budget token ...]"
                 full_prompt = full_prompt.replace(rag_context, trimmed_rag, 1)
-            # Si toujours trop long, tronquer la fin du prompt
+            # Si toujours trop long, tronquer au milieu (préserve début + requête)
             if len(full_prompt) > max_safe_chars:
-                full_prompt = full_prompt[:max_safe_chars - 100] + "\n[... tronqué ...]"
+                keep = max_safe_chars - 200
+                half = keep // 2
+                full_prompt = full_prompt[:half] + "\n[... tronqué ...]\n" + full_prompt[-half:]
+
+        # ── 6.5 Activation ToT (Tree of Thoughts) ──
+        # V16: Exploration arborescente pour les goals P0 critiques.
+        # MUTUELLEMENT EXCLUSIF avec CoT et Self-Consistency.
+        use_tot = False
+        tot_keywords = [
+            "arbre de decision", "explore toutes les possibilites",
+            "analyse en profondeur", "raisonnement approfondi",
+            "toi activer", "tot:",
+        ]
+        tot_pattern = "|".join(tot_keywords)
+        if re.search(tot_pattern, query.lower()) or (intent == "COMPLEX" and len(query.split()) >= 15):
+            use_tot = True
+            logger.info(f"🌳 ToT activee pour: {query[:50]}...")
+
+        # ── 6.6 Activation CoT (Chain of Thought) ──
+        # V16: Désactivé si ToT est déjà actif (redondant)
+        use_cot = False
+        if not use_tot and intent in ("COMPLEX", "RAG", "GENERAL"):
+            from src.learning.chain_of_thought import should_use_cot, format_cot_prompt, extract_reasoning_and_answer
+            use_cot = should_use_cot(query, intent)
+            if use_cot:
+                logger.info(f"💭 CoT activee pour: {query[:50]}...")
+                full_prompt = format_cot_prompt(system_prompt, query, rag_context)
 
         # ── 7. Génération (streaming) ──
         await self.event_bus.emit("pipeline.step", {"step": "generation"})
@@ -318,14 +499,169 @@ class NuruOrchestrator:
         start_gen = time.time()
 
         try:
-            async for token in self.llm_gen.generate(
-                system_prompt, full_prompt, query, intent, ctx,
-                web_context=web_context, rag_context=rag_context,
-                original_query=original_query,
-                stream_session=stream_session,  # V15 P2 #26
-            ):
-                response_content += token
-                yield token
+            # ── Generation : ToT / Self-Consistency / Streaming ──
+            # V16 FIX : Skip Self-Consistency si swap > 50% (M1 8 Go)
+            use_sc = (
+                not use_tot
+                and intent == "RAG"
+                and rag_context
+                and rag_result
+                and getattr(rag_result, 'confidence_label', 'FAIBLE') in ("HAUTE", "MOYENNE")
+            )
+            if use_sc:
+                try:
+                    from src.core.ram_budget import get_budget
+                    probe = get_budget().probe()
+                    if probe.swap_percent > 50:
+                        use_sc = False
+                        logger.info(
+                            f"⏭️ Self-Consistency désactivée (swap={probe.swap_percent:.0f}%)"
+                        )
+                except Exception:
+                    logger.debug("RAM probe échouée pour SC", exc_info=True)
+                    pass
+            use_self_consistency = use_sc
+
+            if use_tot:
+                # V16: Tree of Thoughts Agentic (exploration + validation outils)
+                from src.learning.tree_of_thoughts import TreeOfThoughtsEngine
+
+                async def tot_generate_fn(prompt: str, temp: float) -> str:
+                    return await self._generate_sc_response(prompt, intent, temp)
+
+                async def tot_validate_fn(candidate: str, query: str, context: str) -> tuple[float, str]:
+                    """Valide une branche ToT en executant des outils reels."""
+                    from src.learning.tree_of_thoughts import TOOL_PATTERNS
+                    # Detecter [OUTIL: nom(arg)] dans le candidat
+                    action = None
+                    for tool_name, pattern in TOOL_PATTERNS.items():
+                        m = pattern.search(candidate)
+                        if m:
+                            action = (tool_name, m.group(2))
+                            break
+                    if not action:
+                        return (0.0, "")
+
+                    tool_name, arg = action
+                    try:
+                        if tool_name == "read_file" and arg:
+                            import os
+                            # AUDIT V16 FIX (2.2) : sandbox read_file — only workspace files
+                            _raw = os.path.expanduser(arg)
+                            _resolved = os.path.realpath(_raw)
+                            _workspace = os.path.realpath(".")
+                            if not _resolved.startswith(_workspace):
+                                logger.debug("🌳 ToT: read_file refusé — hors workspace")
+                                return (-0.3, "Lecture refusée (hors espace de travail)")
+                            if os.path.isfile(_resolved):
+                                with open(_resolved, "r", errors="replace") as f:
+                                    content = f.read(2000)
+                                return (0.2, f"Fichier lu ({len(content)} chars): {content[:300]}")
+                            return (-0.3, f"Fichier introuvable: {arg}")
+
+                        elif tool_name == "search_memory" and arg:
+                            if hasattr(self, 'memory_store') and self.memory_store:
+                                results = await self.memory_store.search(arg)
+                                if results:
+                                    text = str(results)[:300]
+                                    return (0.2, f"Memoire: {text}")
+                            return (0.0, "Memoire non disponible")
+
+                        elif tool_name == "rag_query" and arg:
+                            if hasattr(self, 'rag_pipeline') and self.rag_pipeline:
+                                docs = await self.rag_pipeline.search(arg)
+                                if docs:
+                                    text = str(docs)[:300]
+                                    return (0.2, f"RAG: {text}")
+                            return (0.0, "RAG non disponible")
+
+                        elif tool_name == "search_files" and arg:
+                            import glob, os
+                            # AUDIT V16 FIX (2.3) : restreindre search_files au workspace
+                            _workspace = os.path.realpath(".")
+                            _pattern = os.path.join(_workspace, "**", "*" + arg + "*")
+                            matches = glob.glob(_pattern, recursive=True)[:5]
+                            # Retirer le préfixe workspace des résultats pour lisibilité
+                            _short = [os.path.relpath(m) for m in matches]
+                            if _short:
+                                return (0.15, "Fichiers trouves: " + ", ".join(_short[:5]))
+                            return (-0.1, "Aucun fichier trouve")
+
+                        elif tool_name == "run_command" and arg:
+                            # AUDIT V16 FIX (2.1) : run_command désactivé par défaut (sécurité)
+                            if not self._enable_shell_tools:
+                                logger.debug("🌳 ToT: run_command refusé — shell tools désactivés")
+                                return (-0.2, "Commande shell désactivée (sécurité)")
+                            if any(kw in arg.lower() for kw in ["ls", "cat", "head", "tail", "wc", "find"]):
+                                import subprocess
+                                r = await asyncio.to_thread(
+                                    subprocess.run, arg.split()[:5],
+                                    capture_output=True, text=True, timeout=5
+                                )
+                                out = r.stdout[:200]
+                                return (0.1, f"Shell: {out}" if out else (0.0, "Pas de sortie"))
+                            return (-0.2, "Commande interdite (securite)")
+
+                    except Exception as e:
+                        logger.debug(f"🌳 ToT: erreur outil '{tool_name}': {e}")
+                        return (-0.1, f"Erreur: {e}")
+
+                    return (0.0, "")
+
+                engine = TreeOfThoughtsEngine(max_depth=3, branch_factor=2)
+                logger.info(f"🌳 ToT Agentic: BFS (profondeur 3, 2 branches, outils actifs)...")
+                tot_result = await engine.solve(
+                    query=query,
+                    context=rag_context or "",
+                    generate_fn=tot_generate_fn,
+                    validate_fn=tot_validate_fn,
+                    temperature=0.7,
+                )
+                response_content = tot_result.solution
+                logger.info(f"✅ ToT: {tot_result.nodes_explored} noeuds, "
+                           f"{tot_result.total_llm_calls} appels, "
+                           f"{tot_result.duration_ms:.0f}ms")
+                # V17 FIX : yield par mots, pas blocs fixes de 50 chars
+                for chunk in _yield_by_words(response_content):
+                    yield chunk
+
+            elif use_self_consistency:
+                # V16: Self-Consistency (3 votes TF-IDF)
+                sc_prompt = self._build_self_consistency_prompt(
+                    system_prompt, full_prompt, query, rag_context, intent
+                )
+
+                async def sc_generate_fn(prompt: str, temp: float) -> str:
+                    return await self._generate_sc_response(prompt, intent, temp)
+
+                logger.info(f"🗳️ Self-Consistency activée pour: {query[:50]}...")
+                sc_result = await self._self_consistency.generate_consistent(
+                    query=query,
+                    context=rag_context,
+                    generate_fn=sc_generate_fn,
+                    system_prompt=system_prompt,
+                )
+                response_content = sc_result.final_response
+                logger.info(f"✅ Self-Consistency: consensus {sc_result.consensus_score:.0%}")
+                # V17 FIX : yield par mots, pas blocs fixes de 50 chars
+                for chunk in _yield_by_words(response_content):
+                    yield chunk
+
+            else:
+                # Génération normale (streaming)
+                async for token in self.llm_gen.generate(
+                    system_prompt, full_prompt, query, intent, ctx,
+                    web_context=web_context, rag_context=rag_context,
+                    original_query=original_query,
+                    stream_session=stream_session,
+                    session_id=session_id,
+                ):
+                    # V16 FIX : défense anti-None (certains streams API peuvent renvoyer None)
+                    if token is None:
+                        continue
+                    response_content += token
+                    yield token
+
         except (LLMError, GuardError, RAGError) as e:
             logger.error(f"❌ Génération: {e}")
             yield f"\n[⚠️ Erreur: {e}]"
@@ -365,6 +701,7 @@ class NuruOrchestrator:
                 system_prompt, full_prompt + strict_instr, query, intent, ctx,
                 web_context=web_context, rag_context=rag_context,
                 original_query=original_query,
+                session_id=session_id,
             ):
                 new_response += token
                 yield token
@@ -372,6 +709,19 @@ class NuruOrchestrator:
                 response_content = new_response
         elif warning_msg:
             yield "\n\n---\n" + warning_msg + "\n---\n"
+
+        # V16: Post-traitement CoT — extraire uniquement la reponse finale
+        if use_cot and response_content:
+            from src.learning.chain_of_thought import extract_reasoning_and_answer, strip_reasoning_if_needed
+            reasoning, answer = extract_reasoning_and_answer(response_content)
+            if answer:
+                # Remplacer le yield de la reponse brute si on avait deja yield
+                logger.info(f"💭 CoT: raisonnement extrait ({len(reasoning)} chars), reponse {len(answer)} chars")
+                response_content = answer
+            else:
+                # Fallback: si le parsing echoue, utiliser la reponse brute
+                logger.debug("💭 CoT: parsing non structure, utilisation reponse brute")
+                response_content = strip_reasoning_if_needed(response_content)
 
         # V10.3h : ArchonRefiner — auto‑correction post‑génération
         refined = await self.archon_refiner.refine(
@@ -382,7 +732,8 @@ class NuruOrchestrator:
         )
         if refined != response_content:
             response_content = refined
-            yield "\n\n🔮 **Vérification Archon : réponse raffinée**\n"
+            # Ne pas yield de message visible — le raffinement est transparent
+            logger.debug("🔮 Archon: réponse raffinée silencieusement")
 
         # V10.3f : Enregistrer la réponse dans l'historique session
         self.session_store.add_message(
@@ -391,8 +742,33 @@ class NuruOrchestrator:
         )
 
         # ── 8. Finalisation ──
-        result = self._finalize(response_content, duration, intent, rag_result)
-        event_data = result.to_dict()
+        # AUDIT V16 FIX (1.5) : OrchestratorResult est utilisé (plus du code mort)
+        _final_confidence = 0.8 if intent in ("COMPLEX", "LOCAL_LLM") else 0.6
+        _result_obj = OrchestratorResult(
+            response=response_content,
+            route=intent,
+            confidence=_final_confidence,
+            tokens_generated=len(response_content) // 4,
+            tokens_prompt=len(full_prompt) // 4 if 'full_prompt' in locals() else 0,
+            duration_s=duration,
+            tokens_per_sec=len(response_content) / (duration + 0.001) / 4,
+            model=getattr(self.cloud_llm, "model", "local"),
+        )
+        event_data = _result_obj.to_dict()
+        # Ajouter les champs UI qui ne font pas partie d'OrchestratorResult.to_dict()
+        event_data.update({
+            "response": response_content,
+            "duration_seconds": duration,
+            "intent": intent,
+            "tok_s": _result_obj.tokens_per_sec,
+            "latence": int(duration * 1000),
+            "chunks": getattr(rag_result, "chunks_injected", 0) if rag_result else 0,
+            "chunks_high": 0,
+            'chunks_med': 0,
+            'sub_queries': 0,
+            'rag_score': round(getattr(rag_result, 'top_score', 0.0), 2) if rag_result else 0.0,
+            'lora_active': self.local_llm.lora_active if self.local_llm else False,
+        })
         # Enrichir avec les données RAG pour le dashboard d'observabilité
         if rag_result:
             event_data["rag_result"] = {
@@ -424,27 +800,40 @@ class NuruOrchestrator:
         # ── 10. Mémoire ──
         if intent != "COMPLEX":
             await self.llm_cache.set(query, response_content)
-        self.memory_store.add_message("user", query)
+        # V16 FIX: SessionMemory unifié (FIFO 6 messages) — remplace MemoryStore fragmenté
+        self.session_memory.add_interaction(original_query, response_content)
+        # Aussi sauvegarder dans MemoryStore pour compatibilité dashboard/observabilité
+        self.memory_store.add_message("user", original_query)
         self.memory_store.add_message("assistant", response_content)
 
         # NURU V6 : Learning Loop — enregistrement de la trace
-        asyncio.create_task(self.trace_collector.record(
-            query=original_query,
-            response=response_content[:500],
-            mode="CLOUD" if intent == "COMPLEX" else "LOCAL",
-            confidence=result.confidence,
-            tokens_prompt=result.tokens_prompt or len(full_prompt) // 4,
-            tokens_generated=result.tokens_generated,
-            latency_ms=int(duration * 1000) if 'duration' in dir() else 0,
-            model=result.model,
-        )).add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        # V16 FIX : _finalize n'existait pas — valeurs inline
+        _confidence = 0.8 if intent in ("COMPLEX", "LOCAL_LLM") else 0.6
+        _tokens_prompt = len(full_prompt) // 4 if 'full_prompt' in locals() else 512
+        _tokens_gen = len(response_content) // 4
+        self._spawn_background(
+            self.trace_collector.record(
+                query=original_query,
+                response=response_content[:500],
+                mode="CLOUD" if intent == "COMPLEX" else "LOCAL",
+                confidence=_confidence,
+                tokens_prompt=_tokens_prompt,
+                tokens_generated=_tokens_gen,
+                latency_ms=int(duration * 1000),
+                model=getattr(self.cloud_llm, "model", "local"),
+            ),
+            name="trace_collector",
+        )
 
         # ── 11. Long-Term Memory : extraction post-réponse ──
-        asyncio.create_task(self._ltm_extract_post_response(
-            query=original_query,
-            response=response_content,
-            intent=intent,
-        )).add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        self._spawn_background(
+            self._ltm_extract_post_response(
+                query=original_query,
+                response=response_content,
+                intent=intent,
+            ),
+            name="ltm_extract_post",
+        )
 
     def set_long_term_memory(self, ltm):
         """Injecte le module Long-Term Memory (injection de dépendance)."""
@@ -473,6 +862,34 @@ class NuruOrchestrator:
 
     # ─── Privées (conservées) ───
 
+    # AUDIT V16 FIX (4.1) : helper pour lancer une tâche fond tracée
+    _BG_TASK_MAX = 20       # sécurité : pas plus de 20 tâches pendantes
+    _BG_TASK_TIMEOUT = 60.0 # timeout max par tâche
+
+    def _spawn_background(self, coro, name: str = "bg") -> None:
+        if len(self._bg_tasks) >= self._BG_TASK_MAX:
+            logger.warning("⚠️ _bg_tasks plafonné (%s), abandon", self._BG_TASK_MAX)
+            return
+        # Envelopper la coroutine avec un timeout pour éviter le hang infini
+        async def _wrapped():
+            try:
+                await asyncio.wait_for(coro, timeout=self._BG_TASK_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.warning("⏰ Tâche fond '%s' a timeout après %ss", name, self._BG_TASK_TIMEOUT)
+            except Exception:
+                logger.error("💥 Tâche fond '%s' a échoué", name, exc_info=True)
+        task = asyncio.create_task(_wrapped(), name=name)
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
+    @staticmethod
+    def _log_bg_exception(task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            logger.error("Tâche fond '%s' a échoué: %s", task.get_name(), exc, exc_info=exc)
+
     def _route_to_intent(self, decision: str) -> str:
         return {
             "LOCAL_RAG": "RAG",
@@ -493,121 +910,55 @@ class NuruOrchestrator:
             "SIMPLE": "phi",
         }.get(intent, "phi")
 
-    def _build_prompt(self, intent, query, rag_context, web_context,
-                      user_facts_str="", session_id: Optional[str] = None):
-        full_rag = ""
-        if intent == "COMPLEX":
-            full_rag = web_context + ("\n\n" + rag_context if rag_context else "")
-        else:
-            full_rag = rag_context
+    # ── Helpers Self-Consistency ─────────────────────────────────────
 
-        # AUDIT V10.3 — S-002b : sanitiser le contenu RAG avant injection dans le prompt.
-        # Le contenu vient de documents indexés potentiellement contrôlés par des tiers
-        # (CVs, rapports, fichiers publiques) et constitue la surface d'injection #1.
-        if full_rag:
-            full_rag = sanitize_document_content(full_rag, max_chars=4000)
+    def _build_self_consistency_prompt(
+        self,
+        system_prompt: str,
+        full_prompt: str,
+        query: str,
+        rag_context: str,
+        intent: str,
+    ) -> str:
+        """Construit le prompt de base pour Self-Consistency (sans duplication)."""
+        # Le full_prompt contient déjà system_prompt + rag_context + instructions
+        # On retourne juste la partie à compléter
+        return full_prompt
 
-        # AUDIT V10.3 — S-002 : sanitiser la query AVANT l'injection dans le template.
-        safe_query = sanitize_for_prompt_injection(query, max_chars=1000)
+    async def _generate_sc_response(
+        self,
+        prompt: str,
+        intent: str,
+        temperature: float,
+    ) -> str:
+        """Génère une réponse complète (non-streaming) pour Self-Consistency.
 
-        # Construire le prompt système via le callback NuruCore
-        if self._system_prompt_builder:
-            system_prompt = self._system_prompt_builder(
-                intent=intent,
-                facts=self.memory_store.get_recent_facts(limit=20),
-                procedures=self.memory_store.get_procedures(),
-            )
-        else:
-            system_prompt = f"Tu es NURU, assistant personnel de Leblanc."
-
-        # V10.3f : Injection contexte conversationnel de session
-        if session_id:
-            try:
-                session_ctx = self.session_store.build_context(
-                    session_id, max_messages=self._session_max_context)
-                if session_ctx:
-                    # AUDIT V10.3c — sanitiser le contexte de session aussi (historique user)
-                    sanitized_session = sanitize_for_prompt_injection(session_ctx, max_chars=2000)
-                    system_prompt += f"\n\n{sanitized_session}"
-            except Exception:
-                logger.debug("SessionStore: erreur injection contexte", exc_info=True)
-
-        # AUDIT V10.3 — wrap user_facts_str dans un bloc sécurisé
-        # Avant : `f"... {user_facts_str}"` injectait les faits tels quels.
-        # Maintenant : wrap avec délimiteurs + sanitization par fait.
-        if user_facts_str:
-            facts_list = [
-                line.strip("- ").strip()
-                for line in user_facts_str.split("\n")
-                if line.strip()
-            ]
-            safe_facts_block = build_safe_user_facts_block(facts_list)
-            if safe_facts_block:
-                system_prompt += f"\n\n{safe_facts_block}"
-
-        if self.context_budget:
-            # Formater user_facts en liste pour le budget
-            user_facts_lines = user_facts_str.split("\n") if user_facts_str else []
-            full_prompt = self.context_budget.allocate(
-                system=system_prompt,
-                rag=full_rag,
-                facts=self.memory_store.get_recent_facts(limit=20),
-                history=self.memory_store.get_recent_history(limit=8),
-                user_facts=user_facts_lines,
-                include_system=(intent != "COMPLEX"),
-            )
-        else:
-            full_prompt = f"{system_prompt}\n\n{full_rag}"
-
-        if intent == "COMPLEX":
-            full_prompt += f"\n## QUESTION À TRAITER :\n{safe_query}"
-            if full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
-                full_prompt += (
-                    f"\n\n## INSTRUCTION — CONTEXTE DISPONIBLE\n"
-                    f"Le CONTEXTE ci-dessus contient des documents de l'utilisateur. "
-                    f"Utilise- les en PRIORITÉ pour répondre.\n"
-                    f"- Consulte d'abord le contexte dans ta réponse.\n"
-                    f"- Complète avec tes connaissances si nécessaire.\n"
-                    f"- Cite les sources quand tu utilises le contexte.\n"
+        V16 FIX : Vérifie d'abord le swap avant de charger le LLM local.
+        Si swap > 80%, utilise le cloud LLM pour éviter le freeze système.
+        """
+        # Swap guard : cloud LLM si pression mémoire critique
+        try:
+            from src.core.ram_budget import get_budget
+            probe = get_budget().probe()
+            if probe.swap_percent > 80:
+                logger.warning(
+                    f"⚠️ SC: swap {probe.swap_percent:.0f}% → cloud LLM "
+                    f"(temp={temperature})"
                 )
-        elif intent == "GENERAL":
-            # AUDIT V10.3 — utiliser safe_query
-            full_prompt += (
-                f"\n\n## QUESTION (connaissances générales)\n"
-                f"Réponds avec tes connaissances. Si tu n'es pas certain, dis-le.\n\n"
-                f"{safe_query}<|end|>\n<|assistant|>\n"
-            )
-        elif intent == "RAG" and full_rag.strip() and "AUCUNE SOURCE" not in full_rag:
-            full_prompt += (
-                f"\n\n## INSTRUCTION STRICTE — RAG UNIQUEMENT\n"
-                f"Tu dois répondre UNIQUEMENT à partir du CONTEXTE ci-dessus "
-                f"(entre === DÉBUT DU CONTEXTE === et === FIN DU CONTEXTE ===).\n"
-                f"- N'utilise PAS tes connaissances internes.\n"
-                f"- Si l'information n'est pas dans le contexte, dis "
-                f"\"Je ne trouve pas cette information dans les documents.\"\n"
-                f"- N'invente RIEN. Ne complète PAS.\n"
-                f"- Cite la source avec [Source: nom_du_fichier].\n\n"
-                f"{safe_query}<|end|>\n<|assistant|>\n"
-            )
-        else:
-            # AUDIT V10.3 — utiliser safe_query
-            full_prompt += f"{safe_query}<|end|>\n<|assistant|>\n"
-        return system_prompt, full_prompt
+                tokens = []
+                async for t in self.cloud_llm.generate_stream(
+                    prompt=prompt, intent=intent, temperature=temperature,
+                ):
+                    if isinstance(t, str):
+                        tokens.append(t)
+                return "".join(tokens)
+        except Exception:
+            logger.warning("⚠️ SC: swap guard cloud a échoué → fallback local", exc_info=True)
+            pass
 
-    def _finalize(self, response, duration, intent, rag_result):
-        tokens = len(response) // 4
-        tps = tokens / duration if duration > 0 else 0
-        model = "local" if intent != "COMPLEX" else "cloud"
-        route = "LOCAL" if intent != "COMPLEX" else "CLOUD"
-        rag_score = (rag_result.top_score if rag_result else 0) or getattr(self.rag_engine, "last_top_score", 0)
-
-        if self.runtime:
-            self.runtime.update_generation_stats(
-                tokens=tokens, seconds=duration, model=model,
-                route=route, rag_score=rag_score,
-            )
-        return OrchestratorResult(
-            response=response, route=route, confidence=rag_score,
-            duration_s=duration, tokens_generated=tokens,
-            tokens_per_sec=tps, model=model,
+        # Fallback local
+        return await self.local_llm.generate(
+            prompt=prompt,
+            intent=intent,
+            temperature=temperature,
         )

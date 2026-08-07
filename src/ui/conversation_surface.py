@@ -10,8 +10,8 @@ Zone de chat avec bulles alignées :
 import logging
 import time
 
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, Signal
+from PySide6.QtGui import QFont, QTextCursor, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QLabel, QSizePolicy,
     QHBoxLayout, QFrame, QTextBrowser, QGraphicsOpacityEffect,
@@ -31,11 +31,11 @@ class BubbleWidget(QFrame):
 
         # DM-1 couleurs
         if is_user:
-            bg = "rgba(0, 212, 255, 0.10)"
+            bg = "rgba(0, 212, 255, 0.15)"
             text_color = Color.TEXT_PRIMARY
             radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.SM}px {Radius.LARGE}px"
         else:
-            bg = Color.BG_SURFACE1
+            bg = "rgba(18, 30, 55, 0.80)"
             text_color = Color.TEXT_PRIMARY
             radius = f"{Radius.LARGE}px {Radius.LARGE}px {Radius.LARGE}px {Radius.SM}px"
 
@@ -46,7 +46,7 @@ class BubbleWidget(QFrame):
                 padding: {Spacing.SM}px;
             }}
         """)
-        self.setMaximumWidth(600)
+        self.setMaximumWidth(900)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.MD, Spacing.SM, Spacing.MD, Spacing.SM)
@@ -216,9 +216,20 @@ class ConversationSurface(QWidget):
       - Messages NURU → gauche
     """
 
+    # V17.2 (audit F-6) : signal émis quand un fichier est déposé
+    file_dropped = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet("background: transparent;")
+        self.setObjectName("ConversationSurface")
+        self.setAcceptDrops(True)  # V17.2 : drag & drop activé
+        self.setStyleSheet(f"""
+            #ConversationSurface {{
+                background-color: rgba(8, 14, 28, 0.55);
+                border: 1px solid rgba(0, 240, 255, 0.06);
+                border-radius: {Radius.LARGE}px;
+            }}
+        """)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.MD, Spacing.MD, Spacing.MD, Spacing.MD)
@@ -275,9 +286,37 @@ class ConversationSurface(QWidget):
         self._last_assistant_bubble: BubbleWidget | None = None
         self._stream_buffer: list[str] = []
         self._stream_timer: QTimer | None = None
+        # V17 Phase 2 : timer progressif (⏱ X.Xs) pendant le streaming
+        self._stream_start_time: float = 0.0
+        self._progress_timer: QTimer | None = None
+        self._time_label = QLabel()
+        self._time_label.setAlignment(Qt.AlignCenter)
+        self._time_label.setStyleSheet(
+            "background: transparent; color: #4A5568; font-size: 10px;"
+            " padding: 2px 0;"
+        )
+        self._time_label.setVisible(False)
+        # Insérer le time_label APRÈS le strategy_label (index 1 dans le layout)
+        self._time_label_pos = layout.count()  # index après strategy_label
+        layout.insertWidget(self._time_label_pos, self._time_label)
         # Glue spaces entre tokens pour providers qui strippent
         # les espaces en début de token (openrouter deepseek, etc.)
         self._glue_spaces: bool = True
+
+    # ── V17.2 (audit F-6) : Drag & drop de fichiers ──
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """Accepte le drag si des fichiers locaux sont présents."""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        """Émet file_dropped pour chaque fichier déposé."""
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            if path:
+                self.file_dropped.emit(path)
+        event.acceptProposedAction()
 
     # ── Messages normaux ──
 
@@ -310,7 +349,9 @@ class ConversationSurface(QWidget):
     # ── Streaming ──
 
     def start_stream(self) -> None:
-        """Crée une bulle vide pour le streaming de la réponse NURU."""
+        """Crée une bulle vide pour le streaming de la réponse NURU.
+        Lance le timer progressif ⏱.
+        """
         # Vider le buffer
         self._stream_buffer = []
 
@@ -334,6 +375,16 @@ class ConversationSurface(QWidget):
         self._inner_layout.insertWidget(
             self._inner_layout.count() - 1, container
         )
+
+        # V17 Phase 2 : timer progressif
+        self._stream_start_time = time.monotonic()
+        self._time_label.setText("⏱  0.0s")
+        self._time_label.setVisible(True)
+        if self._progress_timer is None:
+            self._progress_timer = QTimer(self)
+            self._progress_timer.setInterval(100)  # ms — 10 FPS
+            self._progress_timer.timeout.connect(self._update_progress_timer)
+        self._progress_timer.start()
 
         QTimer.singleShot(50, self._scroll_to_bottom)
 
@@ -362,6 +413,7 @@ class ConversationSurface(QWidget):
                 prev
                 and not prev[-1].isspace()
                 and not prev.endswith(tuple(sep_chars))
+                and not prev[0].isspace()  # V17 FIX : si prev a déjà un espace en tête (MLX BPE), ne pas ajouter
                 and chunk
                 and not chunk[0].isspace()
                 and not chunk.startswith(tuple(sep_chars))
@@ -373,7 +425,8 @@ class ConversationSurface(QWidget):
 
         # Déclencher le flush immédiatement (timer unique)
         if self._stream_timer is None or not self._stream_timer.isActive():
-            self._stream_timer = QTimer()
+            # V16 AUDIT FIX QW9 : parent QTimer(self) — évite fuite si widget détruit
+            self._stream_timer = QTimer(self)
             self._stream_timer.setSingleShot(True)
             self._stream_timer.timeout.connect(self._flush_stream_buffer)
             self._stream_timer.start(30)  # ms — batch tokens toutes les 30ms
@@ -401,12 +454,27 @@ class ConversationSurface(QWidget):
         self._flush_stream_buffer()
         self._streaming_bubble = None
 
-        # Nettoyer le timer
+        # Nettoyer le timer stream
         if self._stream_timer and self._stream_timer.isActive():
             self._stream_timer.stop()
         self._stream_timer = None
 
+        # V17 Phase 2 : arrêter le timer progressif
+        if self._progress_timer and self._progress_timer.isActive():
+            self._progress_timer.stop()
+        elapsed = time.monotonic() - self._stream_start_time
+        self._time_label.setText(f"✅  {elapsed:.1f}s")
+        # Cacher après 2s
+        QTimer.singleShot(2000, lambda: self._time_label.setVisible(False))
+
     # ── Utilitaires ──
+
+    def _update_progress_timer(self) -> None:
+        """Met à jour l'affichage du timer ⏱ pendant le streaming."""
+        if self._stream_start_time <= 0:
+            return
+        elapsed = time.monotonic() - self._stream_start_time
+        self._time_label.setText(f"⏱  {elapsed:.1f}s")
 
     def _scroll_to_bottom(self):
         scrollbar = self._scroll.verticalScrollBar()

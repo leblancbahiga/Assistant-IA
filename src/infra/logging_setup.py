@@ -13,6 +13,9 @@ class InterceptHandler(logging.Handler):
     """Intercepte les logs standard `logging` et les redirige vers loguru."""
 
     def emit(self, record: logging.LogRecord):
+        # V17 FIX : filtrer le bruit pypdf avant même la vérification de niveau
+        if record.name.startswith("pypdf") and record.levelno < logging.ERROR:
+            return
         try:
             level = logger.level(record.levelname).name
         except ValueError:
@@ -30,7 +33,7 @@ def setup_logging(
     log_file: str | Path = "logs/nuru.log",
     rotation: str = "10 MB",
     retention: str = "30 days",
-    level: str = "DEBUG",
+    level: str = "INFO",
 ):
     """Configure loguru avec fichier tournant et affichage console colorisé.
 
@@ -40,6 +43,10 @@ def setup_logging(
         retention: Durée de conservation (ex: "30 days")
         level: Niveau de log minimum pour la console ("DEBUG", "INFO", "WARNING")
     """
+    # V16 FIX : taire les warnings pypdf (PDFs corrompus, centaines de lignes)
+    for logger_name in ("pypdf", "pypdf._reader"):
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
+
     # Supprime les handlers loguru par défaut
     logger.remove()
 
@@ -62,21 +69,33 @@ def setup_logging(
     # Fichier : rotation, retention, JSON-like structuré
     log_path = Path(log_file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # JSON structuré (Phase 2 : correlation ID + logs JSON)
+    json_path = log_path.with_suffix(".jsonl")
     logger.add(
-        str(log_path),
-        format=(
-            "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <6} | {name}:{function}:{line} | {message}"
-        ),
-        level="DEBUG",
+        str(json_path),
+        format="{time} | {level} | {name} | {function}:{line} | {message}",
+        serialize=True,
         rotation=rotation,
         retention=retention,
-        compression="gz",
+        level="DEBUG",
         backtrace=True,
         diagnose=False,
     )
 
-    # Interception des logs `logging` standard → loguru
-    logging.basicConfig(handlers=[InterceptHandler()], level=logging.DEBUG, force=True)
+    # Fichier texte avec rotation
+    logger.add(
+        str(log_path),
+        format="{time:YYYY-MM-DD HH:mm:ss,SSS} | {level: <6} | {name}:{line} | {message}{exception}",
+        rotation=rotation,
+        retention=retention,
+        level="DEBUG",
+        backtrace=True,
+        diagnose=False,
+    )
+
+    # V16 AUDIT FIX QW11 : logs interceptés à INFO (était DEBUG) — I/O CPU -30%
+    logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
 
     logger.info(f"📋 Logs configurés — fichier: {log_path} | rotation: {rotation} | retention: {retention}")
 

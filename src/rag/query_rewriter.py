@@ -95,6 +95,13 @@ class CloudQueryRewriter:
             self._v6_rewriter = QueryRewriter(cloud_llm=cloud_llm)
         except Exception:
             pass
+        # V17.2 : cache des réécritures (le cloud est appelé 2x/requête sinon)
+        self._cache: dict[str, str] = {}
+        # V17.2 : fail-fast — après un échec/unsafe, ne plus tenter le cloud
+        # pendant CLOUD_REWRITE_COOLDOWN_S (le cloud délire quasi systématiquement
+        # sur le français → on économise 4.5s de latence par requête)
+        self._cloud_failed_at: float = 0.0
+        self.CLOUD_REWRITE_COOLDOWN_S = 300.0  # 5 min
 
     def get_domain(self, query: str) -> Optional[str]:
         """Détecte le domaine de la requête à partir des mots-clés."""
@@ -108,32 +115,51 @@ class CloudQueryRewriter:
         """Point d'entrée principal : réécrit la requête.
 
         Priorité :
-        1. LLM Cloud (si disponible)
-        2. V6 fallback (synonymes)
-        3. Requête originale inchangée
+        1. Cache (si la requête a déjà été réécrite)
+        2. LLM Cloud (si dispo ET pas en cooldown fail-fast)
+        3. V6 fallback (synonymes)
+        4. Requête originale inchangée
         """
         if not query or not query.strip():
             return query
 
-        # 1. Essayer LLM Cloud
-        if self._cloud:
+        # V17.2 : cache — évite le double appel cloud par requête
+        cached = self._cache.get(query)
+        if cached is not None:
+            return cached
+
+        result = self._rewrite_inner(query)
+        self._cache[query] = result
+        return result
+
+    def _rewrite_inner(self, query: str) -> str:
+        """Logique interne de réécriture (après cache)."""
+        import time as _time
+
+        # 1. Essayer LLM Cloud — sauf en cooldown fail-fast (V17.2)
+        cloud_in_cooldown = (
+            self._cloud_failed_at > 0
+            and (_time.time() - self._cloud_failed_at) < self.CLOUD_REWRITE_COOLDOWN_S
+        )
+        if self._cloud and not cloud_in_cooldown:
             try:
                 cloud_result = self._rewrite_with_cloud(query)
                 if cloud_result:
-                    # V10 Correction BUG #1: Vérifier que la réécriture Cloud ne dévie pas
-                    # du contexte réel (ex: BEACCOM → "système de paiement électronique")
                     if self._v6_rewriter and _cloud_rewrite_is_safe(query, cloud_result):
                         logger.info(
                             f"Cloud Query Rewriting: '{query[:60]}' -> '{cloud_result[:80]}'"
                         )
                         return cloud_result
                     else:
-                        # Cloud a déliré → fallback V6
+                        # Cloud a déliré → fallback V6 + cooldown
+                        self._cloud_failed_at = _time.time()
                         logger.warning(
                             f"Cloud rewrite unsafe (hallucination détectée): "
-                            f"'{query[:40]}' -> '{cloud_result[:80]}' → fallback V6"
+                            f"'{query[:40]}' -> '{cloud_result[:80]}' → fallback V6 "
+                            f"(cooldown {self.CLOUD_REWRITE_COOLDOWN_S}s)"
                         )
             except Exception as e:
+                self._cloud_failed_at = _time.time()
                 logger.debug(f"Cloud rewrite failed: {e}")
 
         # 2. Fallback V6
@@ -181,7 +207,7 @@ class CloudQueryRewriter:
         )
 
         try:
-            response = self._cloud.generate(prompt, timeout=10.0)
+            response = self._cloud.generate(prompt, timeout=3.0)
             if not response or not response.strip():
                 logger.debug("Cloud rewrite: réponse vide")
                 return ""

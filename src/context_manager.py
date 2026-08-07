@@ -16,11 +16,11 @@ class ContextBudget:
         self.max_prompt_tokens = max_prompt_tokens
         self.reserved_response = reserved_response
         self.available = max_prompt_tokens - reserved_response
-    
+
     def _estimate_tokens(self, text: str) -> int:
         """Estimation grossière : 1 token ≈ 4 caractères FR."""
         return len(text) // 4
-    
+
     def _truncate_by_chars(self, text: str, max_chars: int) -> str:
         """Tronque par caractères en préservant les phrases."""
         if len(text) <= max_chars:
@@ -30,22 +30,21 @@ class ContextBudget:
         if cut_point == -1:
             cut_point = max_chars
         return text[:cut_point + 1]
-    
+
     def _format_history(self, history: list[dict]) -> str:
         lines = []
         for msg in history:
             prefix = "User" if msg["role"] == "user" else "Assistant"
             lines.append(f"{prefix}: {msg['content']}")
         return "\n".join(lines)
-    
-    def _build_prompt(self, system: str, rag: str, facts: str, history: str, user_facts: str = "", include_system: bool = True, model_family: str = "phi") -> str:
+
+    def _build_prompt(self, system: str, rag: str, facts: str, history: str,
+                      user_facts: str = "", include_system: bool = True,
+                      model_family: str = "phi") -> str:
         """Assemble le prompt final."""
         parts = []
         if include_system:
-            parts.append(f"<|system|>\n{system}\n")
-            if model_family == "phi":
-                parts[-1] += "<|end|>\n"
-            parts.append("<|user|>\n")
+            parts.append(f"{system}\n")
 
         if rag.strip():
             parts.append(f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag.strip()}\n")
@@ -62,14 +61,17 @@ class ContextBudget:
              parts.append("\n--- FIN DU CONTEXTE ---\n")
 
         return "".join(parts)
-    
-    def allocate(self, system: str, rag: str, facts: list[str], history: list[dict], user_facts: list[str] = None, include_system: bool = True, model_family: str = "phi", rag_priority: bool = False) -> str:
+
+    def allocate(self, system: str, rag: str, facts: list[str], history: list[dict],
+                 user_facts: list[str] = None, include_system: bool = True,
+                 model_family: str = "phi", rag_priority: bool = False) -> str:
         """Construit le prompt dans le budget tokens.
 
-        Budget alloué (V8+) :
-        - 90%  → Contexte documentaire (RAG / Web) si rag_priority=True
-        - 80%  → sinon
-        - Le reste réparti entre faits, historique, infos utilisateur
+        Budget alloué (V16 FIX — quotas séquentiels) :
+        Chaque section consomme sur ce qui reste réellement après la section
+        précédente. Plus de dépassement à 115-120%.
+
+        Priorité : RAG > User Facts > Faits > Historique
         """
         user_facts = user_facts or []
 
@@ -82,29 +84,34 @@ class ContextBudget:
             system = self._truncate_by_chars(system, self.available * 4)
             budget = 0
 
-        # 2. RAG : priorité 90% du budget restant (V8+ : plus de contexte pour le cloud)
+        remaining = budget  # Budget restant après chaque section
+
+        # 2. RAG : priorité 90% du budget total (mais prend ce qu'elle consomme)
         rag_budget = int(budget * 0.9)
         rag_text = "\n".join(rag) if isinstance(rag, list) else rag
         if self._estimate_tokens(rag_text) > rag_budget:
             rag_text = self._truncate_by_chars(rag_text, rag_budget * 4)
+        rag_actual = self._estimate_tokens(rag_text)
+        remaining = max(0, remaining - rag_actual)
 
-        # 3. User Facts (LTM) : 10% du budget
-        user_facts_budget = int(budget * 0.10)
+        # 3. User Facts (LTM) : au max 10% du budget total, ou tout ce qui reste
+        user_facts_budget = min(int(budget * 0.10), remaining)
         user_facts_text = "\n".join(user_facts) if user_facts else ""
         if user_facts_text and self._estimate_tokens(user_facts_text) > user_facts_budget:
             user_facts_text = self._truncate_by_chars(user_facts_text, user_facts_budget * 4)
+        uf_actual = self._estimate_tokens(user_facts_text)
+        remaining = max(0, remaining - uf_actual)
 
-        # 4. Faits : 5% du budget
-        facts_budget = int(budget * 0.05)
+        # 4. Faits : au max 5% du budget total, ou tout ce qui reste
+        facts_budget = min(int(budget * 0.05), remaining)
         facts_text = "\n".join(facts)
         if self._estimate_tokens(facts_text) > facts_budget:
             facts_text = self._truncate_by_chars(facts_text, facts_budget * 4)
+        f_actual = self._estimate_tokens(facts_text)
+        remaining = max(0, remaining - f_actual)
 
-        # 5. Historique : 10% du budget (ou 15% si pas de user_facts)
-        if user_facts_text:
-            history_budget = int(budget * 0.10)
-        else:
-            history_budget = int(budget * 0.15)
+        # 5. Historique : tout ce qui reste (max 15% du budget total)
+        history_budget = min(int(budget * 0.15), remaining)
         history_text = self._format_history(history)
         if self._estimate_tokens(history_text) > history_budget:
             # Garder les 4 derniers échanges
@@ -114,12 +121,18 @@ class ContextBudget:
                 history_text = self._truncate_by_chars(history_text, history_budget * 4)
 
         # 6. Assemblage
-        prompt = self._build_prompt(system, rag_text, facts_text, history_text, user_facts=user_facts_text, include_system=include_system, model_family=model_family)
+        prompt = self._build_prompt(system, rag_text, facts_text, history_text,
+                                    user_facts=user_facts_text,
+                                    include_system=include_system,
+                                    model_family=model_family)
 
-        # 7. Vérification finale
+        # 7. Vérification finale (ne devrait plus jamais déclencher)
         total = self._estimate_tokens(prompt)
         if total > self.available:
-            logger.warning(f"Prompt final trop long ({total} tokens), hard truncate")
+            logger.warning(
+                f"Prompt final trop long ({total} tokens, budget={self.available}), "
+                f"hard truncate — V16 FIX: ce cas ne devrait plus arriver"
+            )
             prompt = self._truncate_by_chars(prompt, self.available * 4)
 
         return prompt

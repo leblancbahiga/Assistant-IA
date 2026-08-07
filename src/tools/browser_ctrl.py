@@ -45,6 +45,33 @@ SCREENSHOT_DIR: str = os.path.expanduser("~/Nuru_Workspace/screenshots")
 MAX_NAVIGATION_HISTORY: int = 100
 SCREENSHOT_DEFAULT_DIR: str = os.path.expanduser("~/Nuru_Workspace/screenshots")
 
+# V16 FIX : Protocoles bloqués (SSRF / lecture fichiers locaux)
+BLOCKED_PROTOCOLS: tuple[str, ...] = ("file://", "data:", "ftp://", "gopher://")
+
+# V16 FIX : Plages IP privées/réservées bloquées (SSRF)
+PRIVATE_IP_PREFIXES: tuple[str, ...] = (
+    "127.",     # localhost
+    "10.",      # réseau privé classe A
+    "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.",
+    "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+    "172.30.", "172.31.",  # réseau privé classe B
+    "192.168.", # réseau privé classe C
+    "169.254.", # link-local
+    "0.",       # adresse non spécifiée
+)
+# Métadonnées cloud connues (SSRF direct)
+BLOCKED_HOSTS: tuple[str, ...] = (
+    "169.254.169.254",  # AWS/GCP/Azure metadata
+    "metadata.google.internal",
+    "metadata",
+    "100.100.100.200",  # Alibaba Cloud
+    "localhost",
+    "localhost6",
+    "127.0.0.1",
+    "::1",
+    "0.0.0.0",
+)
+
 # Sites financiers patterns (URL + titre)
 FINANCIAL_KEYWORDS: set[str] = {
     "bank", "banque", "paypal", "stripe", "credit", "carte",
@@ -741,6 +768,56 @@ class BrowserController:
 
         return False
 
+    # ── Validation SSRF ──
+
+    def _validate_url_safety(self, url: str) -> BrowserResult | None:
+        """Bloque les URLs dangereuses (SSRF, file://, private IPs).
+
+        V16 FIX : Protection contre les lectures de fichiers locaux et
+        les attaques SSRF vers les métadonnées cloud / services internes.
+
+        Args:
+            url: URL à valider.
+
+        Returns:
+            None si l'URL est sûre, BrowserResult d'erreur sinon.
+        """
+        url_lower = url.strip().lower()
+
+        # 1. Protocoles bloqués
+        for proto in BLOCKED_PROTOCOLS:
+            if url_lower.startswith(proto):
+                return BrowserResult(
+                    success=False,
+                    error=f"Protocole non autorisé : {proto}",
+                )
+
+        # 2. Extraire l'hôte
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(url_lower if url_lower.startswith(("http://", "https://")) else f"https://{url_lower}")
+            host = parsed.hostname or ""
+        except Exception:
+            host = url_lower
+
+        # 3. Hosts bloqués (noms exacts)
+        if host in BLOCKED_HOSTS:
+            return BrowserResult(
+                success=False,
+                error=f"Hôte non autorisé : {host}",
+            )
+
+        # 4. Plages IP privées
+        if host.replace(".", "").isdigit():  # IPv4 uniquement
+            for prefix in PRIVATE_IP_PREFIXES:
+                if host.startswith(prefix):
+                    return BrowserResult(
+                        success=False,
+                        error=f"Adresse IP privée/réservée : {host}",
+                    )
+
+        return None
+
     def _check_financial_site(self, url: str) -> BrowserResult | None:
         """Vérifie si un site est un site financier non approuvé.
 
@@ -826,6 +903,22 @@ class BrowserController:
         # Ajouter https:// si nécessaire
         if not url.startswith(("http://", "https://", "file://", "data:")):
             url = "https://" + url
+
+        # V16 FIX : Validation SSRF (file://, IP privées, métadonnées cloud)
+        ssrf_check = self._validate_url_safety(url)
+        if ssrf_check is not None:
+            bus.emit_sync("browser:error", {
+                "action": "navigate",
+                "url": url,
+                "error": ssrf_check.error,
+            })
+            return NavigateResult(
+                url=url,
+                title="",
+                status_code=0,
+                final_url="",
+                load_time_ms=(time.time() - start) * 1000,
+            )
 
         # Vérification sécurité site financier
         security_check = self._check_financial_site(url)

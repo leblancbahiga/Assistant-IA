@@ -49,12 +49,14 @@ def _extract_user_facts(system_prompt: str) -> str:
 class LLMGenerator:
     """Sous-orchestrateur de génération LLM : cloud/local streaming + fallback."""
 
-    def __init__(self, local_llm, cloud_llm, policy_engine, runtime, event_bus):
+    def __init__(self, local_llm, cloud_llm, policy_engine, runtime, event_bus, session_store=None):
         self.local_llm = local_llm
         self.cloud_llm = cloud_llm
         self.policy_engine = policy_engine
         self.runtime = runtime
         self.event_bus = event_bus
+        self.session_store = session_store
+        self.last_tokens = 0  # V17: compteur de tokens pour metriques dashboard
 
     # ══════════════════════════════════════════
     # 1. Connectivité
@@ -93,6 +95,7 @@ class LLMGenerator:
         rag_context: str = "",
         original_query: str = "",
         stream_session=None,  # V15 P2 #26 : StreamSession optionnel
+        session_id: str = "", # V16.1 : injection historique conversation cloud
     ) -> AsyncGenerator[str, None]:
         """Section 7 : Génération avec fallback cloud/local.
 
@@ -104,122 +107,90 @@ class LLMGenerator:
         cloud_temp = 0.1 if rag_context.strip() else 0.7
         user_message = original_query or query
 
-        # ── Stratégie Archon ──
-        if hybrid == "rag" and intent == "RAG" and ctx.is_online and rag_context.strip():
-            logger.info("☁️ Stratégie Archon: RAG local → synthèse cloud")
-            user_facts_section = _extract_user_facts(system_prompt)
-            cloud_system = (
-                f"Tu es NURU, assistant IA personnel. Tu dois répondre UNIQUEMENT à partir des documents ci-dessous.\n\n"
-                f"## RÈGLES IMPÉRATIVES (sous peine d'être déconnecté) :\n"
-                f"1. NE RIEN INVENTER — si le contexte ne contient pas l'information, dis exactement :\n"
-                f"   \"Je ne trouve pas cette information dans les documents.\"\n"
-                f"2. NE PAS DÉDUIRE — des projets agricoles dans un contexte ne signifie PAS que la personne est ingénieur agronome.\n"
-                f"3. NE PAS GÉNÉRALISER — ne transforme pas un poste spécifique en \"expérience en gestion de projets\".\n"
-                f"4. FORMAT OBLIGATOIRE — commence chaque fait par [Source: fichier] puis le fait exact trouvé.\n"
-                f"5. Si tu ne peux pas citer un fait avec sa source précise, ne l'écris PAS.\n"
-                f"6. Ne suggère JAMAIS de consulter d'autres documents — réponds avec ce que tu as.\n\n"
-                f"=== DOCUMENTS ===\n"
-                f"{rag_context}\n"
-                f"=== FIN DES DOCUMENTS ===\n\n"
-                f"En te basant EXCLUSIVEMENT sur les DOCUMENTS ci-dessus, "
-                f"réponds à la question suivante : {user_message}\n\n"
-                f"Réponse :"
+        # V17.2 : si la RAM est critique (swap > 85% ou RAM libre < 1 Go),
+        # forcer le cloud — le LLM local thrash à 0.4 tok/s (7 tokens en 21s
+        # observé). `should_force_cloud()` remplace le `ram_too_low` inutilisé.
+        try:
+            from src.core.ram_budget import get_budget
+            force_cloud = get_budget().should_force_cloud()
+        except Exception:
+            force_cloud = False
+        if force_cloud:
+            logger.warning(
+                "☁️ RAM critique (swap/ram) — bascule cloud forcée "
+                "(le LLM local thrash sur M1 8Go)"
             )
-            if user_facts_section:
-                cloud_system += f"\n\n{user_facts_section}"
-            logger.info(f"☁️ Archon cloud call — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
-            async for token in self.cloud_llm.generate_stream(
-                user_message, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
-            ):
-                if stream_session:
-                    if stream_session.is_cancelled:
-                        break
-                    stream_session.emit(token)
-                yield token
-            return
 
-        # ── Cloud-first ──
-        use_cloud_first = ctx.is_online or self.policy_engine.should_use_cloud(ctx)
+        # ── Intent-based cloud routing (no RAM/swap decisions) ──
+        # Cloud UNIQUEMENT pour COMPLEX (raisonnement) + WEB (recherche)
+        # Local pour tout le reste (GENERAL, RAG, SIMPLE, etc.)
+        use_cloud_first = (
+            (intent in ("COMPLEX", "WEB"))
+            and ctx.is_online
+        ) or force_cloud
 
-        if use_cloud_first or hybrid == "verify":
+        # "verify" hybrid strategy needs cloud (confidence verification)
+        if hybrid == "verify" and ctx.is_online:
+            use_cloud_first = True
+
+        if use_cloud_first:
             if not ctx.is_online:
                 logger.warning("☁️ Cloud demandé mais hors-ligne → fallback local")
             else:
-                logger.info(f"☁️ Cloud (intent={intent}, RAM: {ctx.ram_free_mb} MB, hybrid={hybrid}, temp={cloud_temp})")
-                from src.identity_manager import IdentityManager
-                identity = IdentityManager.load()
-                cloud_system = f"Tu es NURU, assistant personnel de {identity['user_name']}. Tu réponds en français.\n\n"
-                user_facts_section = _extract_user_facts(system_prompt)
+                logger.info(f"☁️ Cloud (intent={intent}, hybrid={hybrid}, temp={cloud_temp})")
+                # V17: utiliser le system_prompt du pipeline (conserve les instructions
+                # de mode RAG, format de citation, etc.) au lieu de le reconstruire
+                cloud_system = system_prompt
                 if rag_context.strip():
                     cloud_system += (
-                        f"## CONTEXTE DE VOS DOCUMENTS (prioritaire, utilise EXCLUSIVEMENT ces informations)\n"
-                        f"Les informations ci-dessous sont extraites de VOS documents personnels. "
-                        f"Elles sont prioritaires sur toute autre source.\n"
-                        f"- N'invente PAS d'information. Utilise UNIQUEMENT ce contexte.\n"
-                        f"- Si l'information n'est pas dans le contexte, dis "
-                        f"\"Je ne trouve pas cette information dans vos documents.\"\n"
-                        f"- Cite tes sources avec [Source: fichier].\n"
-                        f"{rag_context}\n\n"
+                        f"\n\n## CONTEXTE DE VOS DOCUMENTS\n"
+                        f"{rag_context}\n"
                     )
                 if web_context.strip():
-                    cloud_system += f"## CONTEXTE DE RECHERCHE WEB\n{web_context}\n\n"
-                if user_facts_section:
-                    cloud_system += f"\n{user_facts_section}\n"
+                    cloud_system += f"\n\n## CONTEXTE DE RECHERCHE WEB\n{web_context}\n"
+                if session_id and self.session_store:
+                    session_ctx = self.session_store.build_context(session_id, max_messages=8)
+                    if session_ctx:
+                        cloud_system += "\\n" + session_ctx + "\\n"
                 anchored_prompt = (
                     f"En te basant sur le contexte ci-dessus, "
                     f"réponds à la question suivante : {user_message}"
                 )
                 logger.info(f"☁️ Cloud call — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
+                n_tok = 0
                 async for token in self.cloud_llm.generate_stream(
                     anchored_prompt, intent=intent, system_prompt=cloud_system, temperature=cloud_temp
                 ):
-                    if stream_session:
-                        if stream_session.is_cancelled:
-                            break
-                        stream_session.emit(token)
+                    n_tok += 1
                     yield token
+                self.last_tokens = n_tok
                 return
 
-        # ── Fallback local ──
+        # ── Local LLM (tout le reste) ──
         logger.info(f"💻 Local (intent={intent}, hybrid={hybrid})")
         try:
             gen = self.local_llm.generate_stream(full_prompt, intent=intent)
-            if self.runtime:
-                async for token in self.runtime.schedule_generator("generation", gen):
-                    if stream_session:
-                        if stream_session.is_cancelled:
-                            break
-                        stream_session.emit(token)
-                    yield token
-            else:
-                async for token in gen:
-                    if stream_session:
-                        if stream_session.is_cancelled:
-                            break
-                        stream_session.emit(token)
-                    yield token
-        except (LLMError, RAGError) as e:
-            logger.error(f"Local fail: {e}. Fallback Cloud.")
-            if stream_session:
-                stream_session.emit(" [Bascule Cloud...] ")
-            yield " [Bascule Cloud...] "
-            cloud_prompt = user_message
-            cloud_sys = system_prompt
-            if rag_context and rag_context.strip() and "AUCUNE SOURCE" not in rag_context:
-                cloud_sys = (
-                        f"{system_prompt}\n\n"
-                        f"## CONTEXTE DOCUMENTAIRE (SOURCES)\n{rag_context.strip()}\n\n"
-                        f"Instructions : utilise EXCLUSIVEMENT le contexte ci-dessus pour répondre. "
-                        f"Si l'information n'y est pas, dis-le clairement.\n\n"
-                        f"Question : {user_message}"
-                    )
-                cloud_prompt = user_message
-            logger.info(f"☁️ Local-fail fallback — user='{user_message[:60]}' | temp={cloud_temp} | rag={len(rag_context)} chars")
-            async for token in self.cloud_llm.generate_stream(
-                cloud_prompt, intent=intent, system_prompt=cloud_sys, temperature=cloud_temp
-            ):
-                if stream_session:
-                    if stream_session.is_cancelled:
-                        break
-                    stream_session.emit(token)
+        except Exception as e:
+            logger.error(f"💻 Local init error: {e}")
+            yield f"💻 Erreur locale: {e}"
+            return
+        if self.runtime:
+            n_tok = 0
+            async for token in self.runtime.schedule_generator("generation", gen):
+                if stream_session and stream_session.is_cancelled:
+                    break
+                n_tok += 1
                 yield token
+                if stream_session:
+                    stream_session.emit(token)
+            self.last_tokens = n_tok
+        else:
+            n_tok = 0
+            async for token in gen:
+                if stream_session and stream_session.is_cancelled:
+                    break
+                n_tok += 1
+                yield token
+                if stream_session:
+                    stream_session.emit(token)
+            self.last_tokens = n_tok

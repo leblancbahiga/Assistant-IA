@@ -47,20 +47,30 @@ class EvidenceVerifier:
         chunk_sources: list[str],
         rag_context: str = "",
     ) -> VerificationResult:
-        """Vérifie que les citations répondent à 3 critères :
+        """Vérifie que les citations répondent à 3 critères.
 
         1. Il y a au moins une citation dans la réponse
         2. Aucune citation n'est "AUCUNE SOURCE" (marqueur de contexte vide)
         3. Chaque source citée existe dans les chunks retournés par le RAG
 
+        V17 : détection automatique du mode appelant.
+        - Si chunk_sources est une string courte (< 500 chars, pas de \n),
+          c'est une query passée par erreur → mode dégradé (skip critère 3).
+        - Si c'est une liste, validation normale.
+
         Args:
             response: Texte généré par le LLM
-            chunk_sources: Noms des sources des chunks RAG (ex: ['doc.pdf', ...])
-            rag_context: Contexte RAG complet (pour détection AUCUNE SOURCE)
+            chunk_sources: Noms des sources des chunks RAG (ou query legacy)
+            rag_context: Contexte RAG complet
 
         Returns:
             VerificationResult structuré
         """
+        # V17 : détection polymorphe — si c'est une string courte, c'est une query
+        if isinstance(chunk_sources, str) and len(chunk_sources) < 500 and "\n" not in chunk_sources:
+            logger.debug("EvidenceVerifier: chunk_sources est une query (legacy call) — skip critère 3")
+            chunk_sources = []
+
         # Critère 1 : présence de citations
         citations = self.extract_citations(response)
         if not citations:

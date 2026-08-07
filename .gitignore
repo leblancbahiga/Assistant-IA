@@ -141,3 +141,10 @@ dump/
 profile_*.png
 trace_*.json
 benchmark_*.json
+
+# V16 : environnements virtuels
+.venv*/
+
+# V16 : artefacts ML (poids adaptateurs, modèles)
+data/adapters/rag/
+models/*/

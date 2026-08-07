@@ -31,7 +31,7 @@ class Embedder:
         if self._initialized:
             return
 
-        self.model_id = "mlx-community/multilingual-e5-base-mlx"
+        self.model_id = "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ"
         self._model = None
         self._tokenizer = None
         self._model_lock = threading.Lock()  # Lock pour le lazy loading thread-safe
@@ -53,6 +53,9 @@ class Embedder:
             try:
                 import mlx_embeddings
                 self._mlx_emb = mlx_embeddings
+                # V16 FIX : Supprimer le bruit des logs HF Hub pendant le chargement
+                logging.getLogger("httpx").setLevel(logging.WARNING)
+                logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
                 resolved_path = config.get_model_path(self.model_id)
                 self._model, self._tokenizer = mlx_embeddings.load(resolved_path)
                 logger.info(f"Embedder MLX chargé depuis : {resolved_path}")
@@ -86,7 +89,11 @@ class Embedder:
             self._model, self._tokenizer, prefixed_texts
         )
         embeddings = output.text_embeds if output.text_embeds is not None else output.pooler_output
-        return np.array(embeddings)
+        # V17: Conversion MLX → numpy (toujours (batch, dim))
+        import mlx.core as mx
+        if isinstance(embeddings, mx.array):
+            embeddings = np.array(embeddings.astype(mx.float32), dtype=np.float32)
+        return np.array(embeddings, dtype=np.float32)
 
     def _embed_sync(self, text: Union[str, List[str]], is_query: bool = True) -> np.ndarray:
         """Version synchrone pour exécuter dans un thread séparé."""
@@ -109,7 +116,11 @@ class Embedder:
         
         embeddings = output.text_embeds if output.text_embeds is not None else output.pooler_output
         
-        return np.array(embeddings)
+        # V17: Conversion MLX → numpy (toujours (batch, dim))
+        import mlx.core as mx
+        if isinstance(embeddings, mx.array):
+            embeddings = np.array(embeddings.astype(mx.float32), dtype=np.float32)
+        return np.array(embeddings, dtype=np.float32)
 
     def unload(self):
         """Libère la mémoire Metal."""

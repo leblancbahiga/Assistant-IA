@@ -33,7 +33,7 @@ def _init_budget() -> None:
     budget = get_budget()
     budget.hard_limit_gb = 6.0
     budget.soft_limit_gb = 5.0
-    budget.register_component("embedder", Priority.EMBEDDER, estimated_mb=500)
+    budget.register_component("embedder", Priority.EMBEDDER, estimated_mb=400)
     budget.register_component("reranker", Priority.RERANKER, estimated_mb=400)
     budget.register_component("llm", Priority.LLM, estimated_mb=3500)
     budget.register_component("cache_llm", Priority.CACHE, estimated_mb=200)
@@ -66,12 +66,14 @@ def sanitize_rag_query(query: str, max_chars: int = 10_000) -> str:
     # 1. Troncature
     query = query[:max_chars]
 
-    # 2. Échappement des délimiteurs de contexte RAG
-    query = query.replace("===", "(triple égal)")
-
-    # 3. Échappement des blocs de code (empêche la fermeture prématurée du format)
-    query = query.replace("```", "(code block)")
-
+    # 2. (supprimé V16 AUDIT QW18) : l'échappement de `===` cassait la recherche
+    #    de documents contenant ce séparateur (ex: "RIKOLTO === BEACCOM").
+    #    Le === n'est qu'un séparateur visuel dans _format_context(), pas un
+    #    motif d'injection.
+    
+    # 3. (supprimé V16 AUDIT QW18) : l'échappement de ``` cassait la recherche
+    #    de code source contenant des triple backticks.
+    
     # 4. Neutralisation des motifs d'injection système
     #    Remplacement par homoglyphes pour casser la reconnaissance sans perdre le sens
     for pattern in _INJECTION_PATTERNS:
@@ -111,7 +113,7 @@ class RAGResult:
     rejected_chunks: int = 0
     rejection_reason: str = ""
     query_rewritten: str = ""
-    embedding_model: str = "multilingual-e5-base-mlx"
+    embedding_model: str = "Qwen3-Embedding-0.6B-4bit-DWQ"
     top_k_configured: int = 5
     top_k_actual: int = 0
     tokens_injected: int = 0
@@ -121,13 +123,15 @@ class RAGResult:
 class RAGEngine:
     """Moteur RAG Hybride : Recherche sémantique (sqlite-vec) + BM25."""
     
-    def __init__(self):
+    def __init__(self, cloud_llm: Optional[CloudLLM] = None):
         self.db_path = config.index_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # V15 : détection sqlite-vec (indisponible sur Python 3.13+)
         self._has_vec0 = self._check_vec0()
         self.embedder = Embedder()
-        self.cloud = CloudLLM()  # Cloud LLM pour l'expansion de requête
+        # V16 AUDIT FIX QW1 : injecter cloud_llm existant (-40 Mo RAM, coût API tracé)
+        # Si non fourni, créer un nouveau (comportement legacy)
+        self.cloud = cloud_llm or CloudLLM()
         self.rewriter = CloudQueryRewriter(cloud_llm=self.cloud)
         self.reranker = CrossEncoderReranker()  # : Reranker sémantique
         self.reranker.set_embedder(self.embedder)  # Connecte l'embedder
@@ -155,7 +159,7 @@ class RAGEngine:
             logger.info("✅ sqlite-vec disponible (recherche vectorielle active)")
             return True
         except (AttributeError, Exception) as e:
-            logger.warning(f"⚠️ sqlite-vec indisponible ({e}) — recherche FTS5+BM25 uniquement")
+            logger.info(f"sqlite-vec indisponible ({e}) — FTS5+BM25 actif")
             return False
 
     def _ensure_multi_search(self):
@@ -208,28 +212,31 @@ class RAGEngine:
         conn = self._get_conn()
         try:
             if search_type == "vector":
-                # Embed la requête et chercher par vecteur
-                import sqlite_vec
-                embed = self.embedder.embed_sync(query, is_query=True)
-                # AUDIT V10.3k — B-Embed : le code testé `if not embed` sur np.ndarray 2D
-                # ce qui lève ValueError "truth value of array with more than one element
-                # is ambiguous" et fait silencieusement retomber _ms_vector_search à []
-                # → RAG vectoriel complètement cassé pour cet appel, sans message
-                # d'erreur clair.
-                # Fix : tester embed.size (méthode sûre np) au lieu de truthiness.
-                if embed is None or getattr(embed, 'size', 0) == 0 or len(embed) == 0:
-                    return []
-                # embed est typiquement shape (1, 768) — index [0] est le vecteur
-                if embed.ndim >= 2:
-                    qvec = sqlite_vec.serialize_float32(embed[0])
+                if self._has_vec0:
+                    # Embed la requête et chercher par vecteur
+                    import sqlite_vec
+                    embed = self.embedder.embed_sync(query, is_query=True)
+                    # AUDIT V10.3k — B-Embed : le code testé `if not embed` sur np.ndarray 2D
+                    # ce qui lève ValueError "truth value of array with more than one element
+                    # is ambiguous" et fait silencieusement retomber _ms_vector_search à []
+                    # → RAG vectoriel complètement cassé pour cet appel, sans message
+                    # d'erreur clair.
+                    # Fix : tester embed.size (méthode sûre np) au lieu de truthiness.
+                    if embed is None or getattr(embed, 'size', 0) == 0 or len(embed) == 0:
+                        return []
+                    # embed est typiquement shape (1, 768) — index [0] est le vecteur
+                    if embed.ndim >= 2:
+                        qvec = sqlite_vec.serialize_float32(embed[0])
+                    else:
+                        qvec = sqlite_vec.serialize_float32(embed)
+                    rows = conn.execute(
+                        "SELECT content, source, 1 - distance as score FROM chunks "
+                        "WHERE embedding MATCH ? ORDER BY distance LIMIT 15",
+                        [qvec]
+                    ).fetchall()
+                    results = [(r[0], r[1], float(r[2])) for r in rows]
                 else:
-                    qvec = sqlite_vec.serialize_float32(embed)
-                rows = conn.execute(
-                    "SELECT content, source, 1 - distance as score FROM chunks "
-                    "WHERE embedding MATCH ? ORDER BY distance LIMIT 15",
-                    [qvec]
-                ).fetchall()
-                results = [(r[0], r[1], float(r[2])) for r in rows]
+                    results = self._vector_search_numpy(query, conn)
             else:  # fts
                 from src.query_rewriter import STOP_WORDS
                 # `re` est importé au niveau module (ligne 7)
@@ -265,7 +272,7 @@ class RAGEngine:
                     results.append((r[0], r[1], score))
             return results
         except Exception as e:
-            logger.warning(f"⚠️ _ms_vector_search({search_type}) a échoué: {e}")
+            logger.warning(f"_ms_vector_search({search_type}) échoué — résultats vides: {e}")
             return []
         finally:
             conn.close()
@@ -277,7 +284,7 @@ class RAGEngine:
         Signature : fn(qvec, top_k=N) -> [(content, source, score)]
         """
         if not self._has_vec0:
-            return []
+            return self._vector_search_numpy_vec(qvec, top_k)
         import sqlite_vec
         conn = self._get_conn()
         try:
@@ -289,8 +296,78 @@ class RAGEngine:
             ).fetchall()
             return [(r[0], r[1], float(r[2])) for r in rows if r[0] and r[2] > 0]
         except Exception as e:
-            logger.warning(f"⚠️ _ms_vector_search_vec a échoué (top_k={top_k}): {e}")
+            logger.warning(f"_ms_vector_search_vec échoué (top_k={top_k}) — résultats vides: {e}")
             return []
+        finally:
+            conn.close()
+
+    def _vector_search_numpy(self, query: str, conn) -> list:
+        """V16+: Recherche vectorielle via numpy dot product (fallback sans sqlite-vec).
+
+        Lit tous les vecteurs de chunk_vectors, calcule le cosinus en batch
+        avec numpy (très rapide — ~15ms/1000 chunks sur M1 Accelerate).
+        """
+        import numpy as np
+        embed = self.embedder.embed_sync(query, is_query=True)
+        if embed is None or getattr(embed, 'size', 0) == 0 or len(embed) == 0:
+            return []
+        # Normaliser le vecteur requête
+        qvec = np.asarray(embed[0] if embed.ndim >= 2 else embed, dtype=np.float32)
+        qnorm = qvec / (np.linalg.norm(qvec) + 1e-12)
+        dim = len(qvec)
+
+        # Lire TOUS les vecteurs stockés
+        rows = conn.execute(
+            "SELECT content, source, embedding FROM chunk_vectors"
+        ).fetchall()
+        if not rows:
+            return []
+
+        # Construire la matrice (batch dot product)
+        n = len(rows)
+        matrix = np.frombuffer(
+            b''.join(r[2] for r in rows), dtype=np.float32
+        ).reshape(n, dim)
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        matrix_norm = matrix / (norms + 1e-12)
+
+        # Cosinus = dot product sur vecteurs normalisés
+        scores = matrix_norm @ qnorm  # (n,)
+
+        # Top 15 (partition partielle O(n) au lieu de sort O(n log n))
+        top_k = min(15, n)
+        top_idx = np.argpartition(scores, -top_k)[-top_k:]
+        top_idx = top_idx[np.argsort(scores[top_idx])[::-1]]
+
+        return [(rows[i][0], rows[i][1], float(scores[i])) for i in top_idx]
+
+    def _vector_search_numpy_vec(self, qvec, top_k: int = 5) -> list:
+        """V16+: Recherche vectorielle à partir d'un vecteur (fallback numpy).
+
+        Utilisé par HyDE dans MultiSearchOrchestrator.
+        qvec est typiquement un ndarray shape (dim,) ou (1, dim).
+        """
+        import numpy as np
+        q = np.asarray(qvec[0] if hasattr(qvec, 'ndim') and qvec.ndim >= 2 else qvec, dtype=np.float32)
+        qnorm = q / (np.linalg.norm(q) + 1e-12)
+        dim = len(q)
+
+        conn = self._get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT content, source, embedding FROM chunk_vectors"
+            ).fetchall()
+            if not rows:
+                return []
+            n = len(rows)
+            matrix = np.frombuffer(b''.join(r[2] for r in rows), dtype=np.float32).reshape(n, dim)
+            norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+            matrix_norm = matrix / (norms + 1e-12)
+            scores = matrix_norm @ qnorm
+            top = min(top_k, n)
+            idx = np.argpartition(scores, -top)[-top:]
+            idx = idx[np.argsort(scores[idx])[::-1]]
+            return [(rows[i][0], rows[i][1], float(scores[i])) for i in idx]
         finally:
             conn.close()
 
@@ -342,18 +419,41 @@ class RAGEngine:
             if self._has_vec0:
                 conn.execute("""
                     CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING vec0(
-                        embedding FLOAT[768],
+                        embedding FLOAT[1024],
                         content TEXT,
                         source TEXT,
                         chunk_date TEXT
                     )
                 """)
             # FTS5 pour BM25 (recherche par mots-clés)
+            # V17.2: tokenizer 'unicode61 remove_diacritics' (français) au lieu de
+            # 'porter' (stemmer ANGLAIS cassé sur le français — audit F-3)
             conn.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-                    content, source, tokenize='porter'
+                    content, source, tokenize='unicode61 remove_diacritics 2'
                 )
             """)
+            # Migration one-shot : si l'index existant a été créé avec 'porter',
+            # le reconstruire avec le tokenizer français (audit F-3)
+            try:
+                _row = conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE name='chunks_fts'"
+                ).fetchone()
+                if _row and "porter" in _row[0]:
+                    conn.execute("ALTER TABLE chunks_fts RENAME TO chunks_fts_porter_old")
+                    conn.execute("""
+                        CREATE VIRTUAL TABLE chunks_fts USING fts5(
+                            content, source, tokenize='unicode61 remove_diacritics 2'
+                        )
+                    """)
+                    conn.execute(
+                        "INSERT INTO chunks_fts(content, source) "
+                        "SELECT content, source FROM chunks_fts_porter_old"
+                    )
+                    conn.execute("DROP TABLE chunks_fts_porter_old")
+                    logger.info("🇫🇷 Migration FTS5 porter→unicode61 (français) effectuée")
+            except Exception as e:
+                logger.warning(f"⚠️ Migration FTS5 française ignorée: {e}")
             # Table de suivi des fichiers indexés
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS indexed_files (
@@ -402,6 +502,16 @@ class RAGEngine:
                     rowid INTEGER UNIQUE
                 )
             """)
+            # V16+: Table de fallback vectoriel sans sqlite-vec (numpy dot product)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chunk_vectors (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source TEXT NOT NULL,
+                    content TEXT,
+                    chunk_date TEXT,
+                    embedding BLOB
+                )
+            """)
 
     def is_file_up_to_date(self, filepath: str, mtime: float = 0, file_hash: str = "") -> bool:
         """Vérifie si le fichier a déjà été indexé avec le même hash SHA256 (V6.2).
@@ -414,6 +524,14 @@ class RAGEngine:
             return False
             
         with self._conn_ctx() as conn:
+            # Défensif : créer la table si _init_db() ne l'a pas fait
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS indexed_files (
+                    filepath TEXT PRIMARY KEY,
+                    mtime FLOAT,
+                    hash TEXT
+                )
+            """)
             # 1. Vérification par filepath (compatible )
             row = conn.execute(
                 "SELECT hash FROM indexed_files WHERE filepath = ?", (filepath,)
@@ -443,6 +561,14 @@ class RAGEngine:
         Supprime aussi les entrées obsolètes pour le même filepath.
         """
         with self._conn_ctx() as conn:
+            # Défensif : créer la table si _init_db() ne l'a pas fait
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS indexed_files (
+                    filepath TEXT PRIMARY KEY,
+                    mtime FLOAT,
+                    hash TEXT
+                )
+            """)
             if file_hash:
                 # V6.2 : Nettoyer les anciennes entrées pour ce hash (même contenu à d'autres chemins)
                 conn.execute(
@@ -700,34 +826,51 @@ class RAGEngine:
             result.retrieval_time_ms = (time.time() - t_start) * 1000
             return "", result
 
-        # === V8+ : SCORE GATE DYNAMIQUE (3 niveaux) ===
-        top1_score = ms_results[0].score
+        # ── V8+ : SCORE GATE DYNAMIQUE (3 niveaux) ===
+        # V16+ FIX: utiliser le raw_score (similarité vectorielle/BM25 brute) pour la 
+        # porte de confiance, PAS le score RRF normalisé qui est arbitrairement bas
+        # (RRF normalise par le nombre de stratégies — un excellent résultat donne 0.07)
+        top1_raw = max(r.raw_score for r in ms_results) if any(r.raw_score > 0 for r in ms_results) else 0.0
+        top1_score = max(top1_raw, ms_results[0].score) if top1_raw > ms_results[0].score else ms_results[0].score
         self.last_top_score = top1_score
         result.top_score = top1_score
         result.all_scores = [r.score for r in ms_results]
 
-        MIN_ABSOLUTE_SCORE = config.rag_score_threshold   # V10.2: 0.30
-        FALLBACK_THRESHOLD = config.rag_score_fallback     # V10.2: 0.25
-        RAG_MIN_USABLE_SCORE = config.rag_min_usable_score # V10.2: 0.20 (ex hardcodé)
+        # V16 FIX: Seuils abaissés pour M1 8Go + embeddings locaux (bge-small, etc.)
+        # Les scores cosinus sur petits modèles sont plus bas mais pertinents
+        MIN_ABSOLUTE_SCORE = 0.22   # Était 0.30 - abaissé pour ne pas jeter le pertinent
+        FALLBACK_THRESHOLD = 0.18   # Était 0.25
+        RAG_MIN_USABLE_SCORE = 0.12 # Était 0.20 - seuil plancher absolue
 
         if top1_score >= MIN_ABSOLUTE_SCORE:
             confidence_label = "HAUTE"
             effective_k = k
         elif top1_score >= FALLBACK_THRESHOLD:
             confidence_label = "MOYENNE"
-            effective_k = max(2, k // 2)
-            logger.info(f"RAG V8+ : confiance MOYENNE (score={top1_score:.2f}), top_k réduit à {effective_k}")
+            # V16 FIX : plus de chunks quand confiance moyenne (inversé)
+            effective_k = min(k * 2, k * 3 // 2)
+            logger.info(
+                f"RAG V8+ : confiance MOYENNE (score={top1_score:.2f}), "
+                f"top_k élargi à {effective_k}"
+            )
         else:
             confidence_label = "FAIBLE"
-            effective_k = max(1, k // 3)
-            logger.info(f"RAG V8+ : confiance FAIBLE (score={top1_score:.2f}), top_k réduit à {effective_k}")
+            # V16 FIX : 2× plus de chunks quand confiance faible (inversé)
+            effective_k = k * 2
+            logger.info(
+                f"RAG V8+ : confiance FAIBLE (score={top1_score:.2f}), "
+                f"top_k élargi à {effective_k}"
+            )
 
         # ── V10 Audit: Rejeter les résultats clairement non pertinents ──
         # AVERTISSEMENT: placée APRES Profile Boost (ligne ~620), pas ici.
         # Les résultats bruts ms_results ne sont pas encore boostés.
 
         # Convertir SearchResult → tuples (content, source, score) pour post-processing
-        combined_results = [(r.content, r.source, r.score) for r in ms_results]
+        # V16 FIX : utiliser raw_score (similarité cosinus réelle) et non r.score
+        # (RRF normalisé ~0.07). Le RRF normalisé écrasait artificiellement les scores
+        # et faisait rejeter des chunks valides par le reranker + BM25.
+        combined_results = [(r.content, r.source, r.raw_score) for r in ms_results]
 
         # Profile Boost (V8+ P2 : freshness bonus supprimé — pas de chunk_date depuis multi_search)
         # Déduplication simple (tous les fichiers ont la même importance)
@@ -738,7 +881,7 @@ class RAGEngine:
         for content, source, score in combined_results:
             if content not in seen_contents:
                 count = source_counts.get(source, 0)
-                if count < 2:
+                if count < 5:  # V16 AUDIT FIX QW17 : 2→5 chunks/source (perte info documents multi-pages)
                     deduped_results.append((content, source, score))
                     source_counts[source] = count + 1
                     seen_contents.add(content)
@@ -747,15 +890,25 @@ class RAGEngine:
 
         # ── V10 Audit: Rejeter les résultats non pertinents ──
         # Vérifie si le top résultat contient des mots-clés de la requête.
-        if combined_results:
-            query_keywords = set(
-                w.lower() for w in re.findall(r'\w+', query)
+        # V17: paramétrable via config.rag_keyword_rejection (defaut: True)
+        ENABLE_KEYWORD_REJECTION = getattr(config, "rag_keyword_rejection", True)
+        
+        if ENABLE_KEYWORD_REJECTION and combined_results:
+            query_keywords_raw = [
+                w for w in re.findall(r'\w+', query)
                 if len(w) > 2 and w.lower() not in {
                     'de', 'la', 'le', 'les', 'du', 'des', 'un', 'une', 'et', 'ou',
                     'est', 'sont', 'dans', 'sur', 'par', 'pour', 'avec', 'que', 'qui',
                     'parle', 'moi', 'peux', 'tu', 'je', 'ne', 'pas', 'the', 'a', 'an',
                 }
-            )
+            ]
+            # Mots-clés en minuscule pour le matching + set des noms propres
+            # (mots capitalisés dans la requête, ex: "Leblanc", "Bahiga")
+            query_keywords = set(w.lower() for w in query_keywords_raw)
+            proper_keywords = {
+                w.lower() for w in query_keywords_raw
+                if w[0].isupper() and not w.isupper()
+            }
             should_reject = False
             rejection_reason = ""
 
@@ -765,13 +918,24 @@ class RAGEngine:
                 rejection_reason = f"score insuffisant ({top1_score:.2f} < {RAG_MIN_USABLE_SCORE})"
 
             # Règle 2: Aucun mot-clé dans le TOP résultat boosté
-            # On scanne les 3 meilleurs résultats pour trouver un chunk pertinent
+            # V17: seuil de correspondance relevé de 30% → 50%
+            # V17.4 FIX: le seuil 50% rejetait les requêtes pertinentes
+            # contenant un NOM PROPRE (ex: "expérience professionnelle de
+            # Leblanc Bahiga" → seuls "leblanc"+"bahiga" matchent, 2/5=40%
+            # < 50% → faux rejet alors que le CV est indexé). Un mot-clé
+            # capitalisé (nom propre) présent dans un chunk compte double:
+            # "Leblanc Bahiga" = 4/5 ≥ 50% → la requête passe.
             if not should_reject and query_keywords:
                 found_relevant = False
                 for rank, (top_content, top_source, _) in enumerate(combined_results[:3]):
                     top_text = (top_content + " " + top_source).lower()
-                    keyword_matches = sum(1 for kw in query_keywords if kw in top_text)
-                    if keyword_matches >= max(1, len(query_keywords) * 0.3):
+                    base_matches = sum(1 for kw in query_keywords if kw in top_text)
+                    proper_matches = sum(
+                        1 for kw in proper_keywords if kw in top_text
+                    )
+                    # Noms propres comptés double (présence du nom = sujet réel)
+                    keyword_matches = base_matches + proper_matches
+                    if keyword_matches >= max(1, len(query_keywords) * 0.5):
                         found_relevant = True
                         break
                 if not found_relevant:
@@ -789,6 +953,12 @@ class RAGEngine:
                 result.retrieval_time_ms = (time.time() - t_start) * 1000
                 return "", result
 
+        # ── V17 Hybrid Scoring: Blend RRF + Reranker ─────────────
+        # Sauvegarder les scores RRF avant de les remplacer par le reranker
+        rrf_score_map: dict[str, float] = {}
+        for content, source, score in combined_results:
+            rrf_score_map[content] = score
+
         #  Phase 0 : Reranker SYSTÉMATIQUE
         # V15 Phase 4 (Item 37) : toujours activé dans le pipeline.
         # V15 Phase 5 (Item 40) : vérification budget RAM avant chargement.
@@ -797,28 +967,47 @@ class RAGEngine:
         
         if should_rerank:
             budget = get_budget()
+            # V16 FIX : Skip reranker si swap > 50% (M1 8 Go — thrashing évité)
+            probe = budget.probe()
+            if probe.swap_percent > 80:
+                logger.info(
+                    f"⏭️ Reranker sauté : swap {probe.swap_percent:.0f}% > 80% → BM25 direct"
+                )
+                should_rerank = False
             # Vérifier si on peut charger le reranker dans le budget
-            if not budget.can_load("reranker"):
+            elif not budget.can_load("reranker"):
                 logger.warning(
                     "⏭️ Reranker sauté : budget RAM insuffisant "
                     f"(swap {budget.probe().swap_percent:.0f}%)"
                 )
                 budget.evict(priority_below=Priority.CACHE)
             else:
-                #  FIX PyTorch/MLX Conflict : Décharger l'embedder (MLX) AVANT
-                # de charger le reranker (PyTorch/MPS) pour éviter le conflit GPU
-                # entre les deux frameworks sur M1 8 Go.
-                self.embedder.unload()
+                # V16 AUDIT FIX (QW15) : Ne plus décharger l'embedder systématiquement.
+                # L'unload causait un rechargement (2-3s) à la prochaine requête.
                 budget.mark_loaded("reranker")
-                
+
                 try:
                     self.reranker.load_model()
                     reranked = await self.reranker.rerank(query, combined_results, top_k=effective_k) or []
+                    # V17: Blend RRF (80%) + Reranker (20%) — le Cross-Encoder est
+                    # ms-marco (anglais) → scores degrades sur le français. Le RRF
+                    # (embedder multilingue + BM25) est plus fiable en FR.
+                    if reranked:
+                        blended = []
+                        for content, source, score in reranked:
+                            rrf_score = rrf_score_map.get(content, 0.0)
+                            blended_score = 0.80 * rrf_score + 0.20 * min(score, 1.0)
+                            blended.append((content, source, blended_score))
+                        reranked = blended
                 finally:
-                    # IMMÉDIATEMENT après usage, décharger le reranker PyTorch/MPS
-                    # pour libérer la mémoire GPU avant que le LLM (MLX) ne charge.
-                    self.reranker.unload()
-                    budget.mark_unloaded("reranker")
+                    # V16 AUDIT FIX QW16 : Garder le cross-encoder chargé entre requêtes
+                    # pour éviter les 5-15s de chargement à chaque appel RAG.
+                    # Le déchargement est géré par :
+                    # 1. RAMMonitor → clear_reranker() si RAM critique
+                    # 2. Schedule_unload timer (120s d'inactivité)
+                    # self.reranker.unload()  ← supprimé
+                    # budget.mark_unloaded("reranker")  ← supprimé
+                    self._schedule_reranker_unload()
         
         # Fallback BM25 si reranker non disponible ou désactivé
         if not reranked and combined_results:
@@ -876,6 +1065,42 @@ class RAGEngine:
         result.sources = source_list
         result.documents_found = len(set(s["name"] for s in source_list))
 
+        # V17.2: Boost CV identité sur l'ORDRE FINAL — V17.3 : ciblé sur le NOM
+        # demandé. Bug corrigé : le marker "mudarhi"/"bahiga" boostait le CV de
+        # Leblanc pour TOUTE question d'identité (même "Qui est Toussaint
+        # Omombo" → réponse sur Leblanc). Désormais, seuls les CV contenant le
+        # nom propre de la requête sont boostés.
+        _is_identity_q = ("qui est" in query.lower()) or (
+            "son " in query.lower() or "sa " in query.lower() or "ses " in query.lower()
+        )
+        if _is_identity_q and reranked:
+            # Extraire le nom demandé : "qui est X ?" → X
+            _m = re.search(r"qui est\s+(.+)", query, re.IGNORECASE)
+            _name = _m.group(1).strip(" ?.!?") if _m else ""
+            _name_tokens = [
+                w.lower() for w in re.findall(r"[a-zà-ÿ]+", _name) if len(w) >= 3
+            ]
+            if _name_tokens:
+                _cv_list = []
+                _other_list = []
+                for _item in reranked:
+                    _src = _item[1].lower()
+                    _content = _item[0].lower()
+                    _is_cv = any(m in _src for m in ("cv", "curriculum", "vitae"))
+                    _has_name = any(
+                        n in _src or n in _content for n in _name_tokens
+                    )
+                    if _is_cv and _has_name:
+                        _cv_list.append(_item)
+                    else:
+                        _other_list.append(_item)
+                if _cv_list:
+                    reranked = _cv_list + _other_list
+                    logger.info(
+                        "🧑‍🌾 Boost CV ciblé '%s': %d source(s) en tête",
+                        _name.strip()[:40], len(_cv_list),
+                    )
+
         context = self._format_context(reranked)
         # V8+ : En-tête de confiance dans le contexte — TOUJOURS présent
         confidence_header = (
@@ -886,38 +1111,37 @@ class RAGEngine:
         else:
             context = confidence_header + "\n" + context
 
-        # V12 — Intégration mémoire V9 : injecter les souvenirs dans le contexte
-        try:
-            mem = self.memory  # accès paresseux
-            if mem is not None:
-                memory_context = mem.get_full_context(query)
-                if memory_context and memory_context.strip():
-                    memory_block = "\n\n=== SOUVENIRS (MÉMOIRE V9) ===\n" + memory_context
-                    context = memory_block + "\n\n" + context
-                    result.tokens_injected += len(memory_block) // 4
-                    logger.debug("🧠 Contexte mémoire V9 injecté (%d chars)", len(memory_context))
-        except Exception as e:
-            logger.debug("⚠️ Injection mémoire V9 ignorée: %s", e)
+        # V17: mémoire NON injectée dans le contexte RAG (contaminait les réponses
+        # avec des souvenirs/instructions/fragments précédents). La mémoire est
+        # gérée séparément par BuildContext → prompt_builder.)
+
         result.tokens_injected = len(context) // 4
         result.retrieval_time_ms = (time.time() - t_start) * 1000
 
         # V6 : Injection des métadonnées structurées dans le contexte
-        # Tous les documents avec des métadonnées (summary, sujets) sont injectés
+        # V16 FIX : Filtrer par sources présentes dans les résultats de recherche
         try:
             from src.document_extractor import DocumentMetadata, format_doc_for_context
 
-            # Récupérer TOUTES les métadonnées structurées disponibles
-            all_meta = self.get_all_doc_meta()
-            if all_meta:
-                injected = 0
-                meta_sections = []
+            # Récupérer UNIQUEMENT les métadonnées des documents trouvés par la recherche
+            relevant_sources = set()
+            if combined_results:
+                for _, src, _ in combined_results:
+                    if src:
+                        relevant_sources.add(src)
 
-                for entry in all_meta:
+            injected = 0
+            meta_sections = []
+            if relevant_sources:
+                for source in relevant_sources:
                     try:
-                        data = json.loads(entry["json_data"])
+                        json_str = self.get_doc_meta(source)
+                        if not json_str:
+                            continue
+                        data = json.loads(json_str)
                         meta = DocumentMetadata(
-                            source_file=entry["source"],
-                            doc_type=entry.get("doc_type", "document"),
+                            source_file=source,
+                            doc_type=data.get("doc_type", "document"),
                             title=data.get("title", ""),
                             summary=data.get("summary", ""),
                             key_topics=data.get("key_topics", []),
@@ -926,14 +1150,14 @@ class RAGEngine:
                             language=data.get("language", ""),
                             word_count=data.get("word_count", 0),
                         )
-                        meta.structured_json = entry["json_data"]
+                        meta.structured_json = json_str
                         meta_sections.append(format_doc_for_context(meta))
                         injected += 1
                     except Exception as e:
-                        logger.warning(f"⚠️ Formatage métadonnées ignoré: {e}")
+                        logger.debug(f"Formatage métadonnées ignoré: {e}")
                         pass
 
-                if meta_sections:
+            if meta_sections:
                     meta_context = "\n\n===\n".join(meta_sections)
                     # Ajouter un marqueur clair pour le LLM
                     meta_block = "\n\n=== FICHES STRUCTURÉES DES DOCUMENTS ===\n" + meta_context
@@ -1025,7 +1249,10 @@ class RAGEngine:
                 source_bonus = 0.15
                 
             # Combinaison : 60% sémantique, 40% mots-clés + bonus source
-            final_score = 0.6 * (1 - vec_dist) + 0.4 * bm25_norm + source_bonus
+            # V16 FIX : vec_dist est une similarité (plus grand = mieux),
+            # PAS une distance. Utiliser (1-vec_dist) était un bug qui
+            # inversait le score (pénalisait les meilleurs chunks).
+            final_score = 0.6 * vec_dist + 0.4 * bm25_norm + source_bonus
             scored.append((content, source, min(final_score, 1.0)))
             
         # Trier par score décroissant
@@ -1035,11 +1262,36 @@ class RAGEngine:
         '''Formate les résultats avec marqueurs CONTEXTE clairs pour forcer le grounding.'''
         context_parts = []
         for i, (content, source, score) in enumerate(results, 1):
+            # V16 AUDIT FIX QW19 : ajouter section_title/level si disponibles
+            meta = self._get_chunk_metadata(source, content)
+            section_info = ""
+            if meta:
+                title = meta.get("section_title", "")
+                level = meta.get("level", "")
+                if title:
+                    section_info = f" [{level}] {title}"
             context_parts.append(
-                f"[SOURCE {i}] {source}\n"
+                f"[SOURCE {i}] {source}{section_info}\n"
                 f"{sanitize_chunk_content(content)}\n"
             )
         return "=== DÉBUT DU CONTEXTE ===\n" + "\n".join(context_parts) + "\n=== FIN DU CONTEXTE ==="
+
+    def _get_chunk_metadata(self, source: str, content: str) -> Optional[dict]:
+        """Récupère section_title/level depuis chunk_hierarchy pour un chunk.
+        V16 AUDIT FIX QW19.
+        """
+        try:
+            conn = self._get_conn()
+            row = conn.execute(
+                """SELECT section_title, level FROM chunk_hierarchy
+                   WHERE source = ? AND content = ? LIMIT 1""",
+                (source, content[:1000])
+            ).fetchone()
+            if row and (row[0] or row[1]):
+                return {"section_title": row[0] or "", "level": row[1] or ""}
+        except Exception:
+            pass
+        return None
 
     def add_chunks(self, chunks: List[dict], dedup_source: bool = True):
         """Ajoute des chunks à l'index vectoriel et FTS (V6.2 : avec déduplication).
@@ -1057,9 +1309,16 @@ class RAGEngine:
         source_name = chunks[0].get("source", "")
         try:
             conn = self._get_conn()
-            
+
             # V10 : Supprimer les anciens chunks via la table de mapping rowid
             if dedup_source and source_name:
+                # Défensif : créer la table si _init_db() ne l'a pas fait
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS chunk_rowids (
+                        source TEXT,
+                        rowid INTEGER UNIQUE
+                    )
+                """)
                 old_rows = conn.execute(
                     "SELECT rowid FROM chunk_rowids WHERE source = ?", (source_name,)
                 ).fetchall()
@@ -1068,6 +1327,8 @@ class RAGEngine:
                     if self._has_vec0:
                         for (rowid,) in old_rows:
                             conn.execute("DELETE FROM chunks WHERE rowid = ?", (rowid,))
+                    else:
+                        conn.execute("DELETE FROM chunk_vectors WHERE source = ?", (source_name,))
                     conn.execute("DELETE FROM chunk_rowids WHERE source = ?", (source_name,))
                     conn.execute("DELETE FROM chunks_fts WHERE source = ?", (source_name,))
                     logger.info(f"🔄 V10 Déduplication : {old_count} anciens chunks de '{source_name}' remplacés")
@@ -1086,6 +1347,14 @@ class RAGEngine:
                     conn.execute(
                         "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
                         [chunk["source"], chunk_rowid]
+                    )
+                else:
+                    # V16+: Fallback chunk_vectors (numpy, pas de sqlite-vec)
+                    import numpy as np
+                    emb = np.asarray(chunk["embedding"], dtype=np.float32)
+                    conn.execute(
+                        "INSERT INTO chunk_vectors(source, content, chunk_date, embedding) VALUES (?, ?, ?, ?)",
+                        [chunk["source"], chunk["content"], chunk_date, emb.tobytes()]
                     )
                 # Insertion FTS
                 conn.execute(
@@ -1167,6 +1436,13 @@ class RAGEngine:
                         "INSERT INTO chunk_rowids(source, rowid) VALUES (?, ?)",
                         [chunk["source"], chunk_rowid]
                     )
+                else:
+                    import numpy as np
+                    emb = np.asarray(chunk["embedding"], dtype=np.float32)
+                    conn.execute(
+                        "INSERT INTO chunk_vectors(source, content, chunk_date, embedding) VALUES (?, ?, ?, ?)",
+                        [chunk["source"], chunk["content"], chunk_date, emb.tobytes()]
+                    )
                 # Insertion FTS
                 conn.execute(
                     "INSERT INTO chunks_fts(content, source) VALUES (?, ?)",
@@ -1210,7 +1486,34 @@ class RAGEngine:
     
     def clear_reranker(self, force: bool = False):
         """Décharge le reranker cross-encoder pour libérer la RAM.
-        Connecté au RAMMonitor en cas de mémoire critique.
+        Connecté au RAMBudgetManager en cas de mémoire critique.
+        V17 FIX : guard — skip si déjà déchargé (évite le spam log).
         """
+        if not self.reranker or not getattr(self.reranker, '_loaded', False):
+            return
         self.reranker.unload()
-        logger.info("🧹 Reranker cross-encoder déchargé (RAMMonitor).")
+        self._reranker_unload_timer = None
+        logger.info("🧹 Reranker cross-encoder déchargé (RAMBudgetManager).")
+
+    def _schedule_reranker_unload(self):
+        """Planifie le déchargement du reranker après 120s d'inactivité.
+        V16 AUDIT FIX QW16 : garde le modèle chaud entre les requêtes RAG.
+        """
+        import asyncio
+        # Annuler le timer précédent s'il existe
+        try:
+            if hasattr(self, '_reranker_unload_timer') and self._reranker_unload_timer is not None:
+                self._reranker_unload_timer.cancel()
+        except Exception:
+            pass
+
+        async def _do_unload():
+            try:
+                await asyncio.sleep(120)  # 120s d'inactivité
+                if hasattr(self, 'reranker') and self.reranker:
+                    self.reranker.unload()
+                    logger.info("🧹 Reranker déchargé après 120s d'inactivité.")
+            except asyncio.CancelledError:
+                pass  # Timer annulé → nouveau RAG request
+
+        self._reranker_unload_timer = asyncio.ensure_future(_do_unload())

@@ -154,7 +154,9 @@ class Router:
                  cloud_llm=None, policy_engine=None, hybrid_mode="local_only"):
         self.rag_engine = rag_engine
         self.cloud_llm = cloud_llm
-        self.is_online = is_online_check or (lambda: True)
+        async def _always_online() -> bool:
+            return True
+        self.is_online = is_online_check or _always_online
         self._cache = TTLDecisionCache(maxsize=256, ttl_seconds=300)
         self._spotlight = None
         try:
@@ -203,13 +205,25 @@ class Router:
         is_identity_query = False
         if m_gk:
             next_word_lower = m_gk.group(1).rstrip("?!.,;:")  # sans ponctuation
-            # Trouver ce mot dans la user_query ORIGINALE pour récupérer sa casse
-            pattern_next = re.escape(next_word_lower[:min(4, len(next_word_lower))])
-            m_orig = re.search(pattern_next, user_query, re.IGNORECASE)
-            if m_orig and m_orig.start() >= 4:  # bien après "qui est"
-                next_word_original = m_orig.group(0)
-                if next_word_original[0].isupper():
-                    is_identity_query = True
+            # V17: si le nom est une personnalite publique connue, pas du RAG
+            KNOWN_PUBLIC_FIGURES = (
+                "tshisekedi", "kabila", "lumumba", "muzito", "kamerhe",
+                "macron", "poutine", "biden", "trump", "merkel",
+                "président", "presidente", "premier ministre", "roi", "reine",
+            )
+            if next_word_lower in KNOWN_PUBLIC_FIGURES or any(
+                f"{next_word_lower} {fig}".strip()
+                for fig in ("président", "premier ministre", "ministre", "sénateur")
+            ):
+                is_identity_query = False
+            else:
+                # Trouver ce mot dans la user_query ORIGINALE pour récupérer sa casse
+                pattern_next = re.escape(next_word_lower[:min(4, len(next_word_lower))])
+                m_orig = re.search(pattern_next, user_query, re.IGNORECASE)
+                if m_orig and m_orig.start() >= 4:  # bien après "qui est"
+                    next_word_original = m_orig.group(0)
+                    if next_word_original[0].isupper():
+                        is_identity_query = True
         # Si on a matché un nom propre, override GENERAL → RAG
         if has_gk and is_identity_query and not has_rag_kw:
             has_gk_unless_identity = False
@@ -246,7 +260,7 @@ class Router:
             return result
 
         # ══ N3 : LLM CLASSIFICATION (Passe 2 — cas ambigus) ══
-        if self.cloud_llm and self.is_online():
+        if self.cloud_llm and await self.is_online():
             try:
                 intent = await self._classify_with_llm(user_query)
                 logger.info(f"🧠 Router N3 (LLM) → {intent}: {query_lower[:50]}")
@@ -310,7 +324,7 @@ class Router:
                 logger.warning(f"Router N4: Spotlight erreur: {e}")
 
         # ══ N5 : CLOUD FALLBACK ══
-        if self.is_online():
+        if await self.is_online():
             result.decision = "CLOUD_GROQ"
             result.confidence = 0.5
             result.reasoning = "Fallback cloud"
@@ -328,7 +342,7 @@ class Router:
 
     async def _classify_with_llm(self, query: str) -> str:
         """Classe l'intent via un appel LLM rapide (Groq)."""
-        prompt = CLASSIFY_PROMPT.format(query=query)
+        prompt = build_classify_prompt(query)
         response = ""
         async for token in self.cloud_llm.generate_stream(
             prompt, intent="SIMPLE",
@@ -368,10 +382,24 @@ class Router:
             return result
 
         # Escalade cloud si RAM trop basse (sauf si c'est du Spotlight)
-        if result.decision == "LOCAL_RAG" and not is_spotlight and self.policy_engine.should_use_cloud(ctx):
-            logger.info(f"↩️ Router: RAM {ctx.ram_free_mb} MB → escalation Cloud forcée")
-            result.decision = "CLOUD_GROQ"
-            result.reasoning += " | RAM trop basse pour local"
+        # V16 FIX: Pour les requêtes RAG documentaires, ON FORCE le local.
+        # Le fallback Cloud ne doit se déclencher QUE si le serveur local est 
+        # physiquement arrêté (ConnectionError), pas si la RAM est basse.
+        # Sur M1 8Go, le swap est lent mais FONCTIONNE - ne pas basculer sur cloud.
+        # V17: LOCAL_RAG ne bascule JAMAIS vers Cloud — le LoRA RAG adapter
+        # n'est chargé que sur le local. Envoyer une requête RAG vers Cloud
+        # = perdre le bénéfice du fine-tuning LoRA.
+        if result.decision == "LOCAL_RAG" and not is_spotlight:
+            if self.policy_engine.should_use_cloud(ctx):
+                logger.info(
+                    f"🔒 V17: LOCAL_RAG maintenu (swap OK) — "
+                    f"le LoRA RAG adapter est local ({ctx.ram_free_mb} MB RAM)"
+                )
+                # V17: PLUS JAMAIS d'escalade Cloud pour LOCAL_RAG.
+                # Le swap M1 est lent mais fonctionne, et le LoRA ne charge pas sur Cloud.
+                # Si le local crash, ce sera catché par LLMGenerator → fallback Cloud.
+                pass
+            # Spotlight bypass inchangé
         elif is_spotlight:
             logger.info(f"🔍 Router: Spotlight actif → pas d'escalade RAM")
 

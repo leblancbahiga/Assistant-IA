@@ -1,4 +1,19 @@
-"""NURU V9 — Module Agent : orchestration ReAct avec planification et vérification."""
+"""NURU V9 — Module Agent : orchestration ReAct avec planification et verification.
+
+V17 : AgentOrchestrator desormais delegable depuis NuruOrchestrator.
+    Activation : config.agent_loop_enabled=True (False par defaut).
+    Les requetes COMPLEX peuvent etre traitees par l'agent 4-phase
+    (Plan->Execute->Verify->Synthesize) au lieu du pipeline Q&A standard.
+    Par defaut : toujours dormant, non branche au pipeline ConversationEngine.
+"""
+
+import logging
+logger = logging.getLogger(__name__)
+logger.warning(
+    "⚠️ V17 : Module Agent (ReAct) — delegable depuis NuruOrchestrator "
+    "(config.agent_loop_enabled=True). Par defaut : toujours non branche "
+    "au pipeline ConversationEngine."
+)
 
 __all__ = [
     "TaskPlanner", "TaskExecutor", "TaskVerifier",
