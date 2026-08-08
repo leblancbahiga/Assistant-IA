@@ -36,6 +36,53 @@ class MCPResource:
     mime_type: str = "text/plain"
 
 
+def tools_from_registry(registry, executor) -> dict[str, "MCPTool"]:
+    """Projette une ToolRegistry (source de vérité unique) en outils MCP.
+
+    V18.1 C5 (V18-10) — unification MCP ↔ ToolRegistry : le serveur MCP
+    devient une **vue** du registre d'outils actif du pipeline
+    (`src.tools.ToolRegistry` / `ToolOrchestrator`), et non plus un deuxième
+    registre parallèle avec des outils codés en dur.
+
+    Chaque `ToolDefinition` du registre est projetée en un `MCPTool` dont le
+    `handler` dispatche vers `executor.execute(name, **params)` — l'exécution
+    réelle reste la propriété du registre unique. Aucune seconde
+    implémentation d'outil n'existe ici.
+
+    L'import de `src.tools.registry` est LAZY (dans la fonction) : ce module
+    reste autonome et léger au boot (gel V18-21 respecté — `src.mcp.server`
+    n'importe pas `src.tools` au chargement).
+    """
+    from src.tools.registry import ToolRegistry, ToolExecutor
+
+    if not isinstance(registry, ToolRegistry):
+        raise TypeError(f"registry doit être un ToolRegistry, reçu {type(registry).__name__}")
+    if not isinstance(executor, ToolExecutor):
+        raise TypeError(f"executor doit être un ToolExecutor, reçu {type(executor).__name__}")
+
+    def _make_handler(ex: ToolExecutor, tool_name: str):
+        def _handler(**params: Any) -> dict:
+            result = ex.execute(tool_name, params)
+            return {
+                "success": result.success,
+                "output": result.output,
+                "error": result.error,
+                "duration_ms": getattr(result, "duration_ms", 0.0),
+            }
+        return _handler
+
+    tools: dict[str, MCPTool] = {}
+    for definition in registry.list_tools():
+        schema = definition.to_schema()
+        tools[definition.name] = MCPTool(
+            name=definition.name,
+            description=definition.description,
+            handler=_make_handler(executor, definition.name),
+            parameters=schema["parameters"],
+        )
+    return tools
+
+
 @dataclass
 class MCPServer:
     """Serveur MCP exposant les capacités de NURU.

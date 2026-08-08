@@ -841,11 +841,33 @@ class NuruCore:
     # ── Phase 4 : MCP Tools ───────────────────────────────────────────────────
 
     def _register_mcp_tools(self) -> None:
-        """Enregistre les outils NURU comme outils MCP."""
-        from src.mcp.server import MCPTool
+        """Enregistre les outils NURU comme outils MCP via le registre UNIFIÉ.
 
-        # Tool: Recherche mémoire
-        def _search_memory(**params):
+        V18.1 C5 (V18-10) : plus aucune liste d'outils codée en dur dans le
+        serveur MCP. `MCPServer.tools` devient une **vue** du registre unique
+        (`ToolOrchestrator`/`ToolRegistry` — la même source de vérité que le
+        step Act du pipeline). Ce registre est peuplé ici (i) par les modules
+        `src.tools` (setup) et (ii) par les 4 capacités internes NURU
+        (mémoire / RAG / graphe / coût), puis projeté dans le serveur MCP.
+
+        Toute cette population est LAZY : elle n'a lieu qu'à l'intérieur de
+        `_ensure_mcp()`, jamais au boot (gel V18-21 respecté — zéro import de
+        `src.tools` et `src.mcp` tant que MCP n'est pas matérialisé).
+        """
+        from src.mcp.server import tools_from_registry
+        from src.tools.orchestrator import ToolOrchestrator
+        from src.tools.registry import ToolDefinition, ToolParameter
+
+        orch = ToolOrchestrator.get_instance()
+        # Peuple le registre unique avec les modules outils pipeline
+        # (shell/os/browser/file/memory/agent) — idempotent.
+        orch.setup()
+
+        # ── 4 capacités internes NURU — enregistrées dans le registre UNIQUE ──
+        # (source de vérité unique : le serveur MCP les verra via la vue, le
+        # step Act du pipeline aussi — aucun double registre.)
+
+        def _search_memory(**params: Any) -> Any:
             query = params.get("query", "")
             limit = params.get("limit", 5)
             try:
@@ -854,15 +876,7 @@ class NuruCore:
             except Exception as e:
                 return {"error": str(e)}
 
-        self.mcp_server.register_tool(MCPTool(
-            name="search_memory",
-            description="Recherche dans la mémoire persistante de NURU",
-            parameters={"query": {"type": "string", "required": True}, "limit": {"type": "integer"}},
-            handler=_search_memory,
-        ))
-
-        # Tool: Query RAG
-        def _rag_query(**params):
+        def _rag_query(**params: Any) -> Any:
             query = params.get("query", "")
             try:
                 results = self.k('rag_engine').search(query)
@@ -872,15 +886,7 @@ class NuruCore:
             except Exception as e:
                 return {"error": str(e)}
 
-        self.mcp_server.register_tool(MCPTool(
-            name="rag_query",
-            description="Interroge le moteur RAG documentaire",
-            parameters={"query": {"type": "string", "required": True}},
-            handler=_rag_query,
-        ))
-
-        # Tool: Knowledge Graph
-        def _kg_query(**params):
+        def _kg_query(**params: Any) -> Any:
             query = params.get("query", "")
             limit = params.get("limit", 10)
             try:
@@ -889,28 +895,65 @@ class NuruCore:
             except Exception as e:
                 return {"error": str(e)}
 
-        self.mcp_server.register_tool(MCPTool(
-            name="knowledge_graph_search",
-            description="Recherche dans le graphe de connaissances",
-            parameters={"query": {"type": "string", "required": True}, "limit": {"type": "integer"}},
-            handler=_kg_query,
-        ))
-
-        # Tool: Cost summary
-        def _cost_summary(**params):
+        def _cost_summary(**params: Any) -> Any:
             try:
                 return self.k('cost_guard').get_summary()
             except Exception as e:
                 return {"error": str(e)}
 
-        self.mcp_server.register_tool(MCPTool(
-            name="cost_summary",
-            description="Résumé des coûts API",
-            parameters={},
-            handler=_cost_summary,
-        ))
+        _internal_tools = (
+            ToolDefinition(
+                name="search_memory",
+                description="Recherche dans la mémoire persistante de NURU",
+                category="memory",
+                parameters=[
+                    ToolParameter(name="query", type="str", description="Texte de recherche"),
+                    ToolParameter(name="limit", type="int", description="Nombre max de résultats", required=False, default=5),
+                ],
+            ),
+            ToolDefinition(
+                name="rag_query",
+                description="Interroge le moteur RAG documentaire",
+                category="document",
+                parameters=[
+                    ToolParameter(name="query", type="str", description="Requête RAG"),
+                ],
+            ),
+            ToolDefinition(
+                name="knowledge_graph_search",
+                description="Recherche dans le graphe de connaissances",
+                category="memory",
+                parameters=[
+                    ToolParameter(name="query", type="str", description="Requête"),
+                    ToolParameter(name="limit", type="int", description="Nombre max de résultats", required=False, default=10),
+                ],
+            ),
+            ToolDefinition(
+                name="cost_summary",
+                description="Résumé des coûts API",
+                category="system",
+                parameters=[],
+            ),
+        )
+        _internal_handlers = {
+            "search_memory": _search_memory,
+            "rag_query": _rag_query,
+            "knowledge_graph_search": _kg_query,
+            "cost_summary": _cost_summary,
+        }
+        executor = orch.get_executor()
+        for tool_def in _internal_tools:
+            orch.get_registry().register(tool_def)
+            executor.register_handler(tool_def.name, _internal_handlers[tool_def.name])
 
-        logger.info(f"🔌 MCP: {len(self.mcp_server.tools)} outils enregistrés")
+        # ── Vue MCP = projection du registre unique ──
+        self.mcp_server.tools = tools_from_registry(
+            orch.get_registry(), orch.get_executor()
+        )
+        logger.info(
+            "🔌 MCP: %d outils exposés (vue du registre unique, %d capacités internes)",
+            len(self.mcp_server.tools), len(_internal_tools),
+        )
 
     # ── Phase 3 : Proactive Engine ────────────────────────────────────────────
 

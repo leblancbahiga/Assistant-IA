@@ -694,6 +694,24 @@ or:
 
 ---
 
+## 23.1 Journal des livraisons V18.1
+
+### C5 — unification MCP ↔ ToolRegistry (V18-10) — `t_b1b84fef`
+
+- **STATUS** : IMPLEMENTÉ (12/12 tests C5 + 57/57 tests C1/C2/C4/kernel verts)
+- **CHANGES** : `MCPServer` devient une **vue** de la ToolRegistry unique (pipeline).
+  - `src/mcp/server.py` : bridge `tools_from_registry(registry, executor)` — projette chaque `ToolDefinition` en `MCPTool` (handler → `executor.execute()`), import lazy de `src.tools` (gel V18-21 maintenu).
+  - `src/nuru_core.py` `_register_mcp_tools()` : plus d'outils codés en dur — setup `ToolOrchestrator`, les 4 capacités internes (search_memory/rag_query/knowledge_graph_search/cost_summary) enregistrées dans la ToolRegistry, puis `mcp_server.tools` projeté depuis le registre (44 outils).
+  - `src/kernel/pipeline_steps.py` `Act.run()` (branche active) : lit le registre unifié via `ToolOrchestrator.get_instance().get_registry()`.
+- **FILES** : `src/mcp/server.py`, `src/mcp/__init__.py`, `src/nuru_core.py`, `src/kernel/pipeline_steps.py`, `tests/test_c5_mcp_toolregistry.py` (nouveau), `tests/test_c4_act_step.py` (1 test rendu robuste à l'ordre — documenté en code).
+- **TESTS RUN** : `pytest tests/test_c5_mcp_toolregistry.py` (12/12), C1/C2/C4/kernel (57/57), test_orchestrator*.py ; boot clean (zéro import src.tools/src.mcp au chargement).
+- **NON-RÉGRESSIONS** : socket 8765 non relancé (`start_http` absent de nuru_core.py), MCP lazy (`_ensure_mcp`), gel V18-21 respecté.
+- **PRÉ-EXISTANTS (non liés C5)** : 9 échecs suite complète (shell_exec métacaractères, RAG float precision, LoRA load_adapters) — fichiers non touchés (diff HEAD vide).
+- **RISQUE** : le C4 `test_run_noop_does_not_load_src_tools` était cassé par l'ordre si C2 matérialise MCP dans le même process (C5 câble légitimement src.tools → `_ensure_mcp`) ; assertion rendue relative (T-1). Sémantique conservée (la branche no-op n'ajoute aucun import), documenté en code `NOTE (V18.1 C5)`.
+- **RECOMMENDED NEXT ACTION** : revue code (nuru-reviewer) puis arbitrage lead ; mise à jour V18.md V18-10 statut si approprié.
+
+---
+
 ## 24. Definition of Done
 
 A task is DONE only when all applicable conditions are satisfied:
