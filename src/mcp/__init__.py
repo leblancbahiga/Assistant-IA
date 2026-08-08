@@ -5,9 +5,10 @@ Permet à d'autres applications d'appeler les capacités de NURU et vice-versa.
 """
 
 from .client import MCPClient, MCPConnection
-from .server import MCPServer, MCPTool
+from .server import MCPServer, MCPTool, tools_from_registry
 
 __all__ = [
     "MCPClient", "MCPConnection",
     "MCPServer", "MCPTool",
+    "tools_from_registry",
 ]

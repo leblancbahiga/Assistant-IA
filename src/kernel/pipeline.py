@@ -93,6 +93,13 @@ class PipelineContext:
     # Remplie par Generate step, lue par PipelineEngine.run_stream()
     stream_queue: Optional[asyncio.Queue] = None
 
+    # V18.1 C4 — contrat du step Act (V18-09)
+    # Permissions + agent_limits sont injectés dans le contexte pour que le
+    # step Act gâté puisse les lire sans dépendre du singleton config.
+    # L'exécution réelle des tools est hors périmètre C4 (lecture-seule, C5).
+    permissions: Optional[Any] = None
+    agent_limits: Optional[Any] = None
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "query": self.query[:80],

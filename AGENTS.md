@@ -35,6 +35,7 @@ leblancbahiga/Assistant-IA
 The local workspace is the source of truth for development operations.
 
 ---
+Cost-aware execution is mandatory. Agents must minimize unnecessary context, redundant repository exploration, repeated analysis and unnecessary delegation.
 
 ## 3. Agent Team
 
@@ -447,6 +448,8 @@ Prefer structured errors containing:
 - correlation/task identifier when available.
 
 ---
+Cost-aware execution is mandatory. Agents must minimize unnecessary context, redundant repository exploration, repeated analysis and unnecessary delegation.
+---
 
 ## 15. Logging and Observability
 
@@ -582,11 +585,15 @@ The Git repository is located at:
 
 Never work directly on `main` for an implementation task.
 
-Prefer:
+Use a **single version branch per development cycle** (décision utilisateur 2026-08-08 — éviter la multiplication de branches par tâche et les merges GitHub coûteux):
 
     main
       ↓
-    feature/agent-<task-id>
+    feature/v<version>   (ex. feature/v18.1 — une seule branche pour tous les chantiers de la version)
+
+All tasks of the same version commit on the same `feature/v<version>` branch; one merge to `main` at the end of the version. Kanban-level task isolation and per-task review remain unchanged — only branch management differs.
+
+If the version branch does not exist yet, create it once (`git checkout -b feature/v18.1`); otherwise `git switch feature/v18.1` and pull latest before starting.
 
 Before modifying code:
 
@@ -687,6 +694,39 @@ or:
 
 ---
 
+## 23.1 Journal des livraisons V18.1
+
+### CONSOLIDATION V18.1 (committer C4+C5, push feature/v18.1) — `t_3c0dcd15`
+
+- **STATUS** : COMMITTÉ + POUSSÉ. C4 (8807454) et C5 (bd2fa88) désormais sur `feature/v18.1` (local ET `origin/feature/v18.1`), après vérification que le working tree contenait bien C4+C5 non commités (reset HEAD~1 antérieur). Les 5 chantiers C1-C5 sont donc tous sur `feature/v18.1` : aefa2fb (C1), bfd8e75 (C2), 4a281ae (C3), 8807454 (C4), bd2fa88 (C5).
+- **VALIDATION** : `pytest tests/test_c1_ghost_services.py tests/test_c2_freeze_modules.py tests/test_c4_act_step.py tests/test_kernel.py tests/test_c5_mcp_toolregistry.py -q` → **69/69 PASS** ; `python -c "import src.nuru_core"` → OK.
+- **DIFF vs main** : `git diff main...feature/v18.1 --stat` → 14 fichiers, tous les chantiers C1-C5 présents (config.py, kernel/*, mcp/*, nuru_core.py, agents_page.py, tests C1/C2/C4/C5).
+- **PUSH** : `git push origin feature/v18.1` → `4a281ae..bd2fa88` (pas de hook LFS gênant, pre-push déjà supprimé en tâche antérieure).
+- **NEXT ACTION** : revue finale + merge `feature/v18.1` → `main` par le lead/opérateur.
+
+### C4 — step Act gâté lecture-seule (V18-09) — `8807454`
+
+- **STATUS** : COMMITTÉ (commit `8807454`).
+- **CHANGES** : étape `Act` dans le pipeline Kernel, insérée entre `Validate()` et `Respond()` (pipeline à 8 steps). GATÉ par `config.enable_act_step` (OFF par défaut → no-op strict, zéro import de `src.tools`). Branch active : lazy import différé de `src.tools` (~19,3 MiB) fait dans `run()`, jamais au boot. `AgentLimits(max_concurrent=1, max_steps=5, allowed_tools=[])` ajouté à `config.py` ; `PipelineContext.permissions`/`agent_limits` injectés.
+- **FILES** : `src/kernel/pipeline_steps.py`, `src/config.py`, `src/kernel/__init__.py`, `src/kernel/pipeline.py`, `src/nuru_core.py`, `tests/test_c4_act_step.py` (nouveau).
+- **VALIDATION** : C4 inclus dans les 69/69 tests verts.
+
+### C5 — unification MCP ↔ ToolRegistry (V18-10) — `t_b1b84fef`
+
+- **STATUS** : IMPLEMENTÉ (12/12 tests C5 + 57/57 tests C1/C2/C4/kernel verts)
+- **CHANGES** : `MCPServer` devient une **vue** de la ToolRegistry unique (pipeline).
+  - `src/mcp/server.py` : bridge `tools_from_registry(registry, executor)` — projette chaque `ToolDefinition` en `MCPTool` (handler → `executor.execute()`), import lazy de `src.tools` (gel V18-21 maintenu).
+  - `src/nuru_core.py` `_register_mcp_tools()` : plus d'outils codés en dur — setup `ToolOrchestrator`, les 4 capacités internes (search_memory/rag_query/knowledge_graph_search/cost_summary) enregistrées dans la ToolRegistry, puis `mcp_server.tools` projeté depuis le registre (44 outils).
+  - `src/kernel/pipeline_steps.py` `Act.run()` (branche active) : lit le registre unifié via `ToolOrchestrator.get_instance().get_registry()`.
+- **FILES** : `src/mcp/server.py`, `src/mcp/__init__.py`, `src/nuru_core.py`, `src/kernel/pipeline_steps.py`, `tests/test_c5_mcp_toolregistry.py` (nouveau), `tests/test_c4_act_step.py` (1 test rendu robuste à l'ordre — documenté en code).
+- **TESTS RUN** : `pytest tests/test_c5_mcp_toolregistry.py` (12/12), C1/C2/C4/kernel (57/57), test_orchestrator*.py ; boot clean (zéro import src.tools/src.mcp au chargement).
+- **NON-RÉGRESSIONS** : socket 8765 non relancé (`start_http` absent de nuru_core.py), MCP lazy (`_ensure_mcp`), gel V18-21 respecté.
+- **PRÉ-EXISTANTS (non liés C5)** : 9 échecs suite complète (shell_exec métacaractères, RAG float precision, LoRA load_adapters) — fichiers non touchés (diff HEAD vide).
+- **RISQUE** : le C4 `test_run_noop_does_not_load_src_tools` était cassé par l'ordre si C2 matérialise MCP dans le même process (C5 câble légitimement src.tools → `_ensure_mcp`) ; assertion rendue relative (T-1). Sémantique conservée (la branche no-op n'ajoute aucun import), documenté en code `NOTE (V18.1 C5)`.
+- **RECOMMENDED NEXT ACTION** : revue code (nuru-reviewer) puis arbitrage lead ; mise à jour V18.md V18-10 statut si approprié.
+
+---
+
 ## 24. Definition of Done
 
 A task is DONE only when all applicable conditions are satisfied:
@@ -767,7 +807,36 @@ The objective is to make NURU:
 - resistant to regressions.
 
 ---
+## TEAM GOVERNANCE
 
+1. Kanban ownership
+Only nuru-lead creates, assigns, prioritizes, chains and closes production tasks.
+Other agents report discovered work to nuru-lead.
+
+2. Completion authority
+Coder reports IMPLEMENTED.
+Tester reports PASS/FAIL/BLOCKED.
+Reviewer reports PASS/FAIL.
+Only nuru-lead closes the Kanban task.
+
+3. Correction cycles
+nuru-lead maintains the correction-cycle count.
+Default maximum: two unsuccessful correction cycles.
+After two failures, stop and escalate.
+
+4. Cost-aware execution
+Use the minimum sufficient context, smallest valid workflow and targeted
+investigation/testing. Expand scope only when evidence requires it.
+Never sacrifice reliability for token savings.
+
+5. Source-of-truth hierarchy
+
+SOUL.md  → agent identity and behavior
+AGENTS.md → team/project operating rules
+V18.md    → architectural decisions
+Repository → actual implementation state
+Runtime/tests → actual observed behavior
+---
 ## 27. Final Rule
 
 When uncertain:
