@@ -617,6 +617,10 @@ class Validate(PipelineStep):
     - Persistance mémoire : LTM, session, faits
     """
 
+    # V18.1 C1 — throttle des WARNING de désactivation des services fantômes.
+    _archon_refiner_warned = False
+    _trace_collector_warned = False
+
     async def run(self, ctx: PipelineContext) -> tuple[PipelineContext, StepResult]:
         logger.info("✅ Validate: response_len=%d", len(ctx.response))
 
@@ -625,20 +629,17 @@ class Validate(PipelineStep):
 
         eb = _get_opt("event_bus")
 
-        # 1. ArchonRefiner — auto-correction
-        try:
-            archon = _get_service("archon_refiner")
-            if archon and archon.enabled:
-                refined = await archon.refine(
-                    ctx.query, ctx.response, ctx.rag_context,
-                    intent=ctx.intent,
-                )
-                if refined and refined != ctx.response:
-                    logger.info("🔮 ArchonRefiner: réponse améliorée (%d→%d chars)",
-                                len(ctx.response), len(refined))
-                    ctx.response = refined
-        except Exception as e:
-            logger.debug("⚠️ ArchonRefiner: %s", e)
+        # 1. ArchonRefiner — désactivé (V18.1)
+        # Service fantôme : jamais enregistré au kernel (nuru_core.py:224-227)
+        # et API incompatible (pipeline_steps.py:632-635 appelait
+        # refine(query, response, rag_context, intent=...) mais la signature est
+        # refine(response, rag_context, rag_score, intent) — archon_refiner.py:68-74
+        # → même enregistré, TypeError. Réactivation = chantier séparé.
+        if not type(self)._archon_refiner_warned:
+            type(self)._archon_refiner_warned = True
+            logger.warning(
+                "ArchonRefiner désactivé (service non enregistré, API incompatible) — V18.1"
+            )
 
         # 2. Evidence verification (si RAG)
         if ctx.rag_result and ctx.rag_context:
@@ -718,13 +719,16 @@ class Validate(PipelineStep):
         except Exception as e:
             logger.debug("⚠️ LTM extract: %s", e)
 
-        # 5. Trace collector (learning loop)
-        try:
-            trace = _get_service("trace_collector")
-            trace.record(ctx.query, ctx.response, ctx.intent, ctx.model_used,
-                         ctx.tokens_generated, ctx.tokens_prompt)
-        except Exception:
-            pass
+        # 5. Trace collector — désactivé (V18.1)
+        # Service fantôme : jamais enregistré au kernel (nuru_core.py:224-227)
+        # et appel async sans await (pipeline_steps.py:724 appelait
+        # trace.record(...) sans await → coroutine jetée, zéro trace même
+        # enregistré ; args positionnels décalés intent→mode, model_used→confidence).
+        if not type(self)._trace_collector_warned:
+            type(self)._trace_collector_warned = True
+            logger.warning(
+                "TraceCollector désactivé (service non enregistré, appel async sans await) — V18.1"
+            )
 
         if eb: await eb.emit("pipeline.step", {"step": "validation"})
         return ctx, StepResult()
