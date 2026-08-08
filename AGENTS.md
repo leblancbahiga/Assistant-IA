@@ -35,6 +35,7 @@ leblancbahiga/Assistant-IA
 The local workspace is the source of truth for development operations.
 
 ---
+Cost-aware execution is mandatory. Agents must minimize unnecessary context, redundant repository exploration, repeated analysis and unnecessary delegation.
 
 ## 3. Agent Team
 
@@ -447,6 +448,8 @@ Prefer structured errors containing:
 - correlation/task identifier when available.
 
 ---
+Cost-aware execution is mandatory. Agents must minimize unnecessary context, redundant repository exploration, repeated analysis and unnecessary delegation.
+---
 
 ## 15. Logging and Observability
 
@@ -582,11 +585,15 @@ The Git repository is located at:
 
 Never work directly on `main` for an implementation task.
 
-Prefer:
+Use a **single version branch per development cycle** (décision utilisateur 2026-08-08 — éviter la multiplication de branches par tâche et les merges GitHub coûteux):
 
     main
       ↓
-    feature/agent-<task-id>
+    feature/v<version>   (ex. feature/v18.1 — une seule branche pour tous les chantiers de la version)
+
+All tasks of the same version commit on the same `feature/v<version>` branch; one merge to `main` at the end of the version. Kanban-level task isolation and per-task review remain unchanged — only branch management differs.
+
+If the version branch does not exist yet, create it once (`git checkout -b feature/v18.1`); otherwise `git switch feature/v18.1` and pull latest before starting.
 
 Before modifying code:
 
@@ -767,7 +774,36 @@ The objective is to make NURU:
 - resistant to regressions.
 
 ---
+## TEAM GOVERNANCE
 
+1. Kanban ownership
+Only nuru-lead creates, assigns, prioritizes, chains and closes production tasks.
+Other agents report discovered work to nuru-lead.
+
+2. Completion authority
+Coder reports IMPLEMENTED.
+Tester reports PASS/FAIL/BLOCKED.
+Reviewer reports PASS/FAIL.
+Only nuru-lead closes the Kanban task.
+
+3. Correction cycles
+nuru-lead maintains the correction-cycle count.
+Default maximum: two unsuccessful correction cycles.
+After two failures, stop and escalate.
+
+4. Cost-aware execution
+Use the minimum sufficient context, smallest valid workflow and targeted
+investigation/testing. Expand scope only when evidence requires it.
+Never sacrifice reliability for token savings.
+
+5. Source-of-truth hierarchy
+
+SOUL.md  → agent identity and behavior
+AGENTS.md → team/project operating rules
+V18.md    → architectural decisions
+Repository → actual implementation state
+Runtime/tests → actual observed behavior
+---
 ## 27. Final Rule
 
 When uncertain:
