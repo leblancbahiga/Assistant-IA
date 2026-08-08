@@ -12,6 +12,9 @@ Flux complet :
     4. BuildContext     → prompt assembly, gardes, compression
     5. Generate         → ToT / CoT / Self-Consistency / stream
     6. Validate         → ArchonRefiner, StrictRAG, memory persist
+    6b. Act             → (V18-09, V18.1 C4) exécution d'actions/tools, GATÉ
+                         par `config.enable_act_step` (OFF par défaut). Lecture-seule
+                         V18.1 : ne charge src.tools que si le flag est True.
     7. Respond          → yield final vers UI
 """
 
@@ -731,6 +734,71 @@ class Validate(PipelineStep):
             )
 
         if eb: await eb.emit("pipeline.step", {"step": "validation"})
+        return ctx, StepResult()
+
+
+# ═══════════════════════════════════════════════════════════════
+# Step 6b — Act (V18-09, V18.1 C4)
+# ═══════════════════════════════════════════════════════════════
+
+class Act(PipelineStep):
+    """Step Act — exécution d'actions/tools (V18-09), GATÉ.
+
+    Lecture-seule V18.1 (C4) : on implémente la STRUCTURE (gate, lazy imports,
+    accès permissions/agent_limits) mais PAS l'exécution réelle des tools —
+    elle sera unifiée en C5 (MCP).
+
+    Comportement :
+        - `config.enable_act_step == False` (défaut) → no-op strict :
+            zéro import de `src.tools`, le pipeline continue inchangé.
+        - `config.enable_act_step == True` → lazy import différé de `src.tools`
+            (19+ modules, ~19,3 MiB) effectué DANS `run()`, jamais au boot.
+            L'exécution effective reste à C5 ; ici on ne fait que valider que
+            le module est chargable et on lit les permissions/agent_limits.
+    """
+
+    async def run(self, ctx: PipelineContext) -> tuple[PipelineContext, StepResult]:
+        # Accès au singleton config — import léger (src.config ≠ src.tools),
+        # effectué ici pour rester cohérent avec le lazy pattern des étapes.
+        from src.config import config
+
+        # ── GATE — désactivé par défaut ──
+        if not config.enable_act_step:
+            logger.info("⏸️ Act gâté (enable_act_step=False) — no-op")
+            return ctx, StepResult()
+
+        # ── Actif : lazy import DIFFÉRÉ de src.tools (~19,3 MiB) ──
+        # L'import n'a lieu qu'ici, jamais au boot. Lecture-seule V18.1 :
+        # on lit le REGISTRE UNIFIÉ (ToolOrchestrator — la même source de
+        # vérité que le serveur MCP, chantier C5 / V18-10). Aucune exécution.
+        try:
+            from src.tools.orchestrator import ToolOrchestrator
+            orch = ToolOrchestrator.get_instance()
+            orch.setup()  # peupler le registre unique (idempotent)
+            registry = orch.get_registry()
+            tool_names = [t.name for t in registry.list_tools()]
+            logger.info(
+                "⚙️ Act actif (enable_act_step=True) — registre unifié lu: "
+                "%d outils (%s). Exécution runtime = chantier C5 (MCP).",
+                len(tool_names), ", ".join(tool_names[:5]) + ("…" if len(tool_names) > 5 else ""),
+            )
+        except Exception as e:  # src.tools import impossible → step dégradé
+            logger.warning("⚠️ Act: import src.tools échoué: %s", e)
+            return ctx, StepResult(error=f"Act: import src.tools: {e}")
+
+        # Permissions + limites injectées via le contexte (lecture seule).
+        limits = getattr(ctx, "agent_limits", None) or config.agent_limits
+        perms = getattr(ctx, "permissions", None)
+        if limits is not None:
+            logger.info(
+                "🔐 Act: allowed_tools=%s max_steps=%s max_concurrent=%s perms=%s",
+                getattr(limits, "allowed_tools", []),
+                getattr(limits, "max_steps", None),
+                getattr(limits, "max_concurrent", None),
+                bool(perms),
+            )
+
+        # NOTE C4/lecture-seule : aucune exécution de tool ici (C5).
         return ctx, StepResult()
 
 

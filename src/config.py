@@ -6,6 +6,7 @@ Accès via le singleton `config`.
 
 import os
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, ClassVar
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +21,19 @@ def _mask_val(key: str, val: str) -> str:
     if any(p in key.lower() for p in SENSITIVE_KEY_PATTERNS):
         return val[:4] + "…" + val[-4:] if len(val) > 8 else "****"
     return val
+
+
+@dataclass
+class AgentLimits:
+    """Contrat de permissions/limites pour le step Act (V18.1 C4, V18-09).
+
+    Structure de configuration lue par le step Act gâté. L'exécution réelle
+    des tools est hors périmètre C4 (lecture-seule) — elle sera unifiée en C5
+    (MCP). Ces défauts sont conservateurs et pensés pour M1 8 Go.
+    """
+    max_concurrent: int = 1     # Tools simultanés maximum
+    max_steps: int = 5          # Steps d'action maximum
+    allowed_tools: list[str] = field(default_factory=list)  # Liste vide = aucun tool autorisé
 
 
 class Config(BaseSettings):
@@ -39,6 +53,14 @@ class Config(BaseSettings):
 
     # ── Mode de réponse (NURU V5) ──
     response_mode: str = "hybrid"  # strict | hybrid | free
+
+    # ── Step Act (V18.1 C4, V18-09) ──
+    # GATE du step Act (exécution d'actions/tools) dans le pipeline Kernel.
+    # OFF par défaut : à False, le step Act est un no-op (aucun import de src.tools).
+    # Permissions + limites lues par le step via `agent_limits`.
+    # Lecture-seule V18.1 : l'exécution réelle des tools ne sera unifiée qu'en C5 (MCP).
+    enable_act_step: bool = False
+    agent_limits: AgentLimits = AgentLimits()
 
     # ── LLM Locaux ──
     local_model: str = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"

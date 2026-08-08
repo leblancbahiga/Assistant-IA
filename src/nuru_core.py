@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 from src.kernel import NuruKernel, KernelState, KernelMetrics, KernelResources, PipelineEngine, KernelRouter, KernelCache, KernelScheduler
 from src.kernel.pipeline_steps import (
     ReceiveQuestion, Route, Retrieve, BuildContext,
-    Generate, Validate, Respond,
+    Generate, Validate, Act, Respond,
 )
 
 _kernel = NuruKernel()  # Singleton, réutilisé dans tous les modules
@@ -236,6 +236,7 @@ class NuruCore:
             BuildContext(),
             Generate(),
             Validate(),
+            Act(),
             Respond(),
         ])
         self._kernel.register("pipeline", self.pipeline)
