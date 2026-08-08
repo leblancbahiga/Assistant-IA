@@ -17,7 +17,7 @@ from src.kernel.resources import KernelResources
 from src.kernel.pipeline import PipelineEngine
 from src.kernel.pipeline_steps import (
     ReceiveQuestion, Route, Retrieve, BuildContext,
-    Generate, Validate, Respond,
+    Generate, Validate, Act, Respond,
 )
 from src.kernel.router import KernelRouter
 from src.kernel.cache import KernelCache

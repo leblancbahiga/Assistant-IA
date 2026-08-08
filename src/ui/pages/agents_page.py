@@ -129,19 +129,19 @@ class AgentsPage(QWidget):
         )
         header.addWidget(title)
 
-        self._status = QLabel("• Agent inactif")
+        self._status = QLabel("○ Agent : en développement")
         self._status.setStyleSheet(f"color: {Color.TEXT_MUTED}; font-size: 10pt;")
         header.addStretch()
         header.addWidget(self._status)
 
-        # Toggle ProactiveEngine
-        self._toggle_btn = QPushButton("▶ Démarrer")
+        # Toggle ProactiveEngine — désactivé (honnête : agent runtime non branchée)
+        self._toggle_btn = QPushButton("Agent : en développement")
+        self._toggle_btn.setEnabled(False)
         self._toggle_btn.setStyleSheet(
-            f"background: rgba(0,240,255,0.15); color: {Color.CYAN}; "
-            f"border: 1px solid {Color.CYAN}; border-radius: {Radius.SMALL}; "
+            f"background: rgba(255,255,255,0.05); color: {Color.TEXT_MUTED}; "
+            f"border: 1px solid {Color.BORDER}; border-radius: {Radius.SMALL}; "
             f"padding: 6px 18px; font-weight: bold; font-size: 9pt;"
         )
-        self._toggle_btn.clicked.connect(self._toggle_proactive)
         header.addWidget(self._toggle_btn)
 
         layout.addLayout(header)
@@ -272,9 +272,9 @@ class AgentsPage(QWidget):
         if proactive and hasattr(proactive, 'is_running'):
             running = proactive.is_running
 
-        self._status.setText(f"{'●' if running else '○'} Agent {'actif' if running else 'inactif'}")
-        if not running:
-            self._toggle_btn.setText("▶ Démarrer")
+        # Honnête : agent runtime non branchée (V18.1 C3)
+        self._status.setText("○ Agent : en développement")
+        # Toggle désactivé — ne pas tenter de mettre à jour
 
     @staticmethod
     def _clear_layout(layout) -> None:
