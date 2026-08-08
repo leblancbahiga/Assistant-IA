@@ -53,6 +53,13 @@ class Config(BaseSettings):
     # Activer pour déléguer les requêtes COMPLEX à l'agent 4-phase (Plan→Execute→Verify→Synthesize).
     agent_loop_enabled: bool = False
 
+    # V18-21 / V18.1-C2 : gel des modules morts/dormants à l'init.
+    # True = GELÉ : KnowledgeGraph, ProactiveEngine, RoutineScheduler, SleepCycle
+    # et MCP ne sont PAS instanciés au boot (imports différés → ~25 MiB libérés).
+    # Rollback : passer à False → instanciation immédiate (comportement V17.4).
+    # Le socket MCP HTTP 8765 reste supprimé dans les deux cas (V18-21, décision lead).
+    freeze_dead_modules: bool = True
+
     # ── Cloud ──
     cloud_model: str = "deepseek-v4-flash-free"
     cloud_provider: str = "opencode_zen"

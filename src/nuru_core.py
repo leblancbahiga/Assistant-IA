@@ -27,18 +27,16 @@ from src.long_term_memory import LongTermMemory  # V10.1 : Mémoire long terme
 from src.memory_bridge import MemoryBridge  # V10.1 : Pont V5+V9
 
 # Phase 3 : Proactif, Connaissances, Cycle de sommeil
-from src.knowledge.graph import KnowledgeGraph
-from src.memory.sleep_cycle import SleepCycleManager
+# V18-21 gel (V18.1-C2) : KnowledgeGraph / SleepCycleManager / ProactiveEngine /
+# RoutineScheduler importés en LAZY dans les méthodes _ensure_*() — plus aucun
+# chargement au boot quand config.freeze_dead_modules=True (~25 MiB libérés).
 from src.routing.prompt_builder import DynamicPromptBuilder
-from src.proactive.engine import ProactiveEngine
-from src.proactive.routines import RoutineScheduler, RoutinePreset
 from src.personality.engine import PersonaEngine
 
 # Phase 4 : MCP, ModelRouter, CostGuard
 from src.models.cost_guard import CostGuard, CostConfig
 from src.models.router import ModelRouter, ModelRoute, TaskType, RoutingDecision
-from src.mcp.server import MCPServer, MCPTool
-from src.mcp.client import MCPClient
+# V18-21 gel : src.mcp.server / src.mcp.client importés en lazy dans _ensure_mcp().
 from src.core.ram_budget import get_budget, Priority
 
 logger = logging.getLogger(__name__)
@@ -264,19 +262,17 @@ class NuruCore:
         self._bg_tasks: set = set()
         self._indexing_enabled = True  # V12 : flag pour stopper l'indexation
 
-        # ── Phase 3 : Knowledge Graph ──
-        self.knowledge_graph = KnowledgeGraph()
-        self.knowledge_graph.init()
-        self._kernel.register("knowledge_graph", self.knowledge_graph)
+        # ── Phase 3 : Knowledge Graph (V18-21 gel : différé si freeze_dead_modules) ──
+        if not config.freeze_dead_modules:
+            self._ensure_knowledge_graph()
 
-        # ── Phase 3 : Sleep Cycle ──
-        self.sleep_cycle = SleepCycleManager()
-        self._kernel.register("sleep_cycle", self.sleep_cycle)
+        # ── Phase 3 : Sleep Cycle (V18-21 gel : lazy — consommé par process_query) ──
+        if not config.freeze_dead_modules:
+            self._ensure_sleep_cycle()
 
-        # ── Phase 3 : Proactive Engine ──
-        self.proactive = ProactiveEngine()
-        self._kernel.register("proactive", self.proactive)
-        self._register_proactive_collectors()
+        # ── Phase 3 : Proactive Engine (V18-21 gel : différé si freeze_dead_modules) ──
+        if not config.freeze_dead_modules:
+            self._ensure_proactive()
 
         # ── Phase 3 : Dynamic Prompt Builder ──
         self.persona = PersonaEngine()
@@ -284,10 +280,9 @@ class NuruCore:
         self.prompt_builder = DynamicPromptBuilder()
         self._kernel.register("prompt_builder", self.prompt_builder)
 
-        # ── Phase 3 : Routine Scheduler ──
-        self.routines = RoutineScheduler()
-        self.routines.load_preset(RoutinePreset.default())
-        self._kernel.register("routines", self.routines)
+        # ── Phase 3 : Routine Scheduler (V18-21 gel : différé si freeze_dead_modules) ──
+        if not config.freeze_dead_modules:
+            self._ensure_routines()
 
         # ── Phase 4 : CostGuard ──
         daily_budget = getattr(config, "cost_daily_budget", getattr(config, "daily_api_budget", 0.50))
@@ -322,10 +317,9 @@ class NuruCore:
         self.kernel_state.set("features", str(getattr(config, "enabled_tools", "rag,web,tools")))
         logger.info("🧠 KernelState: state initial alimenté")
 
-        # ── Phase 4 : MCP ──
-        self.mcp_server = MCPServer(name="nuru-mcp", version="12.0.0")
-        self.mcp_client = MCPClient()
-        self._register_mcp_tools()
+        # ── Phase 4 : MCP (V18-21 gel : différé si freeze_dead_modules) ──
+        if not config.freeze_dead_modules:
+            self._ensure_mcp()
         # V17 P9 : enregistrer NuruCore dans le kernel (evite 2e instanciation par ConversationEngine)
         self._kernel.register("nuru_core", self)
         self._online_cache: tuple[float, bool] = (0.0, False)  # TTL timestamp + cached value
@@ -434,6 +428,74 @@ class NuruCore:
             embedder.unload()
             logger.info("🧹 Embedder déchargé (RAMMonitor) — libère ~400 Mo")
 
+    # ── Phase 3/4 : Instanciation différée (V18-21 — gel des modules morts) ──
+    # Quand config.freeze_dead_modules=True, ces modules ne sont PAS instanciés
+    # au boot (imports différés → ~25 MiB libérés, spec V18.1 C2 §2.3 N2).
+    # Chaque _ensure_*() est idempotent : crée + enregistre l'instance au premier
+    # accès, retourne l'instance existante ensuite.
+
+    def _ensure_knowledge_graph(self):
+        """KnowledgeGraph — instancié au premier accès (jamais au boot quand gelé)."""
+        if getattr(self, "knowledge_graph", None) is not None:
+            return self.knowledge_graph
+        from src.knowledge.graph import KnowledgeGraph
+        self.knowledge_graph = KnowledgeGraph()
+        self.knowledge_graph.init()
+        self._kernel.register("knowledge_graph", self.knowledge_graph)
+        logger.info("🧠 KnowledgeGraph instancié (lazy)")
+        return self.knowledge_graph
+
+    def _ensure_sleep_cycle(self):
+        """SleepCycleManager — lazy car consommé à chaque requête (process_query).
+
+        Gain ~0 (module déjà importé via MemoryBridge/memory.manager) mais
+        l'INSTANCIATION nuru_core est bien différée (spec V18.1 C2 N3).
+        """
+        if getattr(self, "sleep_cycle", None) is not None:
+            return self.sleep_cycle
+        from src.memory.sleep_cycle import SleepCycleManager
+        self.sleep_cycle = SleepCycleManager()
+        self._kernel.register("sleep_cycle", self.sleep_cycle)
+        return self.sleep_cycle
+
+    def _ensure_proactive(self):
+        """ProactiveEngine + collecteurs — instancié au premier accès."""
+        if getattr(self, "proactive", None) is not None:
+            return self.proactive
+        from src.proactive.engine import ProactiveEngine
+        self.proactive = ProactiveEngine()
+        self._kernel.register("proactive", self.proactive)
+        self._register_proactive_collectors()
+        logger.info("⚡ ProactiveEngine instancié (lazy)")
+        return self.proactive
+
+    def _ensure_routines(self):
+        """RoutineScheduler — instancié au premier accès."""
+        if getattr(self, "routines", None) is not None:
+            return self.routines
+        from src.proactive.routines import RoutineScheduler, RoutinePreset
+        self.routines = RoutineScheduler()
+        self.routines.load_preset(RoutinePreset.default())
+        self._kernel.register("routines", self.routines)
+        return self.routines
+
+    def _ensure_mcp(self):
+        """MCPServer + MCPClient — instanciés au premier accès.
+
+        Le socket HTTP 8765 n'est PLUS lancé (suppression définitive V18-21 :
+        zéro client connecté — spec V18.1 C2 §2.4.4 ; un client MCP externe
+        passera par V18-10/unification, chantier C5).
+        """
+        if getattr(self, "mcp_server", None) is not None:
+            return self.mcp_server
+        from src.mcp.server import MCPServer
+        from src.mcp.client import MCPClient
+        self.mcp_server = MCPServer(name="nuru-mcp", version="12.0.0")
+        self.mcp_client = MCPClient()
+        self._register_mcp_tools()
+        logger.info("🔌 MCP instancié (lazy)")
+        return self.mcp_server
+
     def start_background_tasks(self):
         """Lance les tâches asynchrones et le watcher en arrière-plan.
         
@@ -463,21 +525,22 @@ class NuruCore:
         # V17 FIX : api_keys_updated → rebuild les routes ModelRouter
         EventBus().subscribe("api_keys_updated", lambda _: self.refresh_model_routes())
 
-        # ── Phase 3 : Sleep cycle monitoring ──
-        self.k('sleep_cycle').start_monitoring()
-        task = asyncio.create_task(self._sleep_cycle_loop())
-        self._bg_tasks.add(task)
-        task.add_done_callback(self._bg_tasks.discard)
+        # ── Phase 3 : Sleep cycle monitoring (V18-21 gel : désactivé si freeze_dead_modules) ──
+        if not config.freeze_dead_modules:
+            self.k('sleep_cycle').start_monitoring()
+            task = asyncio.create_task(self._sleep_cycle_loop())
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
-        # ── Phase 3 : Proactive signal collection ──
-        task = asyncio.create_task(self._proactive_collect_loop())
-        self._bg_tasks.add(task)
-        task.add_done_callback(self._bg_tasks.discard)
+        # ── Phase 3 : Proactive signal collection (V18-21 gel : désactivé si freeze_dead_modules) ──
+        if not config.freeze_dead_modules:
+            task = asyncio.create_task(self._proactive_collect_loop())
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
-        # ── Phase 4 : MCP HTTP Server ──
-        task = asyncio.create_task(self.mcp_server.start_http(port=8765))
-        self._bg_tasks.add(task)
-        task.add_done_callback(self._bg_tasks.discard)
+        # ── Phase 4 : MCP HTTP Server — SUPPRIMÉ (V18-21 : socket 8765, zéro client) ──
+        # Décision lead : suppression définitive, pas de flag pour la restaurer.
+        # Un client MCP externe passera par V18-10/unification (spec V18.1 C5).
 
         # ── Phase 5 : Purge automatique historique + cache ──
         task = asyncio.create_task(self._auto_purge_loop())
@@ -897,6 +960,8 @@ class NuruCore:
 
     async def _sleep_cycle_loop(self) -> None:
         """Boucle périodique de mise à jour du cycle de sommeil."""
+        if config.freeze_dead_modules:
+            return  # V18-21 : modules gelés — boucle désactivée (défense en profondeur)
         from src.memory.sleep_cycle import SleepPhase
         while self._indexing_enabled:
             try:
@@ -911,6 +976,8 @@ class NuruCore:
 
     async def _proactive_collect_loop(self) -> None:
         """Boucle de collecte et évaluation proactives."""
+        if config.freeze_dead_modules:
+            return  # V18-21 : modules gelés — boucle désactivée (défense en profondeur)
         await asyncio.sleep(30)  # Laisser le temps à l'app de démarrer
         while self._indexing_enabled:
             try:
@@ -1002,8 +1069,8 @@ Quand on te parle de {identity["user_name"]} (identité, âge, vie, travail, pro
         Note: use_tts/audio_engine sont gérés par l'UI (ConversationEngine),
         pas ici.
         """
-        # ── Phase 3 : Signal d'activité utilisateur ──
-        self.k('sleep_cycle').user_activity_detected()
+        # ── Phase 3 : Signal d'activité utilisateur (V18-21 : lazy à la demande) ──
+        self._ensure_sleep_cycle().user_activity_detected()
 
         pipeline = self._kernel.get("pipeline")
         async for token in pipeline.run_stream(
