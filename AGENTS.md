@@ -696,6 +696,21 @@ or:
 
 ## 23.1 Journal des livraisons V18.1
 
+### CONSOLIDATION V18.1 (committer C4+C5, push feature/v18.1) — `t_3c0dcd15`
+
+- **STATUS** : COMMITTÉ + POUSSÉ. C4 (8807454) et C5 (bd2fa88) désormais sur `feature/v18.1` (local ET `origin/feature/v18.1`), après vérification que le working tree contenait bien C4+C5 non commités (reset HEAD~1 antérieur). Les 5 chantiers C1-C5 sont donc tous sur `feature/v18.1` : aefa2fb (C1), bfd8e75 (C2), 4a281ae (C3), 8807454 (C4), bd2fa88 (C5).
+- **VALIDATION** : `pytest tests/test_c1_ghost_services.py tests/test_c2_freeze_modules.py tests/test_c4_act_step.py tests/test_kernel.py tests/test_c5_mcp_toolregistry.py -q` → **69/69 PASS** ; `python -c "import src.nuru_core"` → OK.
+- **DIFF vs main** : `git diff main...feature/v18.1 --stat` → 14 fichiers, tous les chantiers C1-C5 présents (config.py, kernel/*, mcp/*, nuru_core.py, agents_page.py, tests C1/C2/C4/C5).
+- **PUSH** : `git push origin feature/v18.1` → `4a281ae..bd2fa88` (pas de hook LFS gênant, pre-push déjà supprimé en tâche antérieure).
+- **NEXT ACTION** : revue finale + merge `feature/v18.1` → `main` par le lead/opérateur.
+
+### C4 — step Act gâté lecture-seule (V18-09) — `8807454`
+
+- **STATUS** : COMMITTÉ (commit `8807454`).
+- **CHANGES** : étape `Act` dans le pipeline Kernel, insérée entre `Validate()` et `Respond()` (pipeline à 8 steps). GATÉ par `config.enable_act_step` (OFF par défaut → no-op strict, zéro import de `src.tools`). Branch active : lazy import différé de `src.tools` (~19,3 MiB) fait dans `run()`, jamais au boot. `AgentLimits(max_concurrent=1, max_steps=5, allowed_tools=[])` ajouté à `config.py` ; `PipelineContext.permissions`/`agent_limits` injectés.
+- **FILES** : `src/kernel/pipeline_steps.py`, `src/config.py`, `src/kernel/__init__.py`, `src/kernel/pipeline.py`, `src/nuru_core.py`, `tests/test_c4_act_step.py` (nouveau).
+- **VALIDATION** : C4 inclus dans les 69/69 tests verts.
+
 ### C5 — unification MCP ↔ ToolRegistry (V18-10) — `t_b1b84fef`
 
 - **STATUS** : IMPLEMENTÉ (12/12 tests C5 + 57/57 tests C1/C2/C4/kernel verts)
