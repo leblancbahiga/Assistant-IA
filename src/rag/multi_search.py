@@ -606,6 +606,12 @@ class MultiSearchOrchestrator:
         if not q:
             return False
 
+        # V18-15 : en Mode Minimal Pipeline, HYDE est court-circuité
+        # (flag benchmark UNIQUEMENT — jamais le mode normal).
+        if getattr(config, "minimal_pipeline", False):
+            logger.debug("🧪 [minimal] HYDE désactivé (V18-15)")
+            return False
+
         # Modèle <7B → HyDE désactivé (coût > bénéfice sur M1 8 Go)
         if self._small_model:
             logger.debug("⏭️ HyDE désactivé : modèle <7B")

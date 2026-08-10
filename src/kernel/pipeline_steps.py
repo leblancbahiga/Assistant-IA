@@ -82,6 +82,20 @@ def _get_opt(name: str):
         return None
 
 
+def _config_minimal_pipeline() -> bool:
+    """Lit config.minimal_pipeline (V18-15 — flag benchmark UNIQUEMENT).
+
+    Import différé pour ne pas charger src.config au module import time
+    (pipeline_steps est importé tôt). Retourne False par défaut : le mode
+    Minimal Pipeline n'existe que pendant `run.py --benchmark --minimal`.
+    """
+    try:
+        from src.config import config
+        return bool(getattr(config, "minimal_pipeline", False))
+    except Exception:
+        return False
+
+
 # ═══════════════════════════════════════════════════════════════
 # Step 1 — ReceiveQuestion
 # ═══════════════════════════════════════════════════════════════
@@ -297,10 +311,15 @@ class Retrieve(PipelineStep):
             pass
 
         # 4. Spotlight integration
-        if ctx.spotlight_context:
+        # V18-15 : en Mode Minimal Pipeline, l'intégration Spotlight est
+        # court-circuitée (flag benchmark UNIQUEMENT — jamais le mode normal).
+        _minimal = _config_minimal_pipeline()
+        if ctx.spotlight_context and not _minimal:
             ctx.rag_context = rag_pipeline.integrate_spotlight(
                 ctx.rag_context, ctx.rag_result, ctx.spotlight_context,
             )
+        elif ctx.spotlight_context and _minimal:
+            logger.info("🧪 [minimal] Intégration Spotlight désactivée (V18-15)")
 
         # 5. Low confidence cleanup
         has_spotlight = bool(ctx.spotlight_context)

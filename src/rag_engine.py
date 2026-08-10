@@ -800,7 +800,13 @@ class RAGEngine:
         diag.start()
 
         # 1. Optimisation de la requête (synonymes + LLM Cloud)
-        optimized_query = self.rewriter.rewrite(query)
+        # V18-15 : en Mode Minimal Pipeline, QueryRewrite est court-circuité
+        # (flag benchmark UNIQUEMENT — jamais le mode normal).
+        if getattr(config, "minimal_pipeline", False):
+            logger.info("🧪 [minimal] QueryRewrite désactivé (V18-15)")
+            optimized_query = query
+        else:
+            optimized_query = self.rewriter.rewrite(query)
         result.query_rewritten = optimized_query
 
         # 2. V8+ P2 : MultiSearch orchestrateur — source unique de recherche documentaire

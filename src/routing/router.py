@@ -305,7 +305,9 @@ class Router:
                 logger.warning(f"Router N3: LLM classify failed: {e}")
 
         # ══ N4 : SPOTLIGHT ══
-        if self._spotlight:
+        # V18-15 : en Mode Minimal Pipeline, Spotlight est court-circuité
+        # (flag benchmark UNIQUEMENT — jamais le mode normal).
+        if self._spotlight and not getattr(_nuru_config, "minimal_pipeline", False):
             try:
                 spotlight_results = self._spotlight.search(user_query, max_results=5, read_content=True)
                 if spotlight_results:

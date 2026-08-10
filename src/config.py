@@ -82,6 +82,14 @@ class Config(BaseSettings):
     # Le socket MCP HTTP 8765 reste supprimé dans les deux cas (V18-21, décision lead).
     freeze_dead_modules: bool = True
 
+    # ── V18-15 : Mode Minimal Pipeline (flag BENCHMARK UNIQUEMENT, V18-15) ──
+    # False par défaut → le flag n'affecte JAMAIS le mode de fonctionnement normal.
+    # Ce n'est qu'avec `run.py --benchmark --minimal` qu'il passe à True pour
+    # court-circuiter les 5 optimisations (QueryRewrite, HYDE, Spotlight,
+    # Speculative, Décomposition). Les gardes V18-31/02/14 ne sont JAMAIS
+    # désactivées par ce flag.
+    minimal_pipeline: bool = False
+
     # ── Cloud ──
     cloud_model: str = "deepseek-v4-flash-free"
     cloud_provider: str = "opencode_zen"

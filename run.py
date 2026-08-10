@@ -114,6 +114,12 @@ def main():
     if "--legacy" in sys.argv:
         sys.exit(launch_legacy())
 
+    # V18-15 : CLI benchmark A/B — branche headless AVANT toute
+    # instanciation Qt. Aucun widget n'est créé ici.
+    if "--benchmark" in sys.argv:
+        from src.benchmark.runner import run_benchmark_cli
+        sys.exit(run_benchmark_cli(sys.argv))
+
     if USE_NEW_UI:
         sys.exit(launch_v16())
     else:

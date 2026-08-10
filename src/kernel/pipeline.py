@@ -100,6 +100,12 @@ class PipelineContext:
     permissions: Optional[Any] = None
     agent_limits: Optional[Any] = None
 
+    # V18-15 — Mode Minimal Pipeline (flag benchmark UNIQUEMENT, V18-15).
+    # False par défaut. Porté ici pour traçabilité ; l'opérateur effectif des
+    # 5 gating points (QueryRewrite, HYDE, Spotlight, Speculative, Décompose)
+    # lit config.minimal_pipeline — le flag n'existe que pendant run.py --benchmark.
+    minimal_pipeline: bool = False
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "query": self.query[:80],

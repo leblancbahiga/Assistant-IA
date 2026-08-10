@@ -51,11 +51,17 @@ class RAGOrchestrator:
         self.response_guard = response_guard
         self.evidence_verifier = evidence_verifier
         # V15 Phase 5 (Item 39) : Speculative RAG — génération rapide parallèle
-        self.speculative = SpeculativeRAG(
-            rag_engine=rag_engine,
-            cloud_llm=cloud_llm,
-            confidence_threshold=0.7,
-        )
+        # V18-15 : en Mode Minimal Pipeline, Speculative n'est pas instancié
+        # (flag benchmark UNIQUEMENT — jamais le mode normal).
+        self.speculative = None
+        if not getattr(config, "minimal_pipeline", False):
+            self.speculative = SpeculativeRAG(
+                rag_engine=rag_engine,
+                cloud_llm=cloud_llm,
+                confidence_threshold=0.7,
+            )
+        else:
+            logger.info("🧪 [minimal] Speculative RAG désactivé (V18-15)")
 
     # ══════════════════════════════════════════
     # 1. Retrieval principal
@@ -113,6 +119,12 @@ class RAGOrchestrator:
     async def _try_decompose(self, query: str) -> list[str]:
         """Décomposition optionnelle pour requêtes complexes."""
         from src.rag.decomposer import QueryDecomposer, should_decompose
+
+        # V18-15 : en Mode Minimal Pipeline, la décomposition est court-circuitée
+        # (flag benchmark UNIQUEMENT — jamais le mode normal).
+        if getattr(config, "minimal_pipeline", False):
+            logger.info("🧪 [minimal] Décomposition désactivée (V18-15)")
+            return [query]
 
         if not should_decompose(query):
             return [query]
@@ -384,6 +396,13 @@ class RAGOrchestrator:
     # ══════════════════════════════════════════
 
     async def answer_speculative(self, query: str) -> tuple:
-        """Réponse spéculative : génération rapide + RAG parallèle."""
+        """Réponse spéculative : génération rapide + RAG parallèle.
+
+        V18-15 : si le Mode Minimal Pipeline est actif (Speculative non
+        instancié), retombe sur le chemin RAG classique.
+        """
+        if self.speculative is None:
+            logger.info("🧪 [minimal] answer_speculative non dispo (V18-15)")
+            return "", False, {}
         response, is_spec = await self.speculative.answer(query)
         return response, is_spec, self.speculative.get_stats()
